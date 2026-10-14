@@ -8,6 +8,14 @@ struct RootTabView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-PocketComponentGallery") }) {
+            ComponentGallery()
+        } else {
+            tabs
+        }
+    }
+
+    private var tabs: some View {
         TabView {
             ChatsPlaceholder()
                 .tabItem { Label("Chats", systemImage: "bubble.left.and.bubble.right") }
