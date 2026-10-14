@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: PocketAI.Iphone
+      # Checked out as a sibling so the local SPM path dependency resolves,
+      # matching development mode. CORE-05's release workflow additionally
+      # proves the tagged-XCFramework mode from a clean checkout.
+      - uses: actions/checkout@v4
+        with:
+          repository: getPocketAI/PocketAI.Core
+          path: PocketAI.Core
+          token: ${{ secrets.CORE_REPO_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-apple-darwin
+      - run: brew install xcodegen
+      - run: bash scripts/build-xcframework.sh
+        working-directory: PocketAI.Core
+      - run: xcodegen generate
+        working-directory: PocketAI.Iphone
+      - run: xcodebuild -scheme PocketAI -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+        working-directory: PocketAI.Iphone
+      - run: xcodebuild test -scheme PocketAI -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+        working-directory: PocketAI.Iphone
