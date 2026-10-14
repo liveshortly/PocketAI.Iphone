@@ -8,7 +8,7 @@ import PocketUI
 struct ModelsView: View {
     @Environment(AppModel.self) private var model
 
-    private enum Segment: String, CaseIterable { case onDevice = "On this iPhone", browse = "Browse" }
+    private enum Segment: String, CaseIterable { case onDevice = "On this iPhone", onMac = "On your Mac", browse = "Browse" }
 
     @State private var segment = Segment.browse
     @State private var searchText = ""
@@ -18,12 +18,19 @@ struct ModelsView: View {
     @State private var pendingDelete: CatalogEntry?
     @State private var hubResults: [CatalogEntry] = []
     @State private var hubSearchError: String?
+    @State private var peers: [Peer] = []
+    @State private var remoteCatalog: [RemoteCatalogEntry] = []
+    @State private var remoteError: String?
+
+    private var availableSegments: [Segment] {
+        peers.isEmpty ? [.onDevice, .browse] : [.onDevice, .onMac, .browse]
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 Picker("", selection: $segment) {
-                    ForEach(Segment.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    ForEach(availableSegments, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, PocketSpacing.gutterIphone)
@@ -37,16 +44,31 @@ struct ModelsView: View {
                 }
 
                 List {
-                    ForEach(groupedSections, id: \.title) { section in
-                        Section(section.title) {
-                            ForEach(section.entries, id: \.manifest.id) { entry in
+                    if segment == .onMac {
+                        if let remoteError {
+                            Text(remoteError).font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
+                        }
+                        Section("On your Mac") {
+                            ForEach(remoteCatalog) { entry in
                                 ModelRow(
-                                    data: rowData(for: entry),
-                                    primaryActionLabel: primaryActionLabel(for: entry),
-                                    onPrimaryAction: { performPrimaryAction(for: entry) }
+                                    data: remoteRowData(for: entry),
+                                    primaryActionLabel: remotePrimaryActionLabel(for: entry),
+                                    onPrimaryAction: { performRemotePrimaryAction(for: entry) }
                                 )
-                                .contentShape(Rectangle())
-                                .onTapGesture { detail = entry }
+                            }
+                        }
+                    } else {
+                        ForEach(groupedSections, id: \.title) { section in
+                            Section(section.title) {
+                                ForEach(section.entries, id: \.manifest.id) { entry in
+                                    ModelRow(
+                                        data: rowData(for: entry),
+                                        primaryActionLabel: primaryActionLabel(for: entry),
+                                        onPrimaryAction: { performPrimaryAction(for: entry) }
+                                    )
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { detail = entry }
+                                }
                             }
                         }
                     }
@@ -83,11 +105,19 @@ struct ModelsView: View {
             }
             .navigationTitle("Models")
             .background(PocketColor.bgCanvas)
-            .task { reload() }
+            .task {
+                reload()
+                peers = model.core.peers()
+            }
             .onChange(of: searchText) { reload() }
-            .onChange(of: segment) { reload() }
+            .onChange(of: segment) { _, newValue in
+                if newValue == .onMac { Task { await reloadRemote() } }
+            }
             .onChange(of: fitsOnly) { reload() }
-            .refreshable { reload() }
+            .refreshable {
+                reload()
+                if segment == .onMac { await reloadRemote() }
+            }
             .sheet(item: $detail) { entry in
                 ModelDetailSheet(
                     entry: entry,
@@ -158,6 +188,67 @@ struct ModelsView: View {
         catalog = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: true, installedOnly: false))
         hubResults = []
         hubSearchError = nil
+    }
+
+    private func reloadRemote() async {
+        guard let peer = peers.first else { return }
+        guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) }) else {
+            remoteError = "No saved credential for \(peer.name) - try pairing again."
+            return
+        }
+        let endpoint = PeerEndpoint(host: peer.addrs.first ?? "", port: peer.port, fingerprint: peer.certSha256)
+        let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
+        do {
+            remoteCatalog = try await client.catalog()
+            remoteError = nil
+        } catch {
+            remoteError = "Couldn't reach \(peer.name): \(error.localizedDescription)"
+        }
+    }
+
+    private func remoteRowData(for entry: RemoteCatalogEntry) -> ModelRowData {
+        ModelRowData(
+            name: entry.manifest.displayName,
+            familyParamsQuant: "\(entry.manifest.family) · \(entry.manifest.quant)",
+            fitKind: remoteFitKind(entry.fit.verdict),
+            fitReason: "Fits on Mac: \(entry.fit.reason)",
+            sizeOnDisk: formatBytes(entry.manifest.estRuntimeBytes),
+            speedText: entry.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
+            speedIsMeasured: false,
+            licenseLabel: ""
+        )
+    }
+
+    private func remotePrimaryActionLabel(for entry: RemoteCatalogEntry) -> String {
+        switch entry.state {
+        case .installed: return "Loaded on Mac"
+        case .downloading: return "Downloading…"
+        case .paused: return "Paused"
+        case .verifying: return "Checking…"
+        case .failed: return "Retry"
+        case .available, .queued: return "Download on Mac"
+        }
+    }
+
+    private func performRemotePrimaryAction(for entry: RemoteCatalogEntry) {
+        guard let peer = peers.first,
+              let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) })
+        else { return }
+        let endpoint = PeerEndpoint(host: peer.addrs.first ?? "", port: peer.port, fingerprint: peer.certSha256)
+        let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
+        Task {
+            try? await client.startDownload(modelId: entry.manifest.id)
+            await reloadRemote()
+        }
+    }
+
+    private func remoteFitKind(_ verdict: String) -> FitBadgeKind {
+        switch verdict {
+        case "RunsWell": return .runsWell
+        case "RunsSlow": return .runsSlow
+        case "WillNotFit": return .willNotFit
+        default: return .notSupported
+        }
     }
 
     private func searchHub() async {

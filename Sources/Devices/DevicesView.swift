@@ -153,22 +153,54 @@ private struct PairingFlowView: View {
 
     private func handle(code: String) {
         step = .connecting
-        do {
-            let offer = try model.core.parsePairingQr(code)
-            self.offer = offer
+        guard let offer = try? model.core.parsePairingQr(code) else {
+            step = .error("Mac not reachable. Make sure both are on the same Wi-Fi, or enter the address.")
+            return
+        }
+        self.offer = offer
+
+        guard let liveCore = model.core as? LiveCore else {
+            // PreviewCore has no real network handshake to drive - save
+            // immediately so the flow is demoable end to end in Preview mode.
             step = .waitingForApproval
-            // No live approve/deny round trip wired yet (NET-10's server
-            // side of pairing) - save immediately so the flow is testable.
             let approved = ApprovedPairing(
                 hostId: offer.hostId, certFingerprint: offer.certFingerprint,
                 addr: offer.addrs.first ?? "", port: offer.port,
                 deviceId: UUID().uuidString, tokenKeychainRef: "peer-\(offer.hostId)"
             )
-            _ = try model.core.savePeer(approved)
+            _ = try? model.core.savePeer(approved)
             step = .success
             onPaired()
-        } catch {
-            step = .error("Mac not reachable. Make sure both are on the same Wi-Fi, or enter the address.")
+            return
+        }
+
+        let coordinator = PairingCoordinator(core: liveCore.rawCore, keychain: model.hooks)
+        let pairTask = Task { await coordinator.pair(qr: code) }
+        Task {
+            // `pair(qr:)` drives its own `@Published phase` through
+            // connecting -> waitingForApproval -> a terminal state;
+            // mirroring it here (rather than reading it once after the
+            // await) keeps "Waiting for you to allow on your Mac" visible
+            // for however long the real long-poll takes.
+            while !pairTask.isCancelled {
+                switch coordinator.phase {
+                case .waitingForApproval:
+                    step = .waitingForApproval
+                case .approved:
+                    step = .success
+                    onPaired()
+                    return
+                case .denied:
+                    step = .error("Pairing was denied on your Mac.")
+                    return
+                case .failed(let message):
+                    step = .error("Mac not reachable. Make sure both are on the same Wi-Fi, or enter the address. (\(message))")
+                    return
+                case .idle, .connecting:
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
         }
     }
 }
