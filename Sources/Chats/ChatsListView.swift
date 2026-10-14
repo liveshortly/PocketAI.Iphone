@@ -13,6 +13,7 @@ struct ChatsListView: View {
     @State private var searchText = ""
     @State private var conversations: [ConversationSummary] = []
     @State private var openConversationId: String?
+    @State private var pendingInitialMessage: String?
 
     private enum Segment: String, CaseIterable {
         case chats = "Chats"
@@ -85,7 +86,7 @@ struct ChatsListView: View {
             .onChange(of: searchText) { reload() }
             .onChange(of: segment) { reload() }
             .navigationDestination(item: $openConversationId) { id in
-                ConversationStubDetail(conversationId: id)
+                ChatView(conversationId: id, initialMessage: pendingInitialMessage)
             }
         }
     }
@@ -99,6 +100,7 @@ struct ChatsListView: View {
     private func newChat(firstMessage: String?) {
         guard let conversation = try? model.core.createConversation(NewConversation(title: nil, projectId: nil, modelId: nil)) else { return }
         reload()
+        pendingInitialMessage = firstMessage
         openConversationId = conversation.id
     }
 
@@ -117,29 +119,6 @@ struct ChatsListView: View {
         formatter.unitsStyle = .abbreviated
         return formatter
     }()
-}
-
-/// A read-only stand-in for UI-09's real chat screen - just enough to
-/// prove `messages(conversationId:)` round-trips through whatever
-/// `createConversation` returned above.
-private struct ConversationStubDetail: View {
-    let conversationId: String
-    @Environment(AppModel.self) private var model
-    @State private var messages: [Message] = []
-
-    var body: some View {
-        List(messages, id: \.id) { message in
-            Text(message.role).font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)
-        }
-        .overlay {
-            if messages.isEmpty {
-                Text("No messages yet - full chat UI is UI-09.")
-                    .font(.pocket(.footnote))
-                    .foregroundStyle(PocketColor.textTertiary)
-            }
-        }
-        .task { messages = model.core.messages(conversationId: conversationId) }
-    }
 }
 
 private extension Date {
