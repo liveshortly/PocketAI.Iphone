@@ -23,7 +23,8 @@ struct RootTabView: View {
         TabView {
             ChatsListView()
                 .tabItem { Label("Chats", systemImage: "bubble.left.and.bubble.right") }
-            Text("Models").tabItem { Label("Models", systemImage: "cpu") }
+            ModelsView()
+                .tabItem { Label("Models", systemImage: "cpu") }
             Text("Devices").tabItem { Label("Devices", systemImage: "laptopcomputer") }
             Text("Settings").tabItem { Label("Settings", systemImage: "gearshape") }
         }
