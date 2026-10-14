@@ -25,7 +25,8 @@ struct RootTabView: View {
                 .tabItem { Label("Chats", systemImage: "bubble.left.and.bubble.right") }
             ModelsView()
                 .tabItem { Label("Models", systemImage: "cpu") }
-            Text("Devices").tabItem { Label("Devices", systemImage: "laptopcomputer") }
+            DevicesView()
+                .tabItem { Label("Devices", systemImage: "laptopcomputer") }
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
