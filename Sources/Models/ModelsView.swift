@@ -16,6 +16,8 @@ struct ModelsView: View {
     @State private var catalog: [CatalogEntry] = []
     @State private var detail: CatalogEntry?
     @State private var pendingDelete: CatalogEntry?
+    @State private var hubResults: [CatalogEntry] = []
+    @State private var hubSearchError: String?
 
     var body: some View {
         NavigationStack {
@@ -38,6 +40,33 @@ struct ModelsView: View {
                     ForEach(groupedSections, id: \.title) { section in
                         Section(section.title) {
                             ForEach(section.entries, id: \.manifest.id) { entry in
+                                ModelRow(
+                                    data: rowData(for: entry),
+                                    primaryActionLabel: primaryActionLabel(for: entry),
+                                    onPrimaryAction: { performPrimaryAction(for: entry) }
+                                )
+                                .contentShape(Rectangle())
+                                .onTapGesture { detail = entry }
+                            }
+                        }
+                    }
+                    if segment == .browse, !searchText.isEmpty {
+                        Section {
+                            if model.core.isOffline() {
+                                Label("Offline mode is on — turn it off in Settings to search Hugging Face.", systemImage: "airplane")
+                                    .font(.pocket(.footnote))
+                                    .foregroundStyle(PocketColor.textSecondary)
+                            } else {
+                                Button {
+                                    Task { await searchHub() }
+                                } label: {
+                                    Label("Search Hugging Face for \"\(searchText)\"", systemImage: "magnifyingglass")
+                                }
+                            }
+                            if let hubSearchError {
+                                Text(hubSearchError).font(.pocket(.caption)).foregroundStyle(PocketColor.statusBad)
+                            }
+                            ForEach(hubResults, id: \.manifest.id) { entry in
                                 ModelRow(
                                     data: rowData(for: entry),
                                     primaryActionLabel: primaryActionLabel(for: entry),
@@ -127,6 +156,18 @@ struct ModelsView: View {
 
     private func reload() {
         catalog = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: true, installedOnly: false))
+        hubResults = []
+        hubSearchError = nil
+    }
+
+    private func searchHub() async {
+        hubSearchError = nil
+        do {
+            hubResults = try model.core.searchHub(query: searchText, format: .mlxSafetensors)
+        } catch {
+            hubResults = []
+            hubSearchError = "Search failed: \(error)"
+        }
     }
 
     private func rowData(for entry: CatalogEntry) -> ModelRowData {

@@ -26,7 +26,8 @@ struct RootTabView: View {
             ModelsView()
                 .tabItem { Label("Models", systemImage: "cpu") }
             Text("Devices").tabItem { Label("Devices", systemImage: "laptopcomputer") }
-            Text("Settings").tabItem { Label("Settings", systemImage: "gearshape") }
+            SettingsView()
+                .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .tint(PocketColor.accent)
     }
