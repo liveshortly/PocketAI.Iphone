@@ -1,0 +1,24 @@
+name: PocketAI
+options:
+  bundleIdPrefix: app.getpocketai
+packages:
+  PocketCore:
+    path: ../PocketAI.Core
+targets:
+  PocketAI:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [Sources]
+    dependencies:
+      - package: PocketCore
+        product: PocketKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.getpocketai.pocketai
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: NO
+    info:
+      path: Sources/Info.plist
+      properties:
+        UILaunchScreen: {}
