@@ -10,6 +10,10 @@ struct RootTabView: View {
     var body: some View {
         if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-PocketComponentGallery") }) {
             ComponentGallery()
+        } else if !model.hasOnboarded {
+            OnboardingFlow(core: model.core, deviceProfile: model.hooks.deviceProfile()) {
+                model.hasOnboarded = true
+            }
         } else {
             tabs
         }
