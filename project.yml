@@ -10,6 +10,8 @@ targets:
     platform: iOS
     deploymentTarget: "18.0"
     sources: [Sources]
+    resources:
+      - path: Resources/PrivacyInfo.xcprivacy
     dependencies:
       - package: PocketCore
         product: PocketKit
@@ -20,7 +22,15 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.getpocketai.pocketai
         CODE_SIGN_STYLE: Automatic
         CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_ENTITLEMENTS: Entitlements/PocketAI.entitlements
     info:
       path: Sources/Info.plist
       properties:
         UILaunchScreen: {}
+        NSLocalNetworkUsageDescription: "PocketAI finds and connects to your Mac on this network."
+        NSBonjourServices:
+          - _pocketai._tcp
+        NSCameraUsageDescription: "Scan your Mac's pairing code and take photos for vision models."
+        NSMicrophoneUsageDescription: "PocketAI uses the microphone for voice input."
+        NSSpeechRecognitionUsageDescription: "PocketAI transcribes your voice on-device for voice input."
+        NSPhotoLibraryUsageDescription: "PocketAI attaches photos you choose to your chat."

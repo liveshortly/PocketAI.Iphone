@@ -18,6 +18,20 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_pocketai._tcp</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan your Mac's pairing code and take photos for vision models.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>PocketAI finds and connects to your Mac on this network.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PocketAI uses the microphone for voice input.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PocketAI attaches photos you choose to your chat.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>PocketAI transcribes your voice on-device for voice input.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>
