@@ -13,6 +13,8 @@ targets:
     dependencies:
       - package: PocketCore
         product: PocketKit
+      - package: PocketCore
+        product: PocketUI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.getpocketai.pocketai

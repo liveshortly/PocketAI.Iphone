@@ -1,11 +1,13 @@
 import SwiftUI
-import PocketKit
 
 @main
 struct PocketAIApp: App {
+    @State private var model = AppModel()
+
     var body: some Scene {
         WindowGroup {
-            Text(ping())
+            RootTabView()
+                .environment(model)
         }
     }
 }
