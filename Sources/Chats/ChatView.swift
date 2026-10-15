@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var errorText: String?
     @State private var renamingTitle = false
     @State private var newTitle = ""
+    @State private var voiceDictation = VoiceDictation()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,18 +55,25 @@ struct ChatView: View {
             .padding(.horizontal, PocketSpacing.gutterIphone)
             .padding(.bottom, PocketSpacing.s8)
 
-            Composer(
-                text: $composerText,
-                modelChipLabel: nil, // ponytail: remote-model-use gate — wire when the remote model picker lands
-                isFocused: false,
-                isGenerating: isGenerating,
-                onAttach: { _ in },
-                onMic: {},
-                onSend: { send() },
-                onStop: { stop() }
-            )
-            .padding(.horizontal, PocketSpacing.gutterIphone)
-            .padding(.bottom, PocketSpacing.s8)
+            if voiceDictation.isRecording || voiceDictation.isTranscribing {
+                recordingComposerBar
+                    .padding(.horizontal, PocketSpacing.gutterIphone)
+                    .padding(.bottom, PocketSpacing.s8)
+            } else {
+                Composer(
+                    text: $composerText,
+                    modelChipLabel: nil, // ponytail: remote-model-use gate — wire when the remote model picker lands
+                    isFocused: false,
+                    isGenerating: isGenerating,
+                    onAttach: { _ in },
+                    onMic: { startDictation(handsFree: false) },
+                    onMicLongPress: { startDictation(handsFree: true) },
+                    onSend: { send() },
+                    onStop: { stop() }
+                )
+                .padding(.horizontal, PocketSpacing.gutterIphone)
+                .padding(.bottom, PocketSpacing.s8)
+            }
         }
         .background(PocketColor.bgCanvas)
         .navigationTitle(title ?? "New chat")
@@ -90,6 +98,45 @@ struct ChatView: View {
                 try? model.core.renameConversation(id: conversationId, title: newTitle)
                 title = newTitle
             }
+        }
+        .alert("Voice Input Permission Required", isPresented: Binding(
+            get: {
+                if case .denied = voiceDictation.state { return true }
+                return false
+            },
+            set: { if !$0 { voiceDictation.dismissError() } }
+        )) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+                voiceDictation.dismissError()
+            }
+            Button("Cancel", role: .cancel) {
+                voiceDictation.dismissError()
+            }
+        } message: {
+            if case .denied(let message) = voiceDictation.state {
+                Text(message)
+            }
+        }
+        .alert("Voice Input Error", isPresented: Binding(
+            get: {
+                if case .error = voiceDictation.state { return true }
+                return false
+            },
+            set: { if !$0 { voiceDictation.dismissError() } }
+        )) {
+            Button("OK", role: .cancel) {
+                voiceDictation.dismissError()
+            }
+        } message: {
+            if case .error(let message) = voiceDictation.state {
+                Text(message)
+            }
+        }
+        .onDisappear {
+            voiceDictation.cancel()
         }
         .task {
             reload()
@@ -207,5 +254,101 @@ struct ChatView: View {
         }.joined()
         composerText = text
         send()
+    }
+
+    private var recordingComposerBar: some View {
+        HStack(spacing: PocketSpacing.s12) {
+            Button(action: {
+                voiceDictation.cancel()
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(PocketColor.textSecondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .disabled(voiceDictation.isTranscribing)
+            .accessibilityLabel("Cancel voice recording")
+            .accessibilityHint("Discards the recorded audio")
+
+            Spacer()
+
+            if voiceDictation.isTranscribing {
+                HStack(spacing: PocketSpacing.s8) {
+                    ProgressView()
+                        .tint(PocketColor.accent)
+                        .controlSize(.small)
+                    Text("Transcribing…")
+                        .font(.pocket(.body))
+                        .foregroundStyle(PocketColor.textSecondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Transcribing voice input")
+            } else {
+                HStack(spacing: PocketSpacing.s8) {
+                    if voiceDictation.isHandsFree {
+                        Text("Hands-free")
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.accent)
+                            .padding(.horizontal, PocketSpacing.s8)
+                            .padding(.vertical, 2)
+                            .background(PocketColor.accentSoft, in: Capsule())
+                    }
+                    WaveformView(levels: voiceDictation.audioLevels)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(voiceDictation.isHandsFree ? "Recording hands-free voice input" : "Recording voice input")
+                .accessibilityValue("Listening")
+            }
+
+            Spacer()
+
+            Button(action: { finishRecording() }) {
+                Image(systemName: voiceDictation.isHandsFree ? "arrow.up" : "checkmark")
+                    .foregroundStyle(PocketColor.accentOnAccent)
+                    .frame(width: 28, height: 28)
+                    .background(PocketColor.accent, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(voiceDictation.isTranscribing)
+            .accessibilityLabel(voiceDictation.isHandsFree ? "Send voice message" : "Insert voice text")
+            .accessibilityHint(voiceDictation.isHandsFree ? "Transcribes audio and sends the message" : "Transcribes audio and places text in the composer")
+        }
+        .padding(.horizontal, PocketSpacing.s16)
+        .padding(.vertical, PocketSpacing.s12)
+        .background(.regularMaterial, in: Capsule())
+    }
+
+    private func startDictation(handsFree: Bool) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            await voiceDictation.start(handsFree: handsFree)
+        }
+    }
+
+    private func finishRecording() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let wasHandsFree = voiceDictation.isHandsFree
+        Task {
+            if let text = await voiceDictation.stop() {
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                if wasHandsFree {
+                    if composerText.isEmpty {
+                        composerText = trimmed
+                    } else {
+                        composerText += " " + trimmed
+                    }
+                    send()
+                } else {
+                    if composerText.isEmpty {
+                        composerText = trimmed
+                    } else {
+                        composerText += " " + trimmed
+                    }
+                }
+            }
+        }
     }
 }
