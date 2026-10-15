@@ -91,12 +91,16 @@ struct ChatsListView: View {
                             isShowingCreateProject = true
                         } label: {
                             Image(systemName: "plus")
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Create project")
                         .accessibilityHint("Opens sheet to create a new project")
                     } else {
                         Button { newChat(firstMessage: nil) } label: {
                             Image(systemName: "square.and.pencil")
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .accessibilityLabel("New chat")
                         .accessibilityIdentifier("new_chat_button")

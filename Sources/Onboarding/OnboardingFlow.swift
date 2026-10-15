@@ -71,6 +71,8 @@ private struct OnboardingWelcomeView: View {
                 .font(.pocket(.title))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(PocketColor.textPrimary)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: PocketSpacing.s16) {
                 OnboardingBulletRow(icon: "iphone", text: "Runs on this iPhone, even offline")
@@ -83,6 +85,7 @@ private struct OnboardingWelcomeView: View {
             Button("Get started", action: onContinue)
                 .buttonStyle(.borderedProminent)
                 .tint(PocketColor.accent)
+                .foregroundStyle(PocketColor.accentOnAccent)
         }
         .padding(.horizontal, PocketSpacing.gutterIphone)
         .padding(.vertical, PocketSpacing.s32)
@@ -100,6 +103,8 @@ private struct OnboardingBulletRow: View {
             Text(text)
                 .font(.pocket(.body))
                 .foregroundStyle(PocketColor.textSecondary)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -337,6 +342,7 @@ private struct OnboardingReadyView: View {
             Button("Start chatting", action: onStart)
                 .buttonStyle(.borderedProminent)
                 .tint(PocketColor.accent)
+                .foregroundStyle(PocketColor.accentOnAccent)
             Spacer()
         }
         .padding(.horizontal, PocketSpacing.gutterIphone)

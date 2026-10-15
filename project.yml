@@ -65,6 +65,17 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Entitlements/ShareExtension.entitlements
     info:
       path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Add to PocketAI
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsImageWithMaxCount: 1
+              NSExtensionActivationSupportsFileWithMaxCount: 1
 
   PocketAIUITests:
     type: bundle.ui-testing

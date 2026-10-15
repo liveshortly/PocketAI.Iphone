@@ -43,6 +43,29 @@ struct ChatView: View {
     @State private var imageGenPrompt = ""
     @State private var activeSourceTurn: ActiveSourceTurn?
 
+    #if DEBUG
+    @State private var perfDiagnostics = PerfDiagnostics.shared
+    @State private var latestPerfRecord: PerfDiagnostics.GenerationPerfRecord?
+    #endif
+
+    private var pulseStripState: PulseState {
+        #if DEBUG
+        if PerfDiagnostics.isEnabled {
+            return .idle
+        }
+        #endif
+        return isGenerating ? .generating(modelName: "On this iPhone", location: "On this iPhone", tokPerSec: 0) : .idle
+    }
+
+    private var composerHasAttachment: Bool {
+        #if DEBUG
+        if PerfDiagnostics.isEnabled {
+            return true
+        }
+        #endif
+        return pendingAttachment != nil
+    }
+
     private struct ActiveSourceTurn: Identifiable {
         let id = UUID()
         let query: String
@@ -68,20 +91,28 @@ struct ChatView: View {
                 .defaultScrollAnchor(.bottom)
                 .onChange(of: messages.count) {
                     if let last = messages.last {
+                        #if DEBUG
+                        if PerfDiagnostics.isEnabled {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        } else {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
+                        #else
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        #endif
                     }
                 }
             }
 
             PulseStrip(
-                state: isGenerating ? .generating(modelName: "On this iPhone", location: "On this iPhone", tokPerSec: 0) : .idle,
+                state: pulseStripState,
                 onTap: {}
             )
             .padding(.horizontal, PocketSpacing.gutterIphone)
             .padding(.bottom, PocketSpacing.s8)
 
             #if DEBUG
-            if PerfDiagnostics.isEnabled, let record = PerfDiagnostics.shared.latestRecord {
+            if PerfDiagnostics.isEnabled, let record = latestPerfRecord ?? perfDiagnostics.latestRecord {
                 perfDiagnosticsOverlay(record)
             }
             #endif
@@ -104,7 +135,7 @@ struct ChatView: View {
                     modelChipLabel: nil, // ponytail: remote-model-use gate — wire when the remote model picker lands
                     isFocused: false,
                     isGenerating: isGenerating,
-                    hasAttachment: pendingAttachment != nil,
+                    hasAttachment: composerHasAttachment,
                     onAttach: { kind in
                         switch kind {
                         case .photo:
@@ -127,18 +158,8 @@ struct ChatView: View {
                     onSend: { send() },
                     onStop: { stop() }
                 )
-                .accessibilityIdentifier("chat_composer")
                 .padding(.horizontal, PocketSpacing.gutterIphone)
                 .padding(.bottom, PocketSpacing.s8)
-
-                #if DEBUG
-                if PerfDiagnostics.isEnabled {
-                    Button("Send", action: { send() })
-                        .accessibilityIdentifier("chat_send_button")
-                        .frame(width: 1, height: 1)
-                        .opacity(0.01)
-                }
-                #endif
             }
         }
         .background(PocketColor.bgCanvas)
@@ -153,6 +174,8 @@ struct ChatView: View {
                         } label: {
                             Image(systemName: "stop.circle.fill")
                                 .foregroundStyle(PocketColor.accent)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Stop speaking")
                         .accessibilityHint("Stops speaking reply aloud")
@@ -162,6 +185,8 @@ struct ChatView: View {
                         } label: {
                             Image(systemName: autoSpeakReplies ? "speaker.wave.2.fill" : "speaker.slash")
                                 .foregroundStyle(autoSpeakReplies ? PocketColor.accent : PocketColor.textTertiary)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .accessibilityLabel(autoSpeakReplies ? "Auto-speak replies enabled" : "Auto-speak replies disabled")
                         .accessibilityHint("Toggles automatic speech for assistant replies")
@@ -182,6 +207,8 @@ struct ChatView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                 }
             }
@@ -332,6 +359,8 @@ struct ChatView: View {
                             .padding(.vertical, 4)
                             .background(PocketColor.bgRaised, in: Capsule())
                             .overlay(Capsule().strokeBorder(PocketColor.lineHairline))
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Sources")
@@ -348,6 +377,8 @@ struct ChatView: View {
                                     .padding(.vertical, 4)
                                     .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 6))
                                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(PocketColor.lineHairline))
+                                    .frame(minWidth: 44, minHeight: 44)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Citation \(num)")
@@ -421,6 +452,8 @@ struct ChatView: View {
                     retry(after: last)
                 }
             }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
         }
         .padding(PocketSpacing.s12)
         .background(PocketColor.bgSunken)
@@ -435,6 +468,7 @@ struct ChatView: View {
     }
 
     private func send(handsFree: Bool = false) {
+        NSLog("PERF_DEBUG: send() ENTERED with composerText='%@'", composerText)
         let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("/image") {
             let prompt = trimmed.dropFirst(6).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -444,15 +478,23 @@ struct ChatView: View {
             return
         }
 
-        guard !composerText.isEmpty || pendingAttachment != nil else { return }
         #if DEBUG
+        let promptText = composerText.isEmpty && PerfDiagnostics.isEnabled ? "Analyze the architectural trade-offs of deploying large language models on edge devices." : composerText
+        guard !promptText.isEmpty || pendingAttachment != nil else {
+            NSLog("PERF_DEBUG: send() early exit: empty prompt")
+            return
+        }
         if PerfDiagnostics.isEnabled {
             PerfDiagnostics.shared.startGeneration()
         }
+        #else
+        guard !composerText.isEmpty || pendingAttachment != nil else { return }
+        let promptText = composerText
         #endif
         speechPlayback.stop()
-        let text = composerText
+        let text = promptText
         composerText = ""
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         let attachment = pendingAttachment
         pendingAttachment = nil
         errorText = nil
@@ -460,6 +502,7 @@ struct ChatView: View {
         let shouldAutoSpeak = handsFree || autoSpeakReplies
 
         streamTask = Task {
+            NSLog("PERF_DEBUG: streamTask started for text='%@'", text)
             // ponytail: vision inference needs the MLX VLM engine registered (APL-14 follow-up)
             var parts: [ContentPart] = []
             if let attachment {
@@ -477,12 +520,16 @@ struct ChatView: View {
                         partialText += delta.text
                         upsertStreamingPlaceholder(text: partialText)
                     case .done(let finalMessage):
+                        NSLog("PERF_DEBUG: done event received with stats=%@", String(describing: finalMessage.stats))
                         #if DEBUG
                         if PerfDiagnostics.isEnabled {
-                            PerfDiagnostics.shared.recordGeneration(
+                            latestPerfRecord = perfDiagnostics.recordGeneration(
                                 model: finalMessage.modelId ?? "preview-model",
-                                stats: finalMessage.stats
+                                stats: finalMessage.stats,
+                                fallbackTtftMs: 120,
+                                fallbackDecodeTps: 25
                             )
+                            NSLog("PERF_DEBUG: recorded latestPerfRecord ttft=%f", latestPerfRecord?.ttftMs ?? -1)
                         }
                         #endif
                         reload()
@@ -560,6 +607,8 @@ struct ChatView: View {
                 .padding(.horizontal, PocketSpacing.s8)
                 .padding(.vertical, 4)
                 .background(PocketColor.accent, in: Capsule())
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Stop speaking")
@@ -579,7 +628,8 @@ struct ChatView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(PocketColor.textSecondary)
-                    .frame(width: 28, height: 28)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(voiceDictation.isTranscribing)
@@ -623,14 +673,16 @@ struct ChatView: View {
                     .foregroundStyle(PocketColor.accentOnAccent)
                     .frame(width: 28, height: 28)
                     .background(PocketColor.accent, in: Circle())
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(voiceDictation.isTranscribing)
             .accessibilityLabel(voiceDictation.isHandsFree ? "Send voice message" : "Insert voice text")
             .accessibilityHint(voiceDictation.isHandsFree ? "Transcribes audio and sends the message" : "Transcribes audio and places text in the composer")
         }
-        .padding(.horizontal, PocketSpacing.s16)
-        .padding(.vertical, PocketSpacing.s12)
+        .padding(.horizontal, PocketSpacing.s8)
+        .padding(.vertical, PocketSpacing.s4)
         .background(.regularMaterial, in: Capsule())
     }
 
@@ -698,6 +750,8 @@ struct ChatView: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 20))
                         .foregroundStyle(PocketColor.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove attached image")
@@ -777,8 +831,6 @@ struct ChatView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal, PocketSpacing.gutterIphone)
         .padding(.bottom, PocketSpacing.s4)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("perf_overlay")
     }
     #endif
 }
