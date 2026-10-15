@@ -18,6 +18,7 @@ struct PendingAttachment: Identifiable, Sendable {
 /// here), and jump-to-latest (always auto-scrolls to bottom instead).
 struct ChatView: View {
     let conversationId: String
+    var projectId: String? = nil
     var initialMessage: String?
     @Environment(AppModel.self) private var model
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
@@ -40,6 +41,13 @@ struct ChatView: View {
     @State private var cameraUnavailableAlert = false
     @State private var showImageGenSheet = false
     @State private var imageGenPrompt = ""
+    @State private var activeSourceTurn: ActiveSourceTurn?
+
+    private struct ActiveSourceTurn: Identifiable {
+        let id = UUID()
+        let query: String
+        let selectedCitation: Int?
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -237,6 +245,16 @@ struct ChatView: View {
         } message: {
             Text("Camera is not available on this device or simulator.")
         }
+        .sheet(item: $activeSourceTurn) { turn in
+            if let currentProjectId = projectId {
+                SourceSheet(
+                    projectId: currentProjectId,
+                    query: turn.query,
+                    selectedCitation: turn.selectedCitation,
+                    core: model.core
+                )
+            }
+        }
         .onDisappear {
             voiceDictation.cancel()
             speechPlayback.stop()
@@ -265,20 +283,64 @@ struct ChatView: View {
                 }
         } else {
             let isCurrentSpeaking = speechPlayback.isSpeaking && speechPlayback.currentText == text
-            MessageView(
-                text: text,
-                reasoning: message.reasoning,
-                statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
-                onCopy: { UIPasteboard.general.string = text },
-                onRetry: { retry(after: message) },
-                onSpeak: {
-                    if isCurrentSpeaking {
-                        speechPlayback.stop()
-                    } else {
-                        speechPlayback.speak(text)
+            VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                MessageView(
+                    text: text,
+                    reasoning: message.reasoning,
+                    statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
+                    onCopy: { UIPasteboard.general.string = text },
+                    onRetry: { retry(after: message) },
+                    onSpeak: {
+                        if isCurrentSpeaking {
+                            speechPlayback.stop()
+                        } else {
+                            speechPlayback.speak(text)
+                        }
                     }
+                )
+
+                if let currentProjectId = projectId {
+                    let citations = extractCitationNumbers(from: text)
+                    HStack(spacing: PocketSpacing.s8) {
+                        Button {
+                            openSourceSheet(for: message, selectedCitation: nil)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "quote.opening")
+                                    .font(.system(size: 11))
+                                Text("Sources")
+                                    .font(.pocket(.footnote))
+                            }
+                            .foregroundStyle(PocketColor.accent)
+                            .padding(.horizontal, PocketSpacing.s8)
+                            .padding(.vertical, 4)
+                            .background(PocketColor.bgRaised, in: Capsule())
+                            .overlay(Capsule().strokeBorder(PocketColor.lineHairline))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Sources")
+                        .accessibilityHint("Opens sources sheet listing project document hits")
+
+                        ForEach(citations, id: \.self) { num in
+                            Button {
+                                openSourceSheet(for: message, selectedCitation: num)
+                            } label: {
+                                Text("[\(num)]")
+                                    .font(.pocket(.footnote))
+                                    .foregroundStyle(PocketColor.accent)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
+                                    .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 6))
+                                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(PocketColor.lineHairline))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Citation \(num)")
+                            .accessibilityHint("Opens chunk for citation \(num)")
+                        }
+                    }
+                    // ponytail: inline [n] tap-through needs MessageView token parsing
                 }
-            )
+            }
             .contextMenu {
                 Button("Copy") { UIPasteboard.general.string = text }
                 if isCurrentSpeaking {
@@ -292,9 +354,46 @@ struct ChatView: View {
                     }
                     .accessibilityLabel("Speak reply aloud")
                 }
+                if projectId != nil {
+                    Button("Sources", systemImage: "quote.opening") {
+                        openSourceSheet(for: message, selectedCitation: nil)
+                    }
+                }
                 Button("Retry") { retry(after: message) }
             }
         }
+    }
+
+    private func extractCitationNumbers(from text: String) -> [Int] {
+        guard let regex = try? NSRegularExpression(pattern: #"\[(\d+)\]"#) else { return [] }
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        var numbers: [Int] = []
+        for match in matches {
+            if let range = Range(match.range(at: 1), in: text), let num = Int(text[range]) {
+                if !numbers.contains(num) {
+                    numbers.append(num)
+                }
+            }
+        }
+        return numbers.sorted()
+    }
+
+    private func openSourceSheet(for message: Message, selectedCitation: Int?) {
+        let query = userQuery(for: message) ?? "Project query"
+        activeSourceTurn = ActiveSourceTurn(query: query, selectedCitation: selectedCitation)
+    }
+
+    private func userQuery(for message: Message) -> String? {
+        guard let idx = messages.firstIndex(where: { $0.id == message.id }) else {
+            return messages.last(where: { $0.role == "user" }).map { textForMessage($0) }
+        }
+        for i in (0..<idx).reversed() {
+            if messages[i].role == "user" {
+                let q = textForMessage(messages[i]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !q.isEmpty { return q }
+            }
+        }
+        return messages.last(where: { $0.role == "user" }).map { textForMessage($0) }
     }
 
     private func errorCard(_ text: String) -> some View {
