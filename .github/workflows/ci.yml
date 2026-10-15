@@ -4,31 +4,29 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - uses: actions/checkout@v4
         with:
           path: PocketAI.Iphone
-      # Checked out as a sibling so the local SPM path dependency resolves,
-      # matching development mode. CORE-05's release workflow additionally
-      # proves the tagged-XCFramework mode from a clean checkout.
-      - uses: actions/checkout@v4
-        with:
-          repository: getPocketAI/PocketAI.Core
-          path: PocketAI.Core
-          token: ${{ secrets.CORE_REPO_TOKEN }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-apple-darwin
-      - run: brew install xcodegen
+      # Self-hosted runner on the dev Mac: clone PocketAI.Core from the local
+      # working copy (current with pushed main) as a sibling, so the SPM path
+      # dependency (../PocketAI.Core) resolves with no cross-repo token and no
+      # keychain/network access (sidesteps the old CORE_REPO_TOKEN gate, D70).
+      - name: Clone PocketAI.Core (local)
+        run: |
+          rm -rf PocketAI.Core
+          git clone --depth 1 /Users/rohit/rsehgal/github/getpocketai/PocketAI.Core PocketAI.Core
       - run: bash scripts/build-xcframework.sh
         working-directory: PocketAI.Core
       - run: xcodegen generate
         working-directory: PocketAI.Iphone
-      - run: xcodebuild -scheme PocketAI -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-        working-directory: PocketAI.Iphone
-      - run: xcodebuild test -scheme PocketAI -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+      # Device-target build (unsigned; project sets CODE_SIGNING_ALLOWED=NO).
+      # No Simulator run: a headless launchd runner can't drive the Simulator
+      # GUI. Simulator/unit tests need the runner in a logged-in GUI session.
+      - run: xcodebuild -scheme PocketAI -destination 'generic/platform=iOS' build
         working-directory: PocketAI.Iphone
