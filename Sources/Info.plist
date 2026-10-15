@@ -39,6 +39,8 @@
 	<string>PocketAI finds and connects to your Mac on this network.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>PocketAI uses the microphone for voice input.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>PocketAI saves generated images to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>PocketAI attaches photos you choose to your chat.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

@@ -17,6 +17,8 @@ targets:
         product: PocketKit
       - package: PocketCore
         product: PocketUI
+      - package: PocketCore
+        product: PocketImageGen
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app
@@ -34,6 +36,7 @@ targets:
         NSMicrophoneUsageDescription: "PocketAI uses the microphone for voice input."
         NSSpeechRecognitionUsageDescription: "PocketAI transcribes your voice on-device for voice input."
         NSPhotoLibraryUsageDescription: "PocketAI attaches photos you choose to your chat."
+        NSPhotoLibraryAddUsageDescription: "PocketAI saves generated images to your photo library."
         CFBundleURLTypes:
           - CFBundleURLName: app.getpocketai.pocketai
             CFBundleURLSchemes:

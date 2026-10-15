@@ -1,6 +1,13 @@
 import SwiftUI
+import PhotosUI
 import PocketKit
 import PocketUI
+
+struct PendingAttachment: Identifiable, Sendable {
+    let id: UUID
+    let image: UIImage
+    let fileURL: URL
+}
 
 /// UI-09: Chat screen (S-CHAT), `02` §7.2. Covers streaming, stop, retry,
 /// title rename, long-press actions, an error card, and the Pulse strip.
@@ -25,6 +32,14 @@ struct ChatView: View {
     @State private var newTitle = ""
     @State private var voiceDictation = VoiceDictation()
     @State private var speechPlayback = SpeechPlayback()
+
+    @State private var pendingAttachment: PendingAttachment?
+    @State private var isPhotosPickerPresented = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isCameraPresented = false
+    @State private var cameraUnavailableAlert = false
+    @State private var showImageGenSheet = false
+    @State private var imageGenPrompt = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,12 +83,31 @@ struct ChatView: View {
                     .padding(.horizontal, PocketSpacing.gutterIphone)
                     .padding(.bottom, PocketSpacing.s8)
             } else {
+                pendingAttachmentChip
+
                 Composer(
                     text: $composerText,
                     modelChipLabel: nil, // ponytail: remote-model-use gate — wire when the remote model picker lands
                     isFocused: false,
                     isGenerating: isGenerating,
-                    onAttach: { _ in },
+                    hasAttachment: pendingAttachment != nil,
+                    onAttach: { kind in
+                        switch kind {
+                        case .photo:
+                            isPhotosPickerPresented = true
+                        case .camera:
+                            if CameraCaptureView.isCameraAvailable {
+                                isCameraPresented = true
+                            } else {
+                                cameraUnavailableAlert = true
+                            }
+                        case .image:
+                            imageGenPrompt = ""
+                            showImageGenSheet = true
+                        case .file, .projectDocument:
+                            break
+                        }
+                    },
                     onMic: { startDictation(handsFree: false) },
                     onMicLongPress: { startDictation(handsFree: true) },
                     onSend: { send() },
@@ -111,6 +145,11 @@ struct ChatView: View {
 
                     Menu {
                         Toggle("Speak replies", isOn: $autoSpeakReplies)
+                        Divider()
+                        Button("Generate image", systemImage: "sparkles") {
+                            imageGenPrompt = ""
+                            showImageGenSheet = true
+                        }
                         Divider()
                         Button("Rename") { newTitle = title ?? ""; renamingTitle = true }
                         Button("Export as Markdown") {}
@@ -167,9 +206,41 @@ struct ChatView: View {
                 Text(message)
             }
         }
+        .photosPicker(isPresented: $isPhotosPickerPresented, selection: $selectedPhotoItem, matching: .images)
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    handlePickedImage(image)
+                }
+                selectedPhotoItem = nil
+            }
+        }
+        .fullScreenCover(isPresented: $isCameraPresented) {
+            CameraCaptureView { image in
+                handlePickedImage(image)
+            }
+        }
+        .sheet(isPresented: $showImageGenSheet) {
+            ImageGenerationSheet(
+                prompt: imageGenPrompt,
+                core: model.core,
+                onAttachToChat: { image, fileURL in
+                    removePendingAttachment()
+                    self.pendingAttachment = PendingAttachment(id: UUID(), image: image, fileURL: fileURL)
+                }
+            )
+        }
+        .alert("Camera Unavailable", isPresented: $cameraUnavailableAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Camera is not available on this device or simulator.")
+        }
         .onDisappear {
             voiceDictation.cancel()
             speechPlayback.stop()
+            removePendingAttachment()
         }
         .task {
             reload()
@@ -183,11 +254,14 @@ struct ChatView: View {
     @ViewBuilder
     private func messageRow(_ message: Message) -> some View {
         let text = textForMessage(message)
+        let thumbnails = imagesForMessage(message)
 
         if message.role == "user" {
-            UserBubble(text: text)
+            UserBubble(text: text, attachmentThumbnails: thumbnails)
                 .contextMenu {
-                    Button("Copy") { UIPasteboard.general.string = text }
+                    if !text.isEmpty {
+                        Button("Copy") { UIPasteboard.general.string = text }
+                    }
                 }
         } else {
             let isCurrentSpeaking = speechPlayback.isSpeaking && speechPlayback.currentText == text
@@ -246,16 +320,35 @@ struct ChatView: View {
     }
 
     private func send(handsFree: Bool = false) {
-        guard !composerText.isEmpty else { return }
+        let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("/image") {
+            let prompt = trimmed.dropFirst(6).trimmingCharacters(in: .whitespacesAndNewlines)
+            composerText = ""
+            imageGenPrompt = prompt
+            showImageGenSheet = true
+            return
+        }
+
+        guard !composerText.isEmpty || pendingAttachment != nil else { return }
         speechPlayback.stop()
         let text = composerText
         composerText = ""
+        let attachment = pendingAttachment
+        pendingAttachment = nil
         errorText = nil
         isGenerating = true
         let shouldAutoSpeak = handsFree || autoSpeakReplies
 
         streamTask = Task {
-            let input = UserInput(parts: [.text(text: text)])
+            // ponytail: vision inference needs the MLX VLM engine registered (APL-14 follow-up)
+            var parts: [ContentPart] = []
+            if let attachment {
+                parts.append(.imageRef(path: attachment.fileURL.path))
+            }
+            if !text.isEmpty {
+                parts.append(.text(text: text))
+            }
+            let input = UserInput(parts: parts)
             var partialText = ""
             do {
                 for try await event in model.core.sendMessage(conversationId: conversationId, input: input) {
@@ -443,6 +536,77 @@ struct ChatView: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var pendingAttachmentChip: some View {
+        if let pending = pendingAttachment {
+            HStack(spacing: PocketSpacing.s8) {
+                Image(uiImage: pending.image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: PocketSpacing.s8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PocketSpacing.s8)
+                            .stroke(PocketColor.lineHairline, lineWidth: 1)
+                    )
+                    .accessibilityLabel("Pending image attachment")
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Image attached")
+                        .font(.pocket(.callout))
+                        .foregroundStyle(PocketColor.textPrimary)
+                    Text(pending.fileURL.lastPathComponent)
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button(action: { removePendingAttachment() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(PocketColor.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove attached image")
+            }
+            .padding(PocketSpacing.s8)
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, PocketSpacing.gutterIphone)
+            .padding(.bottom, PocketSpacing.s8)
+        }
+    }
+
+    private func handlePickedImage(_ image: UIImage) {
+        removePendingAttachment()
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileURL = tempDir.appendingPathComponent("attach-\(UUID().uuidString).jpg")
+        if let data = image.jpegData(compressionQuality: 0.85) {
+            try? data.write(to: fileURL)
+            pendingAttachment = PendingAttachment(id: UUID(), image: image, fileURL: fileURL)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        }
+    }
+
+    private func removePendingAttachment() {
+        if let fileURL = pendingAttachment?.fileURL {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        pendingAttachment = nil
+    }
+
+    private func imagesForMessage(_ message: Message) -> [Image] {
+        message.parts.compactMap { part -> Image? in
+            if case .imageRef(let path) = part {
+                if let uiImage = UIImage(contentsOfFile: path) {
+                    return Image(uiImage: uiImage)
+                }
+            }
+            return nil
         }
     }
 
