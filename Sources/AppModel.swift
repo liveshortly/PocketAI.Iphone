@@ -5,6 +5,8 @@ import PocketKit
 @Observable
 @MainActor
 public final class AppModel {
+    public static let shared = AppModel()
+
     public let core: CoreClient
     public let hooks: PlatformHooks
     public var hasOnboarded: Bool {
