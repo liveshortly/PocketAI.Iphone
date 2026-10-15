@@ -6,11 +6,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Persistent cargo target dir so the cloned Core's llama.cpp/Rust build is
-# cached across runs instead of rebuilt each time.
-env:
-  CARGO_TARGET_DIR: /Users/rohit/.cache/pocket-ci/iphone
-
 jobs:
   build:
     runs-on: [self-hosted, macOS, ARM64]
