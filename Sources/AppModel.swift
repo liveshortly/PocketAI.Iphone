@@ -18,6 +18,7 @@ public final class AppModel {
     private static let onboardedKey = "app.getpocketai.hasOnboarded"
 
     public init() {
+        DiagnosticsLog.shared.append("AppModel: initialization started")
         hasOnboarded = UserDefaults.standard.bool(forKey: Self.onboardedKey)
         let hooks = LivePlatformHooks()
         self.hooks = hooks
@@ -25,6 +26,7 @@ public final class AppModel {
         let core: CoreClient
         if isPreview {
             core = PreviewCore()
+            DiagnosticsLog.shared.append("AppModel: PreviewCore active")
         } else {
             let config = CoreConfig(appSupportDir: hooks.appSupportDir(), platform: .ios)
             do {
@@ -33,7 +35,9 @@ public final class AppModel {
                 // Apple Intelligence) so send() can actually run inference.
                 live.registerEngine(RoutingEngine())
                 core = live
+                DiagnosticsLog.shared.append("AppModel: LiveCore initialized, RoutingEngine registered")
             } catch {
+                DiagnosticsLog.shared.append("AppModel: LiveCore failed to open")
                 fatalError("PocketCore.open failed: \(error)")
             }
         }
@@ -46,6 +50,7 @@ public final class AppModel {
         if !isPreview {
             Task {
                 await store.start()
+                DiagnosticsLog.shared.append("AppModel: StoreEntitlementManager started")
             }
         }
     }

@@ -10,6 +10,10 @@ struct PocketAIApp: App {
     @State private var model = AppModel.shared
     @State private var activationSheet: ActivationSheetItem?
 
+    init() {
+        DiagnosticsLog.shared.append("PocketAIApp: application initialized")
+    }
+
     var body: some Scene {
         WindowGroup {
             RootTabView()

@@ -9,6 +9,7 @@ import PocketUI
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
+    @AppStorage("app.getpocketai.diagnosticsEnabled") private var diagnosticsEnabled = false
     @State private var offline = false
 
     var body: some View {
@@ -24,6 +25,27 @@ struct SettingsView: View {
                         icon: "airplane", tint: PocketColor.statusWarn, title: "Offline mode",
                         accessory: .toggle($offline)
                     )
+                    SettingsRow(
+                        icon: "heart.text.square", tint: PocketColor.accent, title: "Share diagnostic reports",
+                        accessory: .toggle($diagnosticsEnabled)
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Share diagnostic reports")
+                    .accessibilityValue(diagnosticsEnabled ? "On" : "Off")
+                    .accessibilityHint("Enables the option to send an in-app diagnostic report to support")
+
+                    if diagnosticsEnabled {
+                        NavigationLink {
+                            DiagnosticsPreviewView()
+                        } label: {
+                            SettingsRow(
+                                icon: "envelope", tint: PocketColor.statusInfo, title: "Send diagnostic report…",
+                                accessory: .navigation
+                            )
+                        }
+                        .accessibilityLabel("Send diagnostic report")
+                        .accessibilityHint("Opens a preview of the diagnostic report before sending")
+                    }
                 }
                 Section("Models & memory") {
                     SettingsRow(icon: "cpu", title: "Default model", accessory: .navigation)
@@ -58,7 +80,13 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .task { offline = model.core.isOffline() }
-            .onChange(of: offline) { _, newValue in model.core.setOfflineMode(on: newValue) }
+            .onChange(of: offline) { _, newValue in
+                model.core.setOfflineMode(on: newValue)
+                DiagnosticsLog.shared.append("Settings: offline mode set to \(newValue)")
+            }
+            .onChange(of: diagnosticsEnabled) { _, newValue in
+                DiagnosticsLog.shared.append("Settings: diagnostics sharing set to \(newValue)")
+            }
         }
     }
 }
