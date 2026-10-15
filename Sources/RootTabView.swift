@@ -6,16 +6,41 @@ import PocketUI
 /// PocketMark chip render against a real `CoreClient` (Live or Preview).
 struct RootTabView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isShowingSharedInboxSheet = false
 
     var body: some View {
-        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-PocketComponentGallery") }) {
-            ComponentGallery()
-        } else if !model.hasOnboarded {
-            OnboardingFlow(core: model.core, deviceProfile: model.hooks.deviceProfile()) {
-                model.hasOnboarded = true
+        Group {
+            if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-PocketComponentGallery") }) {
+                ComponentGallery()
+            } else if !model.hasOnboarded {
+                OnboardingFlow(core: model.core, deviceProfile: model.hooks.deviceProfile()) {
+                    model.hasOnboarded = true
+                    checkSharedInbox()
+                }
+            } else {
+                tabs
             }
-        } else {
-            tabs
+        }
+        .sheet(isPresented: $isShowingSharedInboxSheet) {
+            SharedInboxIngestSheet(core: model.core) {
+                isShowingSharedInboxSheet = false
+            }
+        }
+        .task {
+            checkSharedInbox()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                checkSharedInbox()
+            }
+        }
+    }
+
+    private func checkSharedInbox() {
+        guard model.hasOnboarded else { return }
+        if !SharedInbox.listItems().isEmpty {
+            isShowingSharedInboxSheet = true
         }
     }
 

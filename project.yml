@@ -13,6 +13,8 @@ targets:
     resources:
       - path: Resources/PrivacyInfo.xcprivacy
     dependencies:
+      - target: ShareExtension
+        embed: true
       - package: PocketCore
         product: PocketKit
       - package: PocketCore
@@ -41,3 +43,20 @@ targets:
           - CFBundleURLName: app.getpocketai.pocketai
             CFBundleURLSchemes:
               - pocketai
+
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: ShareExtension
+      - path: Sources/SharedInbox/SharedInbox.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app.ShareExtension
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_ENTITLEMENTS: Entitlements/ShareExtension.entitlements
+    info:
+      path: ShareExtension/Info.plist
+
