@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import PocketKit
+import PocketMLX
 
 @Observable
 @MainActor
@@ -24,7 +25,11 @@ public final class AppModel {
         } else {
             let config = CoreConfig(appSupportDir: hooks.appSupportDir(), platform: .ios)
             do {
-                core = try LiveCore(config: config, platform: hooks)
+                let live = try LiveCore(config: config, platform: hooks)
+                // Register the on-device chat engines (MLX .safetensors +
+                // Apple Intelligence) so send() can actually run inference.
+                live.registerEngine(RoutingEngine())
+                core = live
             } catch {
                 fatalError("PocketCore.open failed: \(error)")
             }

@@ -21,6 +21,8 @@ targets:
         product: PocketUI
       - package: PocketCore
         product: PocketImageGen
+      - package: PocketCore
+        product: PocketMLX
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app
