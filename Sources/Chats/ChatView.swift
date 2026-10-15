@@ -5,7 +5,8 @@ import PocketUI
 /// UI-09: Chat screen (S-CHAT), `02` §7.2. Covers streaming, stop, retry,
 /// title rename, long-press actions, an error card, and the Pulse strip.
 /// Not implemented: model switch per chat (no model picker sheet yet,
-/// UI-13 scope), branch-from-here, state restoration after an app kill
+/// UI-13 scope; ponytail: remote-model-use gate — wire when the remote model picker lands),
+/// branch-from-here, state restoration after an app kill
 /// mid-reply (needs a real engine + background task, not exercisable
 /// here), and jump-to-latest (always auto-scrolls to bottom instead).
 struct ChatView: View {
@@ -55,7 +56,7 @@ struct ChatView: View {
 
             Composer(
                 text: $composerText,
-                modelChipLabel: nil,
+                modelChipLabel: nil, // ponytail: remote-model-use gate — wire when the remote model picker lands
                 isFocused: false,
                 isGenerating: isGenerating,
                 onAttach: { _ in },

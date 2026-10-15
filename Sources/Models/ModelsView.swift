@@ -231,6 +231,7 @@ struct ModelsView: View {
     }
 
     private func performRemotePrimaryAction(for entry: RemoteCatalogEntry) {
+        // ponytail: remote-model-use gate — wire when the remote model picker lands
         guard let peer = peers.first,
               let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) })
         else { return }

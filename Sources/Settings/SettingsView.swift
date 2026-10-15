@@ -40,7 +40,11 @@ struct SettingsView: View {
                     SettingsRow(icon: "laptopcomputer", title: "Pair a Mac", accessory: .navigation)
                 }
                 Section("Pro") {
-                    SettingsRow(icon: "star", title: "PocketAI Pro", accessory: .navigation)
+                    NavigationLink {
+                        PaywallView()
+                    } label: {
+                        SettingsRow(icon: "star", title: "PocketAI Pro", accessory: .navigation)
+                    }
                 }
                 Section("About") {
                     SettingsRow(icon: "info.circle", title: "Version", accessory: .value("0.2.0"))

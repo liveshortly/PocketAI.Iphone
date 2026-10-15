@@ -9,6 +9,7 @@ struct DevicesView: View {
     @Environment(AppModel.self) private var model
     @State private var peers: [Peer] = []
     @State private var showPairing = false
+    @State private var showPaywall = false
 
     var body: some View {
         NavigationStack {
@@ -24,6 +25,16 @@ struct DevicesView: View {
             .task { reload() }
             .sheet(isPresented: $showPairing) {
                 PairingFlowView { reload() }
+            }
+            .sheet(isPresented: $showPaywall) {
+                NavigationStack {
+                    PaywallView()
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showPaywall = false }
+                            }
+                        }
+                }
             }
         }
     }
@@ -44,7 +55,13 @@ struct DevicesView: View {
             .font(.pocket(.footnote))
             .foregroundStyle(PocketColor.textSecondary)
 
-            Button("Scan code") { showPairing = true }
+            Button("Scan code") {
+                if model.core.entitlements().pro {
+                    showPairing = true
+                } else {
+                    showPaywall = true
+                }
+            }
                 .buttonStyle(.borderedProminent)
                 .tint(PocketColor.accent)
 
