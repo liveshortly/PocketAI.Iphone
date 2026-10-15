@@ -10,6 +10,8 @@ targets:
     platform: iOS
     deploymentTarget: "18.0"
     sources: [Sources]
+    scheme:
+      storeKitConfiguration: PocketAI.storekit
     resources:
       - path: Resources/PrivacyInfo.xcprivacy
     dependencies:

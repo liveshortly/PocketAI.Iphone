@@ -13,6 +13,8 @@ public struct PaywallView: View {
     @State private var activatedKey: String?
     @State private var error: String?
     @State private var toast: ToastData?
+    @State private var isPurchasing = false
+    @State private var isRestoring = false
 
     public init(prefilledKey: String? = nil) {
         _licenseKey = State(initialValue: prefilledKey ?? "")
@@ -67,22 +69,47 @@ public struct PaywallView: View {
                 Section {
                     VStack(spacing: PocketSpacing.s12) {
                         Button {
-                            // ponytail: StoreKit purchase is APL-18; buttons present for layout + App Review, not yet functional
+                            guard !isPurchasing && !isRestoring else { return }
+                            isPurchasing = true
+                            Task {
+                                defer { isPurchasing = false }
+                                _ = try? await model.store.purchase()
+                                entitlements = model.core.entitlements()
+                            }
                         } label: {
-                            Text("Buy PocketAI Pro")
-                                .font(.pocket(.headline))
-                                .frame(maxWidth: .infinity)
+                            if isPurchasing {
+                                ProgressView()
+                                    .tint(.white)
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                Text("Buy PocketAI Pro")
+                                    .font(.pocket(.headline))
+                                    .frame(maxWidth: .infinity)
+                            }
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(PocketColor.accent)
+                        .disabled(isPurchasing || isRestoring)
 
                         Button {
-                            // ponytail: StoreKit purchase is APL-18; buttons present for layout + App Review, not yet functional
+                            guard !isPurchasing && !isRestoring else { return }
+                            isRestoring = true
+                            Task {
+                                defer { isRestoring = false }
+                                try? await model.store.restorePurchases()
+                                entitlements = model.core.entitlements()
+                            }
                         } label: {
-                            Text("Restore Purchases")
-                                .font(.pocket(.footnote))
-                                .foregroundStyle(PocketColor.accent)
+                            if isRestoring {
+                                ProgressView()
+                                    .tint(PocketColor.accent)
+                            } else {
+                                Text("Restore Purchases")
+                                    .font(.pocket(.footnote))
+                                    .foregroundStyle(PocketColor.accent)
+                            }
                         }
+                        .disabled(isPurchasing || isRestoring)
                     }
                     .padding(.vertical, PocketSpacing.s8)
                     .listRowInsets(EdgeInsets())

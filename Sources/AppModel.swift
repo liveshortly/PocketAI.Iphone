@@ -10,6 +10,7 @@ public final class AppModel {
 
     public let core: CoreClient
     public let hooks: PlatformHooks
+    public let store: StoreEntitlementManager
     public var hasOnboarded: Bool {
         didSet { UserDefaults.standard.set(hasOnboarded, forKey: Self.onboardedKey) }
     }
@@ -20,7 +21,9 @@ public final class AppModel {
         hasOnboarded = UserDefaults.standard.bool(forKey: Self.onboardedKey)
         let hooks = LivePlatformHooks()
         self.hooks = hooks
-        if ProcessInfo.processInfo.arguments.contains("-PocketPreviewCore") {
+        let isPreview = ProcessInfo.processInfo.arguments.contains("-PocketPreviewCore")
+        let core: CoreClient
+        if isPreview {
             core = PreviewCore()
         } else {
             let config = CoreConfig(appSupportDir: hooks.appSupportDir(), platform: .ios)
@@ -32,6 +35,17 @@ public final class AppModel {
                 core = live
             } catch {
                 fatalError("PocketCore.open failed: \(error)")
+            }
+        }
+        self.core = core
+        let store = StoreEntitlementManager(keychain: hooks) { [core] e in
+            core.setStoreEntitlement(e)
+        }
+        self.store = store
+
+        if !isPreview {
+            Task {
+                await store.start()
             }
         }
     }
