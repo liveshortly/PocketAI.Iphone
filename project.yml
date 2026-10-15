@@ -34,3 +34,7 @@ targets:
         NSMicrophoneUsageDescription: "PocketAI uses the microphone for voice input."
         NSSpeechRecognitionUsageDescription: "PocketAI transcribes your voice on-device for voice input."
         NSPhotoLibraryUsageDescription: "PocketAI attaches photos you choose to your chat."
+        CFBundleURLTypes:
+          - CFBundleURLName: app.getpocketai.pocketai
+            CFBundleURLSchemes:
+              - pocketai
