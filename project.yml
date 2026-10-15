@@ -1,6 +1,6 @@
 name: PocketAI
 options:
-  bundleIdPrefix: app.getpocketai
+  bundleIdPrefix: com.getpocketai
 packages:
   PocketCore:
     path: ../PocketAI.Core
@@ -19,7 +19,7 @@ targets:
         product: PocketUI
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.getpocketai.pocketai
+        PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app
         CODE_SIGN_STYLE: Automatic
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGN_ENTITLEMENTS: Entitlements/PocketAI.entitlements
