@@ -12,6 +12,8 @@ targets:
     sources: [Sources]
     scheme:
       storeKitConfiguration: PocketAI.storekit
+      testTargets:
+        - PocketAIUITests
     resources:
       - path: Resources/PrivacyInfo.xcprivacy
     dependencies:
@@ -63,4 +65,19 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Entitlements/ShareExtension.entitlements
     info:
       path: ShareExtension/Info.plist
+
+  PocketAIUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [UITests]
+    dependencies:
+      - target: PocketAI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app.uitests
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: NO
+        TEST_TARGET_NAME: PocketAI
+
 

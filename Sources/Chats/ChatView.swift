@@ -80,6 +80,12 @@ struct ChatView: View {
             .padding(.horizontal, PocketSpacing.gutterIphone)
             .padding(.bottom, PocketSpacing.s8)
 
+            #if DEBUG
+            if PerfDiagnostics.isEnabled, let record = PerfDiagnostics.shared.latestRecord {
+                perfDiagnosticsOverlay(record)
+            }
+            #endif
+
             if speechPlayback.isSpeaking {
                 speakingAffordance
                     .padding(.horizontal, PocketSpacing.gutterIphone)
@@ -121,8 +127,18 @@ struct ChatView: View {
                     onSend: { send() },
                     onStop: { stop() }
                 )
+                .accessibilityIdentifier("chat_composer")
                 .padding(.horizontal, PocketSpacing.gutterIphone)
                 .padding(.bottom, PocketSpacing.s8)
+
+                #if DEBUG
+                if PerfDiagnostics.isEnabled {
+                    Button("Send", action: { send() })
+                        .accessibilityIdentifier("chat_send_button")
+                        .frame(width: 1, height: 1)
+                        .opacity(0.01)
+                }
+                #endif
             }
         }
         .background(PocketColor.bgCanvas)
@@ -429,6 +445,11 @@ struct ChatView: View {
         }
 
         guard !composerText.isEmpty || pendingAttachment != nil else { return }
+        #if DEBUG
+        if PerfDiagnostics.isEnabled {
+            PerfDiagnostics.shared.startGeneration()
+        }
+        #endif
         speechPlayback.stop()
         let text = composerText
         composerText = ""
@@ -456,6 +477,14 @@ struct ChatView: View {
                         partialText += delta.text
                         upsertStreamingPlaceholder(text: partialText)
                     case .done(let finalMessage):
+                        #if DEBUG
+                        if PerfDiagnostics.isEnabled {
+                            PerfDiagnostics.shared.recordGeneration(
+                                model: finalMessage.modelId ?? "preview-model",
+                                stats: finalMessage.stats
+                            )
+                        }
+                        #endif
                         reload()
                         if title == nil { reload() }
                         if shouldAutoSpeak {
@@ -715,4 +744,41 @@ struct ChatView: View {
             return nil
         }.joined()
     }
+
+    #if DEBUG
+    private func perfDiagnosticsOverlay(_ record: PerfDiagnostics.GenerationPerfRecord) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text("PERF")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(PocketColor.accent)
+                Spacer()
+                Text(record.model)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(PocketColor.textTertiary)
+                    .accessibilityIdentifier("perf_model")
+            }
+            HStack(spacing: 8) {
+                Text("TTFT: \(Int(record.ttftMs))ms")
+                    .accessibilityIdentifier("perf_ttft_ms")
+                Text("TPS: \(String(format: "%.1f", record.decodeTps))")
+                    .accessibilityIdentifier("perf_decode_tps")
+                Text("Mem: \(String(format: "%.1f", record.peakMemMB))MB")
+                    .accessibilityIdentifier("perf_peak_mem_mb")
+                Text("ΔAvail: \(String(format: "%.1f", record.availableMemDeltaMB))MB")
+                    .accessibilityIdentifier("perf_avail_mem_delta_mb")
+                Text("Therm: \(record.thermal)")
+                    .accessibilityIdentifier("perf_thermal")
+            }
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(PocketColor.textSecondary)
+        }
+        .padding(6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, PocketSpacing.gutterIphone)
+        .padding(.bottom, PocketSpacing.s4)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("perf_overlay")
+    }
+    #endif
 }

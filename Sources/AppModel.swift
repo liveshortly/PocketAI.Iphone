@@ -19,7 +19,13 @@ public final class AppModel {
 
     public init() {
         DiagnosticsLog.shared.append("AppModel: initialization started")
-        hasOnboarded = UserDefaults.standard.bool(forKey: Self.onboardedKey)
+        if ProcessInfo.processInfo.arguments.contains("-PocketResetOnboarding") {
+            hasOnboarded = false
+        } else if ProcessInfo.processInfo.arguments.contains("-PocketSkipOnboarding") {
+            hasOnboarded = true
+        } else {
+            hasOnboarded = UserDefaults.standard.bool(forKey: Self.onboardedKey)
+        }
         let hooks = LivePlatformHooks()
         self.hooks = hooks
         let isPreview = ProcessInfo.processInfo.arguments.contains("-PocketPreviewCore")

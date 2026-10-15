@@ -99,6 +99,7 @@ struct ChatsListView: View {
                             Image(systemName: "square.and.pencil")
                         }
                         .accessibilityLabel("New chat")
+                        .accessibilityIdentifier("new_chat_button")
                     }
                 }
             }
