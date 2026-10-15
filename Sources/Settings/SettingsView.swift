@@ -8,6 +8,7 @@ import PocketUI
 /// owning features (engine prefs, voice, Pro, etc.) aren't built yet.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
     @State private var offline = false
 
     var body: some View {
@@ -33,6 +34,11 @@ struct SettingsView: View {
                     SettingsRow(icon: "apple.logo", title: "Apple Intelligence", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Available" : "Unavailable"))
                 }
                 Section("Voice") {
+                    SettingsRow(
+                        icon: "speaker.wave.2",
+                        title: "Speak replies",
+                        accessory: .toggle($autoSpeakReplies)
+                    )
                     SettingsRow(icon: "mic", title: "Speech-to-text", accessory: .navigation)
                     SettingsRow(icon: "speaker.wave.2", title: "Text-to-speech voice", accessory: .navigation)
                 }

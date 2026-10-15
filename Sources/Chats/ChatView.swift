@@ -13,6 +13,7 @@ struct ChatView: View {
     let conversationId: String
     var initialMessage: String?
     @Environment(AppModel.self) private var model
+    @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
 
     @State private var title: String?
     @State private var messages: [Message] = []
@@ -23,6 +24,7 @@ struct ChatView: View {
     @State private var renamingTitle = false
     @State private var newTitle = ""
     @State private var voiceDictation = VoiceDictation()
+    @State private var speechPlayback = SpeechPlayback()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,6 +57,12 @@ struct ChatView: View {
             .padding(.horizontal, PocketSpacing.gutterIphone)
             .padding(.bottom, PocketSpacing.s8)
 
+            if speechPlayback.isSpeaking {
+                speakingAffordance
+                    .padding(.horizontal, PocketSpacing.gutterIphone)
+                    .padding(.bottom, PocketSpacing.s8)
+            }
+
             if voiceDictation.isRecording || voiceDictation.isTranscribing {
                 recordingComposerBar
                     .padding(.horizontal, PocketSpacing.gutterIphone)
@@ -80,14 +88,38 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("Rename") { newTitle = title ?? ""; renamingTitle = true }
-                    Button("Export as Markdown") {}
-                    Button("Delete", role: .destructive) {
-                        try? model.core.deleteConversation(id: conversationId)
+                HStack(spacing: PocketSpacing.s12) {
+                    if speechPlayback.isSpeaking {
+                        Button {
+                            speechPlayback.stop()
+                        } label: {
+                            Image(systemName: "stop.circle.fill")
+                                .foregroundStyle(PocketColor.accent)
+                        }
+                        .accessibilityLabel("Stop speaking")
+                        .accessibilityHint("Stops speaking reply aloud")
+                    } else {
+                        Button {
+                            autoSpeakReplies.toggle()
+                        } label: {
+                            Image(systemName: autoSpeakReplies ? "speaker.wave.2.fill" : "speaker.slash")
+                                .foregroundStyle(autoSpeakReplies ? PocketColor.accent : PocketColor.textTertiary)
+                        }
+                        .accessibilityLabel(autoSpeakReplies ? "Auto-speak replies enabled" : "Auto-speak replies disabled")
+                        .accessibilityHint("Toggles automatic speech for assistant replies")
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+
+                    Menu {
+                        Toggle("Speak replies", isOn: $autoSpeakReplies)
+                        Divider()
+                        Button("Rename") { newTitle = title ?? ""; renamingTitle = true }
+                        Button("Export as Markdown") {}
+                        Button("Delete", role: .destructive) {
+                            try? model.core.deleteConversation(id: conversationId)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
             }
         }
@@ -137,6 +169,7 @@ struct ChatView: View {
         }
         .onDisappear {
             voiceDictation.cancel()
+            speechPlayback.stop()
         }
         .task {
             reload()
@@ -149,10 +182,7 @@ struct ChatView: View {
 
     @ViewBuilder
     private func messageRow(_ message: Message) -> some View {
-        let text = message.parts.compactMap { part -> String? in
-            if case .text(let t) = part { return t }
-            return nil
-        }.joined()
+        let text = textForMessage(message)
 
         if message.role == "user" {
             UserBubble(text: text)
@@ -160,13 +190,36 @@ struct ChatView: View {
                     Button("Copy") { UIPasteboard.general.string = text }
                 }
         } else {
+            let isCurrentSpeaking = speechPlayback.isSpeaking && speechPlayback.currentText == text
             MessageView(
                 text: text,
                 reasoning: message.reasoning,
                 statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
                 onCopy: { UIPasteboard.general.string = text },
-                onRetry: { retry(after: message) }
+                onRetry: { retry(after: message) },
+                onSpeak: {
+                    if isCurrentSpeaking {
+                        speechPlayback.stop()
+                    } else {
+                        speechPlayback.speak(text)
+                    }
+                }
             )
+            .contextMenu {
+                Button("Copy") { UIPasteboard.general.string = text }
+                if isCurrentSpeaking {
+                    Button("Stop Speaking", systemImage: "stop.fill") {
+                        speechPlayback.stop()
+                    }
+                    .accessibilityLabel("Stop speaking")
+                } else {
+                    Button("Speak", systemImage: "speaker.wave.2") {
+                        speechPlayback.speak(text)
+                    }
+                    .accessibilityLabel("Speak reply aloud")
+                }
+                Button("Retry") { retry(after: message) }
+            }
         }
     }
 
@@ -192,12 +245,14 @@ struct ChatView: View {
         title = summary?.title
     }
 
-    private func send() {
+    private func send(handsFree: Bool = false) {
         guard !composerText.isEmpty else { return }
+        speechPlayback.stop()
         let text = composerText
         composerText = ""
         errorText = nil
         isGenerating = true
+        let shouldAutoSpeak = handsFree || autoSpeakReplies
 
         streamTask = Task {
             let input = UserInput(parts: [.text(text: text)])
@@ -211,6 +266,14 @@ struct ChatView: View {
                     case .done(let finalMessage):
                         reload()
                         if title == nil { reload() }
+                        if shouldAutoSpeak {
+                            let textToSpeak = textForMessage(finalMessage)
+                            let toSpeak = textToSpeak.isEmpty ? partialText : textToSpeak
+                            let trimmed = toSpeak.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !trimmed.isEmpty {
+                                speechPlayback.speak(trimmed)
+                            }
+                        }
                     }
                 }
             } catch {
@@ -245,15 +308,45 @@ struct ChatView: View {
         streamTask?.cancel()
         streamTask = nil
         isGenerating = false
+        speechPlayback.stop()
     }
 
     private func retry(after message: Message) {
-        let text = message.parts.compactMap { part -> String? in
-            if case .text(let t) = part { return t }
-            return nil
-        }.joined()
+        let text = textForMessage(message)
         composerText = text
         send()
+    }
+
+    private var speakingAffordance: some View {
+        HStack(spacing: PocketSpacing.s8) {
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(PocketColor.accent)
+            Text("Speaking reply…")
+                .font(.pocket(.footnote))
+                .foregroundStyle(PocketColor.textSecondary)
+            Spacer()
+            Button(action: {
+                speechPlayback.stop()
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("Stop")
+                        .font(.pocket(.footnote))
+                }
+                .foregroundStyle(PocketColor.accentOnAccent)
+                .padding(.horizontal, PocketSpacing.s8)
+                .padding(.vertical, 4)
+                .background(PocketColor.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Stop speaking")
+            .accessibilityHint("Stops audio playback of the reply")
+        }
+        .padding(.horizontal, PocketSpacing.s12)
+        .padding(.vertical, PocketSpacing.s8)
+        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var recordingComposerBar: some View {
@@ -321,6 +414,7 @@ struct ChatView: View {
     }
 
     private func startDictation(handsFree: Bool) {
+        speechPlayback.stop()
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         Task {
             await voiceDictation.start(handsFree: handsFree)
@@ -340,7 +434,7 @@ struct ChatView: View {
                     } else {
                         composerText += " " + trimmed
                     }
-                    send()
+                    send(handsFree: true)
                 } else {
                     if composerText.isEmpty {
                         composerText = trimmed
@@ -350,5 +444,12 @@ struct ChatView: View {
                 }
             }
         }
+    }
+
+    private func textForMessage(_ message: Message) -> String {
+        message.parts.compactMap { part -> String? in
+            if case .text(let t) = part { return t }
+            return nil
+        }.joined()
     }
 }
