@@ -48,16 +48,10 @@ public final class AppModel {
             }
         }
         self.core = core
-        let store = StoreEntitlementManager(keychain: hooks) { [core] e in
+        // In the Keygen-only licensing model, there is no App Store IAP path.
+        // StoreEntitlementManager is retained as a disabled stub.
+        self.store = StoreEntitlementManager(keychain: hooks) { [core] e in
             core.setStoreEntitlement(e)
-        }
-        self.store = store
-
-        if !isPreview {
-            Task {
-                await store.start()
-                DiagnosticsLog.shared.append("AppModel: StoreEntitlementManager started")
-            }
         }
     }
 }

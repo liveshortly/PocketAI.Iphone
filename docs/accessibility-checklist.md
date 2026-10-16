@@ -35,9 +35,9 @@ Perform complete end-to-end task flows using only VoiceOver screen reader gestur
 - [ ] **Settings & Network Proof**:
   - Toggles announce current state ("Share diagnostic reports, On/Off, Double-tap to toggle").
   - Network Proof counter announces total requests made and explains offline policy.
-- [ ] **Paywall & Activation**:
-  - Lifetime license features read in order with checkmark indicators.
-  - Price buttons clearly announce billing amount and restore purchases link.
+- [ ] **License Activation**:
+  - Pro features read in order with checkmark indicators.
+  - License key entry field and activate button are clearly accessible.
 
 ### macOS (Mac Companion)
 - [ ] **VoiceOver Cursor**: VO navigation (`Control-Option-Arrow`) logically traverses sidebar, conversation history, and composer.

@@ -2,9 +2,9 @@ import SwiftUI
 import PocketKit
 import PocketUI
 
-/// UI-20: Paywall + Pro gating (S-PAY, `02-design-system.md` §7.7).
-/// Presentation-only screen showing Pro benefits, an in-app purchase stub
-/// for App Store Review, and a license key activation field.
+/// UI-20: Pro benefits + license key activation (S-PAY, `02-design-system.md` §7.7).
+/// Presentation screen showing Pro benefits and Keygen license key activation.
+/// In-app purchase and StoreKit paywalls are removed under the Keygen-only model.
 public struct PaywallView: View {
     @Environment(AppModel.self) private var model
 
@@ -13,8 +13,6 @@ public struct PaywallView: View {
     @State private var activatedKey: String?
     @State private var error: String?
     @State private var toast: ToastData?
-    @State private var isPurchasing = false
-    @State private var isRestoring = false
 
     public init(prefilledKey: String? = nil) {
         _licenseKey = State(initialValue: prefilledKey ?? "")
@@ -32,7 +30,7 @@ public struct PaywallView: View {
                     Text("PocketAI Pro")
                         .font(.pocket(.title))
                         .foregroundStyle(PocketColor.textPrimary)
-                    Text("One purchase. Works on your iPhone and Mac.")
+                    Text("Enter a license key to unlock Pro features.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
                         .multilineTextAlignment(.center)
@@ -66,56 +64,6 @@ public struct PaywallView: View {
                     .padding(.vertical, PocketSpacing.s8)
                 }
             } else {
-                Section {
-                    VStack(spacing: PocketSpacing.s12) {
-                        Button {
-                            guard !isPurchasing && !isRestoring else { return }
-                            isPurchasing = true
-                            Task {
-                                defer { isPurchasing = false }
-                                _ = try? await model.store.purchase()
-                                entitlements = model.core.entitlements()
-                            }
-                        } label: {
-                            if isPurchasing {
-                                ProgressView()
-                                    .tint(.white)
-                                    .frame(maxWidth: .infinity)
-                            } else {
-                                Text("Buy PocketAI Pro")
-                                    .font(.pocket(.headline))
-                                    .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(PocketColor.accent)
-                        .disabled(isPurchasing || isRestoring)
-
-                        Button {
-                            guard !isPurchasing && !isRestoring else { return }
-                            isRestoring = true
-                            Task {
-                                defer { isRestoring = false }
-                                try? await model.store.restorePurchases()
-                                entitlements = model.core.entitlements()
-                            }
-                        } label: {
-                            if isRestoring {
-                                ProgressView()
-                                    .tint(PocketColor.accent)
-                            } else {
-                                Text("Restore Purchases")
-                                    .font(.pocket(.footnote))
-                                    .foregroundStyle(PocketColor.accent)
-                            }
-                        }
-                        .disabled(isPurchasing || isRestoring)
-                    }
-                    .padding(.vertical, PocketSpacing.s8)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
-
                 Section("Have a license key?") {
                     VStack(alignment: .leading, spacing: PocketSpacing.s8) {
                         HStack(spacing: PocketSpacing.s8) {
