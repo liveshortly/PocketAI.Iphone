@@ -2,8 +2,8 @@ import SwiftUI
 import PocketKit
 import PocketUI
 
-/// UI-20: Pro benefits + license key activation (S-PAY, `02-design-system.md` §7.7).
-/// Presentation screen showing Pro benefits and Keygen license key activation.
+/// UI-20: Licensed capabilities + license key activation (S-PAY, `02-design-system.md` §7.7).
+/// Presentation screen showing licensed capabilities and Keygen license key activation.
 /// In-app purchase and StoreKit paywalls are removed under the Keygen-only model.
 public struct PaywallView: View {
     @Environment(AppModel.self) private var model
@@ -18,7 +18,7 @@ public struct PaywallView: View {
         _licenseKey = State(initialValue: prefilledKey ?? "")
     }
 
-    private var isPro: Bool {
+    private var isLicensed: Bool {
         entitlements?.pro ?? false
     }
 
@@ -26,11 +26,11 @@ public struct PaywallView: View {
         List {
             Section {
                 VStack(spacing: PocketSpacing.s12) {
-                    PocketMarkView(state: isPro ? .working(tokPerSec: nil) : .idle, size: 64)
-                    Text("PocketAI Pro")
+                    PocketMarkView(state: isLicensed ? .working(tokPerSec: nil) : .idle, size: 64)
+                    Text("License Activation")
                         .font(.pocket(.title))
                         .foregroundStyle(PocketColor.textPrimary)
-                    Text("Enter a license key to unlock Pro features.")
+                    Text("Enter a license key to activate licensed features.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
                         .multilineTextAlignment(.center)
@@ -41,22 +41,22 @@ public struct PaywallView: View {
                 .listRowBackground(Color.clear)
             }
 
-            Section("Benefits") {
+            Section("Licensed Capabilities") {
                 benefitRow(icon: "laptopcomputer.and.iphone", text: "Use your Mac's models from iPhone")
                 benefitRow(icon: "network", text: "Serve models to other apps on your network")
             }
 
-            if isPro {
+            if isLicensed {
                 Section {
                     HStack(spacing: PocketSpacing.s12) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 28))
                             .foregroundStyle(PocketColor.statusOk)
                         VStack(alignment: .leading, spacing: PocketSpacing.s4) {
-                            Text("Pro active")
+                            Text("License active")
                                 .font(.pocket(.headline))
                                 .foregroundStyle(PocketColor.textPrimary)
-                            Text(proSubtitle)
+                            Text(licenseSubtitle)
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
                         }
@@ -100,7 +100,7 @@ public struct PaywallView: View {
                     .listRowBackground(Color.clear)
             }
         }
-        .navigationTitle("PocketAI Pro")
+        .navigationTitle("License Activation")
         .navigationBarTitleDisplayMode(.inline)
         .task { entitlements = model.core.entitlements() }
         .pocketToast($toast)
@@ -119,19 +119,19 @@ public struct PaywallView: View {
         .padding(.vertical, PocketSpacing.s4)
     }
 
-    private var proSubtitle: String {
+    private var licenseSubtitle: String {
         if let key = activatedKey ?? (licenseKey.isEmpty ? nil : licenseKey), key.count >= 4 {
-            return "Pro · key ending \(key.suffix(4))"
+            return "License · key ending \(key.suffix(4))"
         }
         if let source = entitlements?.source, !source.isEmpty {
             if source.hasPrefix("license:") {
                 let rest = source.dropFirst("license:".count)
                 let suffix = rest.count >= 4 ? String(rest.suffix(4)) : String(rest)
-                return "Pro · key ending \(suffix)"
+                return "License · key ending \(suffix)"
             }
-            return "Pro · \(source)"
+            return "License · \(source)"
         }
-        return "Pro active"
+        return "License active"
     }
 
     private func activate() {
@@ -141,7 +141,7 @@ public struct PaywallView: View {
             entitlements = try model.core.activateLicense(key: trimmed)
             activatedKey = trimmed
             error = nil
-            toast = ToastData(message: "Pro unlocked")
+            toast = ToastData(message: "License activated")
         } catch {
             self.error = "Couldn't activate that key."
         }

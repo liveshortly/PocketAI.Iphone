@@ -5,7 +5,7 @@ import PocketUI
 /// UI-11: Settings + Privacy (S-SET, S-NP). Only the Privacy section is
 /// real (offline mode + Network Proof, this card's actual "Done when");
 /// the other `02` §7.8 sections are present as navigable rows but their
-/// owning features (engine prefs, voice, Pro, etc.) aren't built yet.
+/// owning features (engine prefs, voice, license, etc.) aren't built yet.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
@@ -67,11 +67,11 @@ struct SettingsView: View {
                 Section("Mac") {
                     SettingsRow(icon: "laptopcomputer", title: "Pair a Mac", accessory: .navigation)
                 }
-                Section("Pro") {
+                Section("License") {
                     NavigationLink {
                         PaywallView()
                     } label: {
-                        SettingsRow(icon: "star", title: "PocketAI Pro", accessory: .navigation)
+                        SettingsRow(icon: "key", title: "License Activation", accessory: .navigation)
                     }
                 }
                 Section("About") {

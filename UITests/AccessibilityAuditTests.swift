@@ -12,7 +12,7 @@ import XCTest
 /// 3. Chat Detail (`ChatView`)
 /// 4. Models Catalog (`ModelsView`)
 /// 5. Settings & Privacy (`SettingsView`)
-/// 6. PocketAI Pro Paywall (`PaywallView`)
+/// 6. License Activation (`PaywallView`)
 final class AccessibilityAuditTests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -125,13 +125,14 @@ final class AccessibilityAuditTests: XCTestCase {
         try runAudit(app: app, screenName: "Settings")
     }
 
-    /// 6. Paywall Screen Accessibility Audit
+    /// 6. License Activation Accessibility Audit
     func testPaywallAccessibilityAudit() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-PocketPreviewCore", "-PocketSkipOnboarding", "-PocketScreenPaywall"]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["PocketAI Pro"].waitForExistence(timeout: 5) ||
+        XCTAssertTrue(app.staticTexts["License Activation"].waitForExistence(timeout: 5) ||
+                      app.staticTexts["PocketAI Pro"].waitForExistence(timeout: 5) ||
                       app.buttons["Done"].waitForExistence(timeout: 5) ||
                       app.buttons["Continue"].waitForExistence(timeout: 5))
         try runAudit(app: app, screenName: "Paywall")

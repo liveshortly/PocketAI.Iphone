@@ -36,7 +36,7 @@ Perform complete end-to-end task flows using only VoiceOver screen reader gestur
   - Toggles announce current state ("Share diagnostic reports, On/Off, Double-tap to toggle").
   - Network Proof counter announces total requests made and explains offline policy.
 - [ ] **License Activation**:
-  - Pro features read in order with checkmark indicators.
+  - Licensed capabilities read in order with checkmark indicators.
   - License key entry field and activate button are clearly accessible.
 
 ### macOS (Mac Companion)
@@ -117,7 +117,7 @@ Enable **Settings > Accessibility > Keyboards > Full Keyboard Access** on iOS, a
 | **Chat & Pulse** (`ChatView`) | [ ] | [ ] | [ ] | [ ] | [ ] | |
 | **Models Catalog** (`ModelsView`) | [ ] | [ ] | [ ] | [ ] | [ ] | |
 | **Settings & Privacy** (`SettingsView`) | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| **Pro Paywall** (`PaywallView`) | [ ] | [ ] | [ ] | [ ] | [ ] | |
+| **License Activation** (`PaywallView`) | [ ] | [ ] | [ ] | [ ] | [ ] | |
 | **Network Proof** (`NetworkProofView`) | [ ] | [ ] | [ ] | [ ] | [ ] | |
 | **Shared Inbox Ingest** (`SharedInboxIngestSheet`) | [ ] | [ ] | [ ] | [ ] | [ ] | |
 
