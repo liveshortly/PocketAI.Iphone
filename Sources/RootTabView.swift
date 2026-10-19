@@ -9,6 +9,18 @@ struct RootTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var isShowingSharedInboxSheet = false
 
+    private enum AppTab: Hashable {
+        case chats, models, devices, settings
+    }
+
+    @State private var selectedTab: AppTab = {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-PocketTabModels") { return .models }
+        if args.contains("-PocketTabDevices") { return .devices }
+        if args.contains("-PocketTabSettings") { return .settings }
+        return .chats
+    }()
+
     var body: some View {
         Group {
             if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-PocketComponentGallery") }) {
@@ -16,6 +28,14 @@ struct RootTabView: View {
             } else if ProcessInfo.processInfo.arguments.contains("-PocketScreenPaywall") {
                 NavigationStack {
                     PaywallView()
+                }
+            } else if ProcessInfo.processInfo.arguments.contains("-PocketScreenChat") {
+                NavigationStack {
+                    ChatView(conversationId: "fixture-0")
+                }
+            } else if ProcessInfo.processInfo.arguments.contains("-PocketScreenProjectDetail") {
+                NavigationStack {
+                    ProjectDetailView(projectId: "proj-1")
                 }
             } else if !model.hasOnboarded {
                 OnboardingFlow(core: model.core, deviceProfile: model.hooks.deviceProfile()) {
@@ -49,21 +69,59 @@ struct RootTabView: View {
     }
 
     private var tabs: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             ChatsListView()
-                .tabItem { Label("Chats", systemImage: "bubble.left.and.bubble.right") }
+                .tabItem {
+                    Label(
+                        "Chats",
+                        systemImage: selectedTab == .chats ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right"
+                    )
+                }
+                .tag(AppTab.chats)
                 .accessibilityIdentifier("tab_chats")
+
             ModelsView()
-                .tabItem { Label("Models", systemImage: "cpu") }
+                .tabItem {
+                    Label(
+                        "Models",
+                        systemImage: selectedTab == .models ? "cpu.fill" : "cpu"
+                    )
+                }
+                .tag(AppTab.models)
                 .accessibilityIdentifier("tab_models")
+
             DevicesView()
-                .tabItem { Label("Devices", systemImage: "laptopcomputer") }
+                .tabItem {
+                    Label(
+                        "Mac",
+                        systemImage: selectedTab == .devices ? "laptopcomputer.and.iphone" : "laptopcomputer"
+                    )
+                }
+                .tag(AppTab.devices)
                 .accessibilityIdentifier("tab_devices")
+
             SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tabItem {
+                    Label(
+                        "Settings",
+                        systemImage: selectedTab == .settings ? "gearshape.fill" : "gearshape"
+                    )
+                }
+                .tag(AppTab.settings)
                 .accessibilityIdentifier("tab_settings")
         }
         .tint(PocketColor.accent)
+        .modifier(TabBarMinimizeModifier())
+    }
+}
+
+private struct TabBarMinimizeModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            content
+        }
     }
 }
 

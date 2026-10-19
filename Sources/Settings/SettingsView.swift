@@ -2,31 +2,64 @@ import SwiftUI
 import PocketKit
 import PocketUI
 
-/// UI-11: Settings + Privacy (S-SET, S-NP). Only the Privacy section is
-/// real (offline mode + Network Proof, this card's actual "Done when");
-/// the other `02` §7.8 sections are present as navigable rows but their
-/// owning features (engine prefs, voice, license, etc.) aren't built yet.
+/// UI-11: Redesigned Settings + Privacy (S-SET, S-NP).
+/// Features grouped Form with native iOS section headers, icon badges,
+/// an at-a-glance Network Proof status card, and offline mode toggle.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
     @AppStorage("app.getpocketai.diagnosticsEnabled") private var diagnosticsEnabled = false
     @State private var offline = false
+    @State private var egressCount = 0
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Privacy") {
+                Section {
                     NavigationLink {
                         NetworkProofView(offline: $offline)
                     } label: {
-                        SettingsRow(icon: "network", title: "Network Proof", accessory: .navigation)
+                        HStack(spacing: PocketSpacing.s12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(PocketColor.accentSoft)
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: "checkmark.shield.fill")
+                                    .font(.system(.title2))
+                                    .foregroundStyle(PocketColor.statusOk)
+                            }
+                            .accessibilityHidden(true)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text("Network Proof")
+                                        .font(.pocket(.headline))
+                                        .foregroundStyle(PocketColor.textPrimary)
+                                    Spacer()
+                                    Text("\(egressCount)")
+                                        .font(.pocket(.title))
+                                        .foregroundStyle(PocketColor.accent)
+                                }
+                                Text(egressCount == 0 ? "0 outbound requests today · Verified on-device" : "\(egressCount) requests today")
+                                    .font(.pocket(.footnote))
+                                    .foregroundStyle(PocketColor.textSecondary)
+                            }
+                        }
+                        .padding(.vertical, PocketSpacing.s4)
                     }
+                }
+
+                Section("Privacy") {
                     SettingsRow(
-                        icon: "airplane", tint: PocketColor.statusWarn, title: "Offline mode",
+                        icon: "airplane",
+                        tint: PocketColor.statusWarn,
+                        title: "Offline mode",
                         accessory: .toggle($offline)
                     )
                     SettingsRow(
-                        icon: "heart.text.square", tint: PocketColor.accent, title: "Share diagnostic reports",
+                        icon: "heart.text.square",
+                        tint: PocketColor.accent,
+                        title: "Share diagnostic reports",
                         accessory: .toggle($diagnosticsEnabled)
                     )
                     .accessibilityElement(children: .combine)
@@ -39,7 +72,9 @@ struct SettingsView: View {
                             DiagnosticsPreviewView()
                         } label: {
                             SettingsRow(
-                                icon: "envelope", tint: PocketColor.statusInfo, title: "Send diagnostic report…",
+                                icon: "envelope",
+                                tint: PocketColor.statusInfo,
+                                title: "Send diagnostic report…",
                                 accessory: .navigation
                             )
                         }
@@ -47,39 +82,56 @@ struct SettingsView: View {
                         .accessibilityHint("Opens a preview of the diagnostic report before sending")
                     }
                 }
-                Section("Models & memory") {
-                    SettingsRow(icon: "cpu", title: "Default model", accessory: .navigation)
-                    SettingsRow(icon: "internaldrive", title: "Storage used", accessory: .navigation)
+
+                Section("Models & Memory") {
+                    SettingsRow(icon: "cpu", tint: PocketColor.statusInfo, title: "Default model", accessory: .navigation)
+                    SettingsRow(icon: "internaldrive", tint: PocketColor.textSecondary, title: "Storage used", accessory: .navigation)
                 }
+
                 Section("Engines") {
-                    SettingsRow(icon: "bolt", title: "MLX / llama.cpp", accessory: .navigation)
-                    SettingsRow(icon: "apple.logo", title: "Apple Intelligence", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Available" : "Unavailable"))
+                    SettingsRow(icon: "bolt.fill", tint: PocketColor.statusWarn, title: "MLX / llama.cpp", accessory: .navigation)
+                    SettingsRow(
+                        icon: "apple.logo",
+                        tint: PocketColor.textPrimary,
+                        title: "Apple Intelligence",
+                        accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Available" : "Unavailable")
+                    )
                 }
+
                 Section("Voice") {
                     SettingsRow(
-                        icon: "speaker.wave.2",
+                        icon: "speaker.wave.2.fill",
+                        tint: PocketColor.accent,
                         title: "Speak replies",
                         accessory: .toggle($autoSpeakReplies)
                     )
-                    SettingsRow(icon: "mic", title: "Speech-to-text", accessory: .navigation)
-                    SettingsRow(icon: "speaker.wave.2", title: "Text-to-speech voice", accessory: .navigation)
+                    SettingsRow(icon: "mic.fill", tint: PocketColor.statusInfo, title: "Speech-to-text", accessory: .navigation)
+                    SettingsRow(icon: "waveform", tint: PocketColor.statusOk, title: "Text-to-speech voice", accessory: .navigation)
                 }
-                Section("Mac") {
-                    SettingsRow(icon: "laptopcomputer", title: "Pair a Mac", accessory: .navigation)
+
+                Section("Mac & Devices") {
+                    SettingsRow(icon: "laptopcomputer", tint: PocketColor.statusInfo, title: "Pair a Mac", accessory: .navigation)
                 }
+
                 Section("License") {
                     NavigationLink {
                         PaywallView()
                     } label: {
-                        SettingsRow(icon: "key", title: "License Activation", accessory: .navigation)
+                        SettingsRow(icon: "key.fill", tint: PocketColor.accent, title: "License Activation", accessory: .navigation)
                     }
                 }
+
                 Section("About") {
-                    SettingsRow(icon: "info.circle", title: "Version", accessory: .value("0.2.0"))
+                    SettingsRow(icon: "info.circle.fill", tint: PocketColor.textSecondary, title: "Version", accessory: .value("0.2.0"))
                 }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Settings")
-            .task { offline = model.core.isOffline() }
+            .navigationBarTitleDisplayMode(.large)
+            .task {
+                offline = model.core.isOffline()
+                egressCount = model.core.egressLog(limit: 0).count
+            }
             .onChange(of: offline) { _, newValue in
                 model.core.setOfflineMode(on: newValue)
                 DiagnosticsLog.shared.append("Settings: offline mode set to \(newValue)")
@@ -106,25 +158,36 @@ private struct NetworkProofView: View {
                         .foregroundStyle(PocketColor.statusWarn)
                 }
             }
+
             Section {
-                VStack(alignment: .leading, spacing: PocketSpacing.s4) {
-                    Text("\(entries.count)")
-                        .font(.pocket(.display))
-                        .foregroundStyle(PocketColor.textPrimary)
+                VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("\(entries.count)")
+                            .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                            .foregroundStyle(PocketColor.textPrimary)
+                        Text("requests today")
+                            .font(.pocket(.headline))
+                            .foregroundStyle(PocketColor.textSecondary)
+                    }
+
                     Text("PocketAI made \(entries.count) internet request\(entries.count == 1 ? "" : "s") today.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
+
                     Text("Apple-managed purchases, system speech downloads, and anything you open yourself in a browser or Mail aren't counted here.")
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
                 }
+                .padding(.vertical, PocketSpacing.s8)
             }
+
             Section {
                 Toggle(isOn: $offline) {
                     Label("Offline mode", systemImage: "airplane")
                 }
                 .tint(PocketColor.statusWarn)
             }
+
             if !entries.isEmpty {
                 Section("Today") {
                     ForEach(entries, id: \.ts) { entry in
@@ -137,13 +200,16 @@ private struct NetworkProofView: View {
                     }
                 }
             }
+
             Section {
                 Text("Connections to your paired Mac are listed under Devices.")
                     .font(.pocket(.caption))
                     .foregroundStyle(PocketColor.textTertiary)
             }
         }
+        .listStyle(.insetGrouped)
         .navigationTitle("Network Proof")
+        .navigationBarTitleDisplayMode(.inline)
         .task { entries = model.core.egressLog(limit: 0) }
     }
 }

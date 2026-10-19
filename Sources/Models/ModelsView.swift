@@ -2,13 +2,18 @@ import SwiftUI
 import PocketKit
 import PocketUI
 
-/// UI-10: Models (S-MOD). "On your Mac" segment is NET-10/UI-12 scope
-/// (needs pairing) and isn't added until a Mac is actually paired, so this
-/// only covers "On this iPhone" and "Browse" for now.
+/// UI-10: Redesigned Models catalog & manager (S-MOD).
+/// Features segmented navigation (On this iPhone / Browse / On your Mac),
+/// "Recommended for this iPhone" hero card, Fit badges, clean download progress,
+/// categorized model sections, and a refined detail sheet.
 struct ModelsView: View {
     @Environment(AppModel.self) private var model
 
-    private enum Segment: String, CaseIterable { case onDevice = "On this iPhone", onMac = "On your Mac", browse = "Browse" }
+    private enum Segment: String, CaseIterable {
+        case onDevice = "On this iPhone"
+        case browse = "Browse"
+        case onMac = "On your Mac"
+    }
 
     @State private var segment = Segment.browse
     @State private var searchText = ""
@@ -23,27 +28,46 @@ struct ModelsView: View {
     @State private var remoteError: String?
 
     private var availableSegments: [Segment] {
-        peers.isEmpty ? [.onDevice, .browse] : [.onDevice, .onMac, .browse]
+        peers.isEmpty ? [.onDevice, .browse] : [.onDevice, .browse, .onMac]
+    }
+
+    private var heroEntry: CatalogEntry? {
+        catalog.first { $0.manifest.tags.contains("recommended") && $0.fit.verdict == .runsWell }
+            ?? catalog.first { $0.fit.verdict == .runsWell }
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("", selection: $segment) {
+                // Segmented picker
+                Picker("Catalog", selection: $segment) {
                     ForEach(availableSegments, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, PocketSpacing.gutterIphone)
-                .padding(.vertical, PocketSpacing.s8)
+                .padding(.top, PocketSpacing.s8)
+                .padding(.bottom, PocketSpacing.s8)
 
                 if segment == .browse {
-                    Toggle("Fits only", isOn: $fitsOnly)
-                        .font(.pocket(.footnote))
-                        .padding(.horizontal, PocketSpacing.gutterIphone)
-                        .padding(.bottom, PocketSpacing.s8)
+                    HStack {
+                        Toggle("Fits only", isOn: $fitsOnly)
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textSecondary)
+                    }
+                    .padding(.horizontal, PocketSpacing.gutterIphone)
+                    .padding(.bottom, PocketSpacing.s8)
                 }
 
                 List {
+                    // Hero card in Browse mode when no active search
+                    if segment == .browse, searchText.isEmpty, let hero = heroEntry {
+                        Section {
+                            heroCard(hero)
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                    }
+
                     if segment == .onMac {
                         if let remoteError {
                             Text(remoteError).font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
@@ -57,6 +81,12 @@ struct ModelsView: View {
                                 )
                             }
                         }
+                    } else if segment == .onDevice && groupedSections.isEmpty {
+                        Section {
+                            emptyOnDeviceState
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     } else {
                         ForEach(groupedSections, id: \.title) { section in
                             Section(section.title) {
@@ -72,6 +102,7 @@ struct ModelsView: View {
                             }
                         }
                     }
+
                     if segment == .browse, !searchText.isEmpty {
                         Section {
                             if model.core.isOffline() {
@@ -100,10 +131,12 @@ struct ModelsView: View {
                         }
                     }
                 }
-                .listStyle(.plain)
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
                 .searchable(text: $searchText, prompt: "Search models")
             }
             .navigationTitle("Models")
+            .navigationBarTitleDisplayMode(.large)
             .background(PocketColor.bgCanvas)
             .task {
                 reload()
@@ -146,6 +179,121 @@ struct ModelsView: View {
             }
         }
     }
+
+    // MARK: - Hero Card
+
+    private func heroCard(_ hero: CatalogEntry) -> some View {
+        Button {
+            detail = hero
+        } label: {
+            VStack(alignment: .leading, spacing: PocketSpacing.s12) {
+                HStack {
+                    HStack(spacing: PocketSpacing.s4) {
+                        PocketMarkView(state: .idle, size: 14)
+                        Text("RECOMMENDED FOR THIS IPHONE")
+                            .font(.system(.caption2, design: .rounded).weight(.bold))
+                            .foregroundStyle(PocketColor.accent)
+                    }
+                    .padding(.horizontal, PocketSpacing.s8)
+                    .padding(.vertical, 4)
+                    .background(PocketColor.accentSoft, in: Capsule())
+
+                    Spacer()
+
+                    FitBadge(kind: fitKind(hero.fit.verdict), reason: hero.fit.reason)
+                }
+
+                VStack(alignment: .leading, spacing: PocketSpacing.s4) {
+                    Text(hero.manifest.displayName)
+                        .font(.pocket(.title))
+                        .foregroundStyle(PocketColor.textPrimary)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("\(hero.manifest.family) · \(hero.manifest.quant) · \(formatBytes(hero.manifest.estRuntimeBytes))")
+                        .font(.pocket(.footnote))
+                        .foregroundStyle(PocketColor.textSecondary)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(hero.fit.reason)
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textSecondary)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
+
+                HStack(spacing: PocketSpacing.s12) {
+                    if let tok = hero.fit.estTokensPerSec {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill")
+                                .font(.caption2)
+                                .foregroundStyle(PocketColor.accent)
+                            Text("\(Int(tok)) tok/s")
+                                .font(.pocket(.caption))
+                                .foregroundStyle(PocketColor.textSecondary)
+                        }
+                    }
+
+                    Text(hero.manifest.license.spdx)
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textSecondary)
+
+                    Spacer()
+
+                    Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        performPrimaryAction(for: hero)
+                    } label: {
+                        Text(primaryActionLabel(for: hero))
+                            .font(.pocket(.footnote))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(PocketColor.accentOnAccent)
+                            .padding(.horizontal, PocketSpacing.s12)
+                            .padding(.vertical, 6)
+                            .background(PocketColor.accent, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, PocketSpacing.s4)
+            }
+            .padding(PocketSpacing.s16)
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(PocketColor.lineHairline))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var emptyOnDeviceState: some View {
+        VStack(spacing: PocketSpacing.s16) {
+            ZStack {
+                Circle()
+                    .fill(PocketColor.accentSoft)
+                    .frame(width: 64, height: 64)
+                Image(systemName: "arrow.down.circle")
+                    .font(.title)
+                    .foregroundStyle(PocketColor.accent)
+            }
+            Text("No models on this iPhone")
+                .font(.pocket(.headline))
+                .foregroundStyle(PocketColor.textPrimary)
+            Text("Download models from the Browse tab to run them offline.")
+                .font(.pocket(.footnote))
+                .foregroundStyle(PocketColor.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Button("Browse catalog") {
+                segment = .browse
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(PocketColor.accent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, PocketSpacing.s32)
+    }
+
+    // MARK: - Sections & Grouping
 
     private struct ModelSection {
         let title: String
@@ -231,7 +379,6 @@ struct ModelsView: View {
     }
 
     private func performRemotePrimaryAction(for entry: RemoteCatalogEntry) {
-        // ponytail: remote-model-use gate — wire when the remote model picker lands
         guard let peer = peers.first,
               let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) })
         else { return }
@@ -282,7 +429,7 @@ struct ModelsView: View {
         case .paused: return "Resume"
         case .verifying: return "Checking…"
         case .failed: return "Retry"
-        case .available, .queued: return entry.fit.verdict == .willNotFit ? "Won't fit" : "Download \(formatBytes(entry.manifest.estRuntimeBytes))"
+        case .available, .queued: return entry.fit.verdict == .willNotFit ? "Won't fit" : "Download"
         }
     }
 
@@ -311,27 +458,55 @@ private struct ModelDetailSheet: View {
     let primaryActionLabel: String
     let onPrimaryAction: () -> Void
     let onDelete: (() -> Void)?
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Text(entry.manifest.displayName).font(.pocket(.title))
-                    Text(entry.manifest.family).font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)
-                    FitBadge(kind: fitKind, reason: entry.fit.reason)
+                    VStack(alignment: .leading, spacing: PocketSpacing.s12) {
+                        HStack(spacing: PocketSpacing.s12) {
+                            PocketMarkView(state: .idle, size: 36)
+                            VStack(alignment: .leading, spacing: PocketSpacing.s2) {
+                                Text(entry.manifest.displayName)
+                                    .font(.pocket(.title))
+                                    .foregroundStyle(PocketColor.textPrimary)
+                                Text(entry.manifest.family)
+                                    .font(.pocket(.callout))
+                                    .foregroundStyle(PocketColor.textSecondary)
+                            }
+                        }
+                        FitBadge(kind: fitKind, reason: entry.fit.reason)
+                    }
+                    .padding(.vertical, PocketSpacing.s8)
                 }
+
                 Section("Specs") {
-                    LabeledContent("Quant", value: entry.manifest.quant)
-                    LabeledContent("Context", value: "\(entry.manifest.contextLength)")
-                    LabeledContent("Size", value: formatBytes(entry.manifest.estRuntimeBytes))
+                    LabeledContent("Quantization", value: entry.manifest.quant)
+                    LabeledContent("Context Length", value: "\(entry.manifest.contextLength) tokens")
+                    LabeledContent("Download Size", value: formatBytes(entry.manifest.estRuntimeBytes))
                     LabeledContent("Format", value: "\(entry.manifest.format)")
+                    if let speed = entry.fit.estTokensPerSec {
+                        LabeledContent("Estimated Speed", value: "\(Int(speed)) tok/s")
+                    }
                 }
-                Section("License") {
-                    Text(entry.manifest.license.spdx)
-                    Link(entry.manifest.license.url, destination: URL(string: entry.manifest.license.url) ?? URL(string: "https://huggingface.co")!)
+
+                Section("License & Source") {
+                    LabeledContent("License", value: entry.manifest.license.spdx)
+                    if let url = URL(string: entry.manifest.license.url) {
+                        Link(destination: url) {
+                            HStack {
+                                Text("Hugging Face Model Page")
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.caption)
+                            }
+                        }
+                    }
                 }
+
                 if entry.state == .downloading || entry.state == .paused {
-                    Section {
+                    Section("Download Status") {
                         DownloadProgress(
                             state: entry.state == .paused
                                 ? .paused(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(entry.manifest.estRuntimeBytes))
@@ -341,15 +516,33 @@ private struct ModelDetailSheet: View {
                         )
                     }
                 }
+
                 Section {
-                    Button(primaryActionLabel, action: onPrimaryAction)
+                    Button {
+                        onPrimaryAction()
+                    } label: {
+                        Text(primaryActionLabel)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .fontWeight(.semibold)
+                    }
+                    .tint(PocketColor.accent)
+
                     if let onDelete {
-                        Button("Delete", role: .destructive, action: onDelete)
+                        Button(role: .destructive, action: onDelete) {
+                            Text("Delete from Device")
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
                     }
                 }
             }
-            .navigationTitle("Model details")
+            .listStyle(.insetGrouped)
+            .navigationTitle("Model Details")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
         .presentationDetents([.medium, .large])
     }

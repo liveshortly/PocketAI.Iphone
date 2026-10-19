@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import PocketKit
 import PocketMLX
+import UIKit
 
 @Observable
 @MainActor
@@ -29,6 +30,11 @@ public final class AppModel {
         let hooks = LivePlatformHooks()
         self.hooks = hooks
         let isPreview = ProcessInfo.processInfo.arguments.contains("-PocketPreviewCore")
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-PocketPerfDiagnostics") {
+            UIView.setAnimationsEnabled(false)
+        }
+        #endif
         let core: CoreClient
         if isPreview {
             core = PreviewCore()

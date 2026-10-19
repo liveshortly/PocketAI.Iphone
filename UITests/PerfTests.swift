@@ -51,12 +51,12 @@ final class PerfTests: XCTestCase {
         for iteration in 1...5 {
             // Find composer text input
             let composerField: XCUIElement
-            if app.textViews["Message"].waitForExistence(timeout: 5) {
-                composerField = app.textViews["Message"]
+            if app.textFields["chat_composer"].waitForExistence(timeout: 5) {
+                composerField = app.textFields["chat_composer"]
             } else if app.textFields["Message"].waitForExistence(timeout: 3) {
                 composerField = app.textFields["Message"]
-            } else if app.textFields["chat_composer"].waitForExistence(timeout: 3) {
-                composerField = app.textFields["chat_composer"]
+            } else if app.textViews["Message"].waitForExistence(timeout: 3) {
+                composerField = app.textViews["Message"]
             } else {
                 composerField = app.otherElements["chat_composer"]
             }

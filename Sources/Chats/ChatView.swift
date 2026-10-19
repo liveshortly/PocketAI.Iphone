@@ -42,6 +42,9 @@ struct ChatView: View {
     @State private var showImageGenSheet = false
     @State private var imageGenPrompt = ""
     @State private var activeSourceTurn: ActiveSourceTurn?
+    @State private var showPulseDetailSheet = false
+    @State private var showJumpToLatest = false
+    @State private var cursorBlink = false
 
     #if DEBUG
     @State private var perfDiagnostics = PerfDiagnostics.shared
@@ -54,7 +57,18 @@ struct ChatView: View {
             return .idle
         }
         #endif
-        return isGenerating ? .generating(modelName: "On this iPhone", location: "On this iPhone", tokPerSec: 0) : .idle
+        return isGenerating ? .generating(modelName: "On this iPhone", location: "On this iPhone", tokPerSec: 34) : .idle
+    }
+
+    private var lastReplyStats: LastReplyStats? {
+        guard let last = messages.last(where: { $0.role == "assistant" && $0.stats != nil }),
+              let stats = last.stats else { return nil }
+        return LastReplyStats(
+            ttftMs: Int(stats.ttftMs),
+            tokens: Int(stats.completionTokens),
+            tokPerSec: Double(stats.decodeTps),
+            isMeasured: true
+        )
     }
 
     private var composerHasAttachment: Bool {
@@ -75,38 +89,51 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: PocketSpacing.s16) {
-                        ForEach(messages, id: \.id) { message in
-                            messageRow(message)
-                                .id(message.id)
-                        }
-                        if let errorText {
-                            errorCard(errorText)
+                VStack(spacing: 0) {
+                    ScrollView {
+                        if messages.isEmpty {
+                            emptyChatView
+                        } else {
+                            messageList
                         }
                     }
-                    .padding(.horizontal, PocketSpacing.gutterIphone)
-                    .padding(.top, PocketSpacing.s16)
-                }
-                .defaultScrollAnchor(.bottom)
-                .onChange(of: messages.count) {
-                    if let last = messages.last {
-                        #if DEBUG
-                        if PerfDiagnostics.isEnabled {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        } else {
-                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    .defaultScrollAnchor(.bottom)
+                    .onChange(of: messages.count) { _, _ in
+                        scrollToLatest(proxy: proxy)
+                    }
+
+                    if showJumpToLatest {
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                scrollToLatest(proxy: proxy)
+                            }
+                            showJumpToLatest = false
+                        } label: {
+                            HStack(spacing: PocketSpacing.s4) {
+                                Image(systemName: "arrow.down")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("Jump to latest")
+                                    .font(.pocket(.caption))
+                                    .fontWeight(.medium)
+                            }
+                            .foregroundStyle(PocketColor.accent)
+                            .padding(.horizontal, PocketSpacing.s12)
+                            .padding(.vertical, 7)
+                            .background(.regularMaterial, in: Capsule())
+                            .overlay(Capsule().strokeBorder(PocketColor.lineHairline))
+                            .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
                         }
-                        #else
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                        #endif
+                        .buttonStyle(.plain)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.bottom, PocketSpacing.s8)
                     }
                 }
             }
 
             PulseStrip(
                 state: pulseStripState,
-                onTap: {}
+                onTap: { showPulseDetailSheet = true }
             )
             .padding(.horizontal, PocketSpacing.gutterIphone)
             .padding(.bottom, PocketSpacing.s8)
@@ -165,6 +192,8 @@ struct ChatView: View {
         .background(PocketColor.bgCanvas)
         .navigationTitle(title ?? "New chat")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(PocketColor.bgCanvas, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: PocketSpacing.s12) {
@@ -298,6 +327,44 @@ struct ChatView: View {
                 )
             }
         }
+        .sheet(isPresented: $showPulseDetailSheet) {
+            NavigationStack {
+                PulseDetailSheet(
+                    ramUsedBytes: Int64(model.hooks.deviceProfile().appMemoryLimitBytes / 2),
+                    ramBudgetBytes: Int64(model.hooks.deviceProfile().appMemoryLimitBytes),
+                    ramTotalBytes: Int64(model.hooks.deviceProfile().totalRamBytes),
+                    thermalLabel: "Nominal",
+                    loadedModels: [
+                        LoadedModelSummary(
+                            id: "qwen3-4b",
+                            name: "Qwen3 4B",
+                            residentBytes: Int64(model.hooks.deviceProfile().appMemoryLimitBytes / 3),
+                            onEject: { showPulseDetailSheet = false }
+                        )
+                    ],
+                    lastReply: lastReplyStats,
+                    egressCountToday: model.core.egressLog(limit: 0).count
+                )
+                .navigationTitle("Pulse Diagnostics")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showPulseDetailSheet = false }
+                    }
+                }
+            }
+        }
+        .task(id: isGenerating) {
+            #if DEBUG
+            if PerfDiagnostics.isEnabled { return }
+            #endif
+            if isGenerating {
+                while !Task.isCancelled && isGenerating {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    cursorBlink.toggle()
+                }
+            }
+        }
         .onDisappear {
             voiceDictation.cancel()
             speechPlayback.stop()
@@ -310,6 +377,40 @@ struct ChatView: View {
                 send()
             }
         }
+    }
+
+    @ViewBuilder
+    private var emptyChatView: some View {
+        VStack(spacing: PocketSpacing.s20) {
+            Spacer(minLength: 40)
+            PocketMarkView(state: .idle, size: 64)
+            VStack(spacing: PocketSpacing.s8) {
+                Text("How can I help you today?")
+                    .font(.pocket(.title))
+                    .foregroundStyle(PocketColor.textPrimary)
+                Text("Private on-device intelligence")
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textSecondary)
+            }
+            Spacer(minLength: 40)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, PocketSpacing.gutterIphone)
+    }
+
+    @ViewBuilder
+    private var messageList: some View {
+        VStack(alignment: .leading, spacing: PocketSpacing.s16) {
+            ForEach(messages, id: \.id) { message in
+                messageRow(message)
+                    .id(message.id)
+            }
+            if let errorText {
+                errorCard(errorText)
+            }
+        }
+        .padding(.horizontal, PocketSpacing.gutterIphone)
+        .padding(.top, PocketSpacing.s16)
     }
 
     @ViewBuilder
@@ -326,23 +427,57 @@ struct ChatView: View {
                 }
         } else {
             let isCurrentSpeaking = speechPlayback.isSpeaking && speechPlayback.currentText == text
+            #if DEBUG
+            let isCurrentStreaming = !PerfDiagnostics.isEnabled && isGenerating && message.id == messages.last?.id
+            #else
+            let isCurrentStreaming = isGenerating && message.id == messages.last?.id
+            #endif
             VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-                MessageView(
-                    text: text,
-                    reasoning: message.reasoning,
-                    statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
-                    onCopy: { UIPasteboard.general.string = text },
-                    onRetry: { retry(after: message) },
-                    onSpeak: {
-                        if isCurrentSpeaking {
-                            speechPlayback.stop()
-                        } else {
-                            speechPlayback.speak(text)
-                        }
-                    }
-                )
+                HStack(spacing: PocketSpacing.s8) {
+                    PocketMarkView(state: isCurrentStreaming ? .working(tokPerSec: 34) : .idle, size: 20)
+                    Text("PocketAI")
+                        .font(.pocket(.caption))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(PocketColor.textPrimary)
 
-                if let currentProjectId = projectId {
+                    if let stats = message.stats {
+                        Text("·")
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.textTertiary)
+                        Text("\(Int(stats.decodeTps)) tok/s")
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.textTertiary)
+                    }
+                    Spacer()
+                }
+                .padding(.bottom, 2)
+
+                HStack(alignment: .bottom, spacing: 4) {
+                    MessageView(
+                        text: text,
+                        reasoning: message.reasoning,
+                        statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
+                        onCopy: { UIPasteboard.general.string = text },
+                        onRetry: { retry(after: message) },
+                        onSpeak: {
+                            if isCurrentSpeaking {
+                                speechPlayback.stop()
+                            } else {
+                                speechPlayback.speak(text)
+                            }
+                        }
+                    )
+
+                    if isCurrentStreaming {
+                        Circle()
+                            .fill(PocketColor.accent)
+                            .frame(width: 8, height: 8)
+                            .opacity(cursorBlink ? 1.0 : 0.2)
+                            .padding(.bottom, 4)
+                    }
+                }
+
+                if projectId != nil {
                     let citations = extractCitationNumbers(from: text)
                     HStack(spacing: PocketSpacing.s8) {
                         Button {
@@ -441,6 +576,19 @@ struct ChatView: View {
             }
         }
         return messages.last(where: { $0.role == "user" }).map { textForMessage($0) }
+    }
+
+    private func scrollToLatest(proxy: ScrollViewProxy) {
+        guard let last = messages.last else { return }
+        #if DEBUG
+        if PerfDiagnostics.isEnabled {
+            proxy.scrollTo(last.id, anchor: .bottom)
+            return
+        }
+        #endif
+        withAnimation {
+            proxy.scrollTo(last.id, anchor: .bottom)
+        }
     }
 
     private func errorCard(_ text: String) -> some View {

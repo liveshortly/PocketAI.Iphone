@@ -2,14 +2,15 @@ import SwiftUI
 import PocketKit
 import PocketUI
 
-/// UI-12: Mac tab + pairing (`02` §7.4 S-MAC, §7.5 S-PAIR). Not-paired,
-/// paired, and not-reachable states for the tab; the pairing flow itself
-/// (scan -> connecting -> waiting -> success/error) as a sheet.
+/// UI-12: Redesigned Mac tab + pairing (`02` §7.4 S-MAC, §7.5 S-PAIR).
+/// Features hardware illustration, step-by-step guidance cards, paired status card,
+/// and QR pairing flow.
 struct DevicesView: View {
     @Environment(AppModel.self) private var model
     @State private var peers: [Peer] = []
     @State private var showPairing = false
     @State private var showPaywall = false
+    @State private var peerToRevoke: Peer?
 
     var body: some View {
         NavigationStack {
@@ -21,6 +22,7 @@ struct DevicesView: View {
                 }
             }
             .navigationTitle("Mac")
+            .navigationBarTitleDisplayMode(.large)
             .background(PocketColor.bgCanvas)
             .task { reload() }
             .sheet(isPresented: $showPairing) {
@@ -36,56 +38,248 @@ struct DevicesView: View {
                         }
                 }
             }
+            .confirmationDialog(
+                "Disconnect \(peerToRevoke?.name ?? "Mac")?",
+                isPresented: Binding(get: { peerToRevoke != nil }, set: { if !$0 { peerToRevoke = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Disconnect", role: .destructive) {
+                    if let peer = peerToRevoke {
+                        revoke(peer)
+                    }
+                    peerToRevoke = nil
+                }
+                Button("Cancel", role: .cancel) { peerToRevoke = nil }
+            } message: {
+                Text("You can pair again anytime by scanning the code on your Mac.")
+            }
         }
     }
 
-    private var notPairedView: some View {
-        VStack(spacing: PocketSpacing.s24) {
-            Spacer()
-            Image(systemName: "laptopcomputer.and.iphone")
-                .font(.system(size: 56))
-                .foregroundStyle(PocketColor.accent)
-            Text("Use your Mac's models from this iPhone")
-                .font(.pocket(.title))
-                .multilineTextAlignment(.center)
-            VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-                Text("1. Open PocketAI on your Mac → Devices → Pair iPhone.")
-                Text("2. Scan the code.")
-            }
-            .font(.pocket(.footnote))
-            .foregroundStyle(PocketColor.textSecondary)
+    // MARK: - Not Paired View
 
-            Button("Scan code") {
-                if model.core.entitlements().pro {
-                    showPairing = true
-                } else {
-                    showPaywall = true
+    private var notPairedView: some View {
+        ScrollView {
+            VStack(spacing: PocketSpacing.s24) {
+                // Hardware illustration card
+                hardwareIllustration
+                    .padding(.top, PocketSpacing.s12)
+
+                VStack(spacing: PocketSpacing.s8) {
+                    Text("Use your Mac's models from this iPhone")
+                        .font(.pocket(.title))
+                        .foregroundStyle(PocketColor.textPrimary)
+                        .multilineTextAlignment(.center)
+
+                    Text("Pair over local Wi-Fi to run larger models using your Mac's unified memory. Everything stays on your devices.")
+                        .font(.pocket(.callout))
+                        .foregroundStyle(PocketColor.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, PocketSpacing.s16)
                 }
-            }
+
+                // Step cards
+                VStack(spacing: PocketSpacing.s12) {
+                    stepCard(
+                        number: "1",
+                        title: "Open PocketAI on your Mac",
+                        subtitle: "Go to Devices → Pair iPhone to show your QR code."
+                    )
+                    stepCard(
+                        number: "2",
+                        title: "Scan the pairing code",
+                        subtitle: "Point this iPhone camera at your Mac screen."
+                    )
+                }
+                .padding(.horizontal, PocketSpacing.gutterIphone)
+
+                // CTA Button
+                Button {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    if model.core.entitlements().pro {
+                        showPairing = true
+                    } else {
+                        showPaywall = true
+                    }
+                } label: {
+                    HStack(spacing: PocketSpacing.s8) {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Scan pairing code")
+                            .font(.pocket(.headline))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, PocketSpacing.s12)
+                }
                 .buttonStyle(.borderedProminent)
                 .tint(PocketColor.accent)
+                .padding(.horizontal, PocketSpacing.gutterIphone)
+                .padding(.top, PocketSpacing.s8)
 
-            Link("Don't have PocketAI on Mac? getpocketai.app", destination: URL(string: "https://getpocketai.app")!)
-                .font(.pocket(.caption))
-            Spacer()
+                Link(destination: URL(string: "https://getpocketai.app")!) {
+                    HStack(spacing: 4) {
+                        Text("Don't have PocketAI on Mac? getpocketai.app")
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                    }
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textTertiary)
+                }
+                .padding(.bottom, PocketSpacing.s24)
+            }
+        }
+    }
+
+    private var hardwareIllustration: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(PocketColor.bgRaised)
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(PocketColor.lineHairline))
+                .frame(height: 160)
+
+            HStack(spacing: PocketSpacing.s24) {
+                VStack(spacing: 6) {
+                    Image(systemName: "laptopcomputer")
+                        .font(.system(size: 48))
+                        .foregroundStyle(PocketColor.textPrimary)
+                    Text("Mac")
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textSecondary)
+                }
+
+                // Connecting beam with Spark Mark
+                HStack(spacing: 4) {
+                    Rectangle()
+                        .fill(PocketColor.lineStrong)
+                        .frame(width: 24, height: 2)
+
+                    PocketMarkView(state: .working(tokPerSec: nil), size: 36)
+
+                    Rectangle()
+                        .fill(PocketColor.lineStrong)
+                        .frame(width: 24, height: 2)
+                }
+
+                VStack(spacing: 6) {
+                    Image(systemName: "iphone.gen3")
+                        .font(.system(size: 44))
+                        .foregroundStyle(PocketColor.textPrimary)
+                    Text("iPhone")
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textSecondary)
+                }
+            }
         }
         .padding(.horizontal, PocketSpacing.gutterIphone)
     }
 
+    private func stepCard(number: String, title: String, subtitle: String) -> some View {
+        HStack(alignment: .top, spacing: PocketSpacing.s12) {
+            ZStack {
+                Circle()
+                    .fill(PocketColor.accentSoft)
+                    .frame(width: 28, height: 28)
+                Text(number)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(PocketColor.accent)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.pocket(.headline))
+                    .foregroundStyle(PocketColor.textPrimary)
+                Text(subtitle)
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(PocketSpacing.s16)
+        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
+        .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
+    }
+
+    // MARK: - Paired View
+
     private func pairedView(_ peer: Peer) -> some View {
         List {
             Section {
-                DeviceRow(
-                    name: peer.name, isConnected: true, lastSeenText: "",
-                    route: peer.addrs.first.map { "Wi-Fi · \($0)" }, icon: "laptopcomputer",
-                    onRevoke: { revoke(peer) }
-                )
+                VStack(alignment: .leading, spacing: PocketSpacing.s12) {
+                    HStack(spacing: PocketSpacing.s12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(PocketColor.accentSoft)
+                                .frame(width: 48, height: 48)
+                            Image(systemName: "laptopcomputer")
+                                .font(.system(size: 24))
+                                .foregroundStyle(PocketColor.accent)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(peer.name)
+                                .font(.pocket(.title))
+                                .foregroundStyle(PocketColor.textPrimary)
+
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(PocketColor.statusOk)
+                                    .frame(width: 8, height: 8)
+                                Text("Connected · Local Wi-Fi")
+                                    .font(.pocket(.caption))
+                                    .foregroundStyle(PocketColor.statusOk)
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    if let addr = peer.addrs.first {
+                        HStack {
+                            Text("Network Address")
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.textSecondary)
+                            Spacer()
+                            Text(addr)
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.textPrimary)
+                        }
+                    }
+
+                    HStack {
+                        Text("Status")
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textSecondary)
+                        Spacer()
+                        Text("Ready for remote inference")
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textPrimary)
+                    }
+                }
+                .padding(.vertical, PocketSpacing.s8)
             }
+
+            Section("Mac Capabilities") {
+                NavigationLink {
+                    // Models view auto-selects Mac segment when paired
+                    Text("Mac Catalog")
+                } label: {
+                    SettingsRow(icon: "cpu", title: "Load model on Mac…", accessory: .navigation)
+                }
+
+                SettingsRow(icon: "info.circle", title: "Server info & API key", accessory: .navigation)
+            }
+
             Section {
-                SettingsRow(icon: "cpu", title: "Load model…", accessory: .navigation)
-                SettingsRow(icon: "info.circle", title: "Server info", accessory: .navigation)
+                Button(role: .destructive) {
+                    peerToRevoke = peer
+                } label: {
+                    Text("Disconnect Mac")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
     }
 
     private func reload() {
@@ -98,9 +292,7 @@ struct DevicesView: View {
     }
 }
 
-/// S-PAIR: scanner -> connecting -> waiting -> success, with the
-/// "Enter code manually" fallback (same `parsePairingQr` call, just fed a
-/// typed string instead of a scanned one).
+/// S-PAIR: QR Scanner -> Connecting -> Waiting -> Success.
 private struct PairingFlowView: View {
     let onPaired: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -118,48 +310,100 @@ private struct PairingFlowView: View {
                 case .scan:
                     ZStack(alignment: .bottom) {
                         QRScannerView { code in handle(code: code) }
-                        Button("Enter code manually") { step = .manualEntry }
-                            .foregroundStyle(.white)
-                            .padding(.bottom, PocketSpacing.s32)
+                        Button("Enter code manually") {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            step = .manualEntry
+                        }
+                        .font(.pocket(.callout))
+                        .fontWeight(.medium)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, PocketSpacing.s16)
+                        .padding(.vertical, PocketSpacing.s8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.bottom, PocketSpacing.s40)
                     }
                 case .manualEntry:
-                    VStack(spacing: PocketSpacing.s16) {
-                        Text("Enter the host and code shown on your Mac").font(.pocket(.body))
+                    VStack(spacing: PocketSpacing.s20) {
+                        Text("Enter the host and code shown on your Mac")
+                            .font(.pocket(.body))
+                            .foregroundStyle(PocketColor.textPrimary)
+                            .multilineTextAlignment(.center)
+
                         TextField("host:port#code", text: $manualCode)
+                            .font(.pocket(.mono))
                             .textFieldStyle(.roundedBorder)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
                             .padding(.horizontal, PocketSpacing.gutterIphone)
-                        Button("Connect") { handle(code: manualCode) }
-                            .buttonStyle(.borderedProminent)
+
+                        Button("Connect") {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            handle(code: manualCode)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(PocketColor.accent)
+                        .disabled(manualCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
-                    .padding(.top, PocketSpacing.s32)
+                    .padding(.top, PocketSpacing.s40)
                 case .connecting:
-                    VStack(spacing: PocketSpacing.s16) {
-                        PocketMarkView(state: .loading, size: 64)
-                        Text("Connecting to \(offer?.hostName ?? "your Mac")…").font(.pocket(.body))
+                    VStack(spacing: PocketSpacing.s20) {
+                        PocketMarkView(state: .loading, size: 72)
+                        Text("Connecting to \(offer?.hostName ?? "your Mac")…")
+                            .font(.pocket(.headline))
+                            .foregroundStyle(PocketColor.textPrimary)
                     }
                 case .waitingForApproval:
-                    VStack(spacing: PocketSpacing.s16) {
-                        PocketMarkView(state: .loading, size: 64)
-                        Text("Waiting for you to allow on your Mac").font(.pocket(.body))
+                    VStack(spacing: PocketSpacing.s20) {
+                        PocketMarkView(state: .loading, size: 72)
+                        Text("Waiting for you to allow on your Mac")
+                            .font(.pocket(.headline))
+                            .foregroundStyle(PocketColor.textPrimary)
+                        Text("Check the prompt on your Mac's screen.")
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textSecondary)
                     }
                 case .success:
-                    VStack(spacing: PocketSpacing.s16) {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 48)).foregroundStyle(PocketColor.statusOk)
-                        Text("Paired. Your Mac's models now appear in the model picker.")
+                    VStack(spacing: PocketSpacing.s20) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 56))
+                            .foregroundStyle(PocketColor.statusOk)
+                        Text("Paired with Mac")
+                            .font(.pocket(.title))
+                            .foregroundStyle(PocketColor.textPrimary)
+                        Text("Your Mac's models now appear in the model picker.")
                             .font(.pocket(.body))
+                            .foregroundStyle(PocketColor.textSecondary)
                             .multilineTextAlignment(.center)
-                        Button("Choose a Mac model") { dismiss() }
-                            .buttonStyle(.borderedProminent)
+                            .padding(.horizontal, PocketSpacing.gutterIphone)
+
+                        Button("Choose a Mac model") {
+                            dismiss()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(PocketColor.accent)
+                        .padding(.top, PocketSpacing.s8)
                     }
                     .padding(.horizontal, PocketSpacing.gutterIphone)
                 case .error(let message):
-                    VStack(spacing: PocketSpacing.s16) {
-                        Text(message).font(.pocket(.body)).multilineTextAlignment(.center)
-                        Button("Try again") { step = .scan }
+                    VStack(spacing: PocketSpacing.s20) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 48))
+                            .foregroundStyle(PocketColor.statusBad)
+                        Text(message)
+                            .font(.pocket(.body))
+                            .foregroundStyle(PocketColor.textPrimary)
+                            .multilineTextAlignment(.center)
+                        Button("Try again") {
+                            step = .scan
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(PocketColor.accent)
                     }
                     .padding(.horizontal, PocketSpacing.gutterIphone)
                 }
             }
+            .navigationTitle("Pair Mac")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -177,8 +421,6 @@ private struct PairingFlowView: View {
         self.offer = offer
 
         guard let liveCore = model.core as? LiveCore else {
-            // PreviewCore has no real network handshake to drive - save
-            // immediately so the flow is demoable end to end in Preview mode.
             step = .waitingForApproval
             let approved = ApprovedPairing(
                 hostId: offer.hostId, certFingerprint: offer.certFingerprint,
@@ -194,11 +436,6 @@ private struct PairingFlowView: View {
         let coordinator = PairingCoordinator(core: liveCore.rawCore, keychain: model.hooks)
         let pairTask = Task { await coordinator.pair(qr: code) }
         Task {
-            // `pair(qr:)` drives its own `@Published phase` through
-            // connecting -> waitingForApproval -> a terminal state;
-            // mirroring it here (rather than reading it once after the
-            // await) keeps "Waiting for you to allow on your Mac" visible
-            // for however long the real long-poll takes.
             while !pairTask.isCancelled {
                 switch coordinator.phase {
                 case .waitingForApproval:
