@@ -17,7 +17,7 @@ struct ModelsView: View {
 
     @State private var segment = Segment.browse
     @State private var searchText = ""
-    @State private var fitsOnly = true
+    @State private var fitsOnly = false
     @State private var catalog: [CatalogEntry] = []
     @State private var detail: CatalogEntry?
     @State private var pendingDelete: CatalogEntry?
@@ -88,18 +88,8 @@ struct ModelsView: View {
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                     } else {
-                        ForEach(groupedSections, id: \.title) { section in
-                            Section(section.title) {
-                                ForEach(section.entries, id: \.manifest.id) { entry in
-                                    ModelRow(
-                                        data: rowData(for: entry),
-                                        primaryActionLabel: primaryActionLabel(for: entry),
-                                        onPrimaryAction: { performPrimaryAction(for: entry) }
-                                    )
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { detail = entry }
-                                }
-                            }
+                        ForEach(groupedSections) { section in
+                            modelSectionView(section)
                         }
                     }
 
@@ -295,9 +285,33 @@ struct ModelsView: View {
 
     // MARK: - Sections & Grouping
 
-    private struct ModelSection {
+    private struct ModelSection: Identifiable {
+        var id: String { title }
         let title: String
+        let icon: String
         let entries: [CatalogEntry]
+    }
+
+    private func modelSectionView(_ section: ModelSection) -> some View {
+        Section {
+            ForEach(section.entries, id: \.manifest.id) { entry in
+                ModelRow(
+                    data: rowData(for: entry),
+                    primaryActionLabel: primaryActionLabel(for: entry),
+                    onPrimaryAction: { performPrimaryAction(for: entry) }
+                )
+                .contentShape(Rectangle())
+                .onTapGesture { detail = entry }
+            }
+        } header: {
+            HStack(spacing: PocketSpacing.s8) {
+                Image(systemName: section.icon)
+                    .font(.pocket(.footnote))
+                Text(section.title)
+                    .font(.pocket(.footnote))
+            }
+            .foregroundStyle(PocketColor.textSecondary)
+        }
     }
 
     private var groupedSections: [ModelSection] {
@@ -307,28 +321,39 @@ struct ModelsView: View {
         }
         if segment == .onDevice {
             entries = entries.filter { $0.state == .installed || $0.state == .downloading || $0.state == .paused }
-            return entries.isEmpty ? [] : [ModelSection(title: "On this iPhone", entries: entries)]
+            return entries.isEmpty ? [] : [ModelSection(title: "On this iPhone", icon: "iphone", entries: entries)]
         }
         if fitsOnly {
             entries = entries.filter { $0.fit.verdict == .runsWell || $0.fit.verdict == .runsSlow }
         }
         var sections: [ModelSection] = []
-        let recommended = entries.filter { $0.manifest.tags.contains("recommended") }
-        if !recommended.isEmpty { sections.append(ModelSection(title: "Recommended for this iPhone", entries: recommended)) }
-        let vision = entries.filter { $0.manifest.modalities.contains(.vision) }
-        if !vision.isEmpty { sections.append(ModelSection(title: "Vision", entries: vision)) }
-        let voice = entries.filter { $0.manifest.modalities.contains(.speechToText) || $0.manifest.modalities.contains(.textToSpeech) }
-        if !voice.isEmpty { sections.append(ModelSection(title: "Voice", entries: voice)) }
-        let images = entries.filter { $0.manifest.modalities.contains(.image) }
-        if !images.isEmpty { sections.append(ModelSection(title: "Images", entries: images)) }
-        let rest = entries.filter {
-            !$0.manifest.tags.contains("recommended")
+
+        let text = entries.filter {
+            $0.manifest.modalities.contains(.text)
                 && !$0.manifest.modalities.contains(.vision)
-                && !$0.manifest.modalities.contains(.speechToText)
-                && !$0.manifest.modalities.contains(.textToSpeech)
                 && !$0.manifest.modalities.contains(.image)
         }
-        if !rest.isEmpty { sections.append(ModelSection(title: "Fast & small", entries: rest)) }
+        if !text.isEmpty {
+            sections.append(ModelSection(title: "Text", icon: "text.bubble", entries: text))
+        }
+
+        let vision = entries.filter { $0.manifest.modalities.contains(.vision) }
+        if !vision.isEmpty {
+            sections.append(ModelSection(title: "Vision", icon: "eye", entries: vision))
+        }
+
+        let image = entries.filter { $0.manifest.modalities.contains(.image) }
+        if !image.isEmpty {
+            sections.append(ModelSection(title: "Image generation", icon: "photo", entries: image))
+        }
+
+        let voice = entries.filter {
+            $0.manifest.modalities.contains(.speechToText) || $0.manifest.modalities.contains(.textToSpeech)
+        }
+        if !voice.isEmpty {
+            sections.append(ModelSection(title: "Voice", icon: "waveform", entries: voice))
+        }
+
         return sections
     }
 

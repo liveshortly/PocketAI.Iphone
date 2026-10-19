@@ -112,6 +112,18 @@ final class AccessibilityAuditTests: XCTestCase {
 
         XCTAssertTrue(app.navigationBars["Models"].waitForExistence(timeout: 5))
         try runAudit(app: app, screenName: "Models")
+
+        try? FileManager.default.createDirectory(atPath: "/tmp/models-ui", withIntermediateDirectories: true)
+        let shot1 = XCUIScreen.main.screenshot()
+        try? shot1.pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/models-ui/iphone-models-1.png"))
+
+        app.swipeUp()
+        let shot2 = XCUIScreen.main.screenshot()
+        try? shot2.pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/models-ui/iphone-models-2.png"))
+
+        app.swipeUp()
+        let shot3 = XCUIScreen.main.screenshot()
+        try? shot3.pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/models-ui/iphone-models-3.png"))
     }
 
     /// 5. Settings Screen Accessibility Audit
