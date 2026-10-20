@@ -25,10 +25,6 @@ struct RootTabView: View {
         Group {
             if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-PocketComponentGallery") }) {
                 ComponentGallery()
-            } else if ProcessInfo.processInfo.arguments.contains("-PocketScreenPaywall") {
-                NavigationStack {
-                    PaywallView()
-                }
             } else if ProcessInfo.processInfo.arguments.contains("-PocketScreenChat") {
                 NavigationStack {
                     ChatView(conversationId: "fixture-0")
