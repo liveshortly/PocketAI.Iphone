@@ -246,6 +246,7 @@ struct ModelsView: View {
                             .background(PocketColor.accent, in: Capsule())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("model_action_button_\(hero.manifest.id)")
                 }
                 .padding(.top, PocketSpacing.s4)
             }
@@ -254,6 +255,8 @@ struct ModelsView: View {
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(PocketColor.lineHairline))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("model_hero_\(hero.manifest.id)")
+        .accessibilityValue(modelStateAccessibilityValue(hero.state))
     }
 
     private var emptyOnDeviceState: some View {
@@ -301,6 +304,9 @@ struct ModelsView: View {
                     primaryActionLabel: primaryActionLabel(for: entry),
                     onPrimaryAction: { performPrimaryAction(for: entry) }
                 )
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("model_row_\(entry.manifest.id)")
+                .accessibilityValue(modelStateAccessibilityValue(entry.state))
                 .contentShape(Rectangle())
                 .onTapGesture { detail = entry }
             }
@@ -475,6 +481,18 @@ struct ModelsView: View {
         case .runsSlow: return .runsSlow
         case .willNotFit: return .willNotFit
         case .notSupported: return .notSupported
+        }
+    }
+
+    private func modelStateAccessibilityValue(_ state: ModelState) -> String {
+        switch state {
+        case .available: return "available"
+        case .downloading: return "downloading"
+        case .paused: return "paused"
+        case .installed: return "installed"
+        case .queued: return "queued"
+        case .verifying: return "verifying"
+        case .failed(let reason): return "failed: \(reason)"
         }
     }
 }
