@@ -47,6 +47,7 @@ struct SettingsView: View {
                         }
                         .padding(.vertical, PocketSpacing.s4)
                     }
+                    .accessibilityIdentifier("settings_network_proof_row")
                 }
 
                 Section("Privacy") {
@@ -56,6 +57,7 @@ struct SettingsView: View {
                         title: "Offline mode",
                         accessory: .toggle($offline)
                     )
+                    .accessibilityIdentifier("settings_offline_row")
                     SettingsRow(
                         icon: "heart.text.square",
                         tint: PocketColor.accent,
@@ -181,6 +183,7 @@ private struct NetworkProofView: View {
                     Label("Offline mode", systemImage: "airplane")
                 }
                 .tint(PocketColor.statusWarn)
+                .accessibilityIdentifier("network_proof_offline_toggle")
             }
 
             if !entries.isEmpty {

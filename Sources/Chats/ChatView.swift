@@ -420,6 +420,7 @@ struct ChatView: View {
 
         if message.role == "user" {
             UserBubble(text: text, attachmentThumbnails: thumbnails)
+                .accessibilityIdentifier("chat_bubble_user")
                 .contextMenu {
                     if !text.isEmpty {
                         Button("Copy") { UIPasteboard.general.string = text }
@@ -467,6 +468,7 @@ struct ChatView: View {
                             }
                         }
                     )
+                    .accessibilityIdentifier("chat_bubble_assistant")
 
                     if isCurrentStreaming {
                         Circle()
@@ -662,7 +664,9 @@ struct ChatView: View {
             let input = UserInput(parts: parts)
             var partialText = ""
             do {
-                for try await event in model.core.sendMessage(conversationId: conversationId, input: input) {
+                let stream = model.core.sendMessage(conversationId: conversationId, input: input)
+                reload()
+                for try await event in stream {
                     switch event {
                     case .delta(let delta):
                         partialText += delta.text
