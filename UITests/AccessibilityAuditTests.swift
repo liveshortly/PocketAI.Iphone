@@ -6,13 +6,12 @@ import XCTest
 /// Automated accessibility audits via `app.performAccessibilityAudit()` require an active
 /// Simulator GUI session (XCUIApplication connection). Headless test executions lack
 /// the graphics/window server context necessary to inspect UIKit/SwiftUI accessibility elements.
-/// This suite verifies test compilation and defines automated audit coverage across all 6 core surfaces:
+/// This suite verifies test compilation and defines automated audit coverage across all 5 core surfaces:
 /// 1. Onboarding Flow (`OnboardingFlow`)
 /// 2. Chats List (`ChatsListView`)
 /// 3. Chat Detail (`ChatView`)
 /// 4. Models Catalog (`ModelsView`)
 /// 5. Settings & Privacy (`SettingsView`)
-/// 6. License Activation (`PaywallView`)
 final class AccessibilityAuditTests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -43,9 +42,6 @@ final class AccessibilityAuditTests: XCTestCase {
                 // SwiftUI List cells containing multi-line static text report partial dynamic type support
                 // under on-Simulator automated audits due to cell height measurement constraints.
                 if issue.compactDescription == "Dynamic Type font sizes are partially unsupported" {
-                    return true
-                }
-                if screenName == "Paywall", issue.auditType == .dynamicType {
                     return true
                 }
                 // Elements that cannot be bound to any accessible UI element (issue.element == nil)
@@ -138,18 +134,5 @@ final class AccessibilityAuditTests: XCTestCase {
 
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         try runAudit(app: app, screenName: "Settings")
-    }
-
-    /// 6. License Activation Accessibility Audit
-    func testPaywallAccessibilityAudit() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-PocketPreviewCore", "-PocketSkipOnboarding", "-PocketScreenPaywall"]
-        app.launch()
-
-        XCTAssertTrue(app.staticTexts["License Activation"].waitForExistence(timeout: 5) ||
-                      app.staticTexts["PocketAI Pro"].waitForExistence(timeout: 5) ||
-                      app.buttons["Done"].waitForExistence(timeout: 5) ||
-                      app.buttons["Continue"].waitForExistence(timeout: 5))
-        try runAudit(app: app, screenName: "Paywall")
     }
 }

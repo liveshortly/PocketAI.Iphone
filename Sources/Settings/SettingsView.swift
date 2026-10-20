@@ -113,14 +113,6 @@ struct SettingsView: View {
                     SettingsRow(icon: "laptopcomputer", tint: PocketColor.statusInfo, title: "Pair a Mac", accessory: .navigation)
                 }
 
-                Section("License") {
-                    NavigationLink {
-                        PaywallView()
-                    } label: {
-                        SettingsRow(icon: "key.fill", tint: PocketColor.accent, title: "License Activation", accessory: .navigation)
-                    }
-                }
-
                 Section("About") {
                     SettingsRow(icon: "info.circle.fill", tint: PocketColor.textSecondary, title: "Version", accessory: .value("0.2.0"))
                 }

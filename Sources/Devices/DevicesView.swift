@@ -9,7 +9,6 @@ struct DevicesView: View {
     @Environment(AppModel.self) private var model
     @State private var peers: [Peer] = []
     @State private var showPairing = false
-    @State private var showPaywall = false
     @State private var peerToRevoke: Peer?
 
     var body: some View {
@@ -27,16 +26,6 @@ struct DevicesView: View {
             .task { reload() }
             .sheet(isPresented: $showPairing) {
                 PairingFlowView { reload() }
-            }
-            .sheet(isPresented: $showPaywall) {
-                NavigationStack {
-                    PaywallView()
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showPaywall = false }
-                            }
-                        }
-                }
             }
             .confirmationDialog(
                 "Disconnect \(peerToRevoke?.name ?? "Mac")?",
@@ -96,11 +85,7 @@ struct DevicesView: View {
                 // CTA Button
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    if model.core.entitlements().pro {
-                        showPairing = true
-                    } else {
-                        showPaywall = true
-                    }
+                    showPairing = true
                 } label: {
                     HStack(spacing: PocketSpacing.s8) {
                         Image(systemName: "qrcode.viewfinder")
