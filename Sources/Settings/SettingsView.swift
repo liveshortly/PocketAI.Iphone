@@ -126,6 +126,9 @@ struct SettingsView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(PocketColor.bgCanvas)
+            .padding(.bottom, 80)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
             .task {

@@ -124,6 +124,7 @@ struct ModelsView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
                 .searchable(text: $searchText, prompt: "Search models")
+                .padding(.bottom, 110)
             }
             .navigationTitle("Models")
             .navigationBarTitleDisplayMode(.large)
