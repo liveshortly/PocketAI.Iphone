@@ -450,7 +450,7 @@ struct ChatsListView: View {
     }
 
     private func newChat(firstMessage: String?) {
-        guard let conversation = try? model.core.createConversation(NewConversation(title: nil, projectId: nil, modelId: nil)) else { return }
+        guard let conversation = try? model.core.createConversation(NewConversation(title: nil, projectId: nil, modelId: model.selectedModelId)) else { return }
         reload()
         pendingInitialMessage = firstMessage
         openConversationId = conversation.id

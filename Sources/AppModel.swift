@@ -15,8 +15,12 @@ public final class AppModel {
     public var hasOnboarded: Bool {
         didSet { UserDefaults.standard.set(hasOnboarded, forKey: Self.onboardedKey) }
     }
+    public var selectedModelId: String? {
+        didSet { UserDefaults.standard.set(selectedModelId, forKey: Self.selectedModelKey) }
+    }
 
     private static let onboardedKey = "app.getpocketai.hasOnboarded"
+    private static let selectedModelKey = "app.getpocketai.selectedModelId"
 
     public init() {
         DiagnosticsLog.shared.append("AppModel: initialization started")
@@ -27,6 +31,7 @@ public final class AppModel {
         } else {
             hasOnboarded = UserDefaults.standard.bool(forKey: Self.onboardedKey)
         }
+        selectedModelId = UserDefaults.standard.string(forKey: Self.selectedModelKey)
         let hooks = LivePlatformHooks()
         self.hooks = hooks
         let isPreview = ProcessInfo.processInfo.arguments.contains("-PocketPreviewCore")
@@ -43,11 +48,24 @@ public final class AppModel {
             let config = CoreConfig(appSupportDir: hooks.appSupportDir(), platform: .ios)
             do {
                 let live = try LiveCore(config: config, platform: hooks)
-                // Register the on-device chat engines (MLX .safetensors +
-                // Apple Intelligence) so send() can actually run inference.
-                live.registerEngine(RoutingEngine())
+                let lazyRemote = LazyRemoteEngine { [weak live, hooks] in
+                    guard let live else { return nil }
+                    guard let peer = live.peers().first else { return nil }
+                    guard let tokenData = hooks.keychainGet(key: peer.tokenRef),
+                          let token = String(data: tokenData, encoding: .utf8),
+                          let host = peer.addrs.first else {
+                        return nil
+                    }
+                    let endpoint = PeerEndpoint(host: host, port: peer.port, fingerprint: peer.certSha256)
+                    return PeerClient(endpoint: endpoint, token: token)
+                }
+                live.registerEngine(RoutingEngine(engines: [
+                    PocketMLXEngine(),
+                    AppleFoundationModelsEngine(),
+                    lazyRemote,
+                ]))
                 core = live
-                DiagnosticsLog.shared.append("AppModel: LiveCore initialized, RoutingEngine registered")
+                DiagnosticsLog.shared.append("AppModel: LiveCore initialized, RoutingEngine registered with MLX, AFM, and LazyRemoteEngine")
             } catch {
                 DiagnosticsLog.shared.append("AppModel: LiveCore failed to open")
                 fatalError("PocketCore.open failed: \(error)")

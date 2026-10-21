@@ -21,7 +21,7 @@ struct AskPocketAIIntent: AppIntent {
         let conversation: Conversation
         do {
             conversation = try core.createConversation(
-                NewConversation(title: "Siri", projectId: nil, modelId: nil)
+                NewConversation(title: "Siri", projectId: nil, modelId: AppModel.shared.selectedModelId)
             )
         } catch {
             throw PocketAIIntentError("PocketAI couldn't generate a response.")

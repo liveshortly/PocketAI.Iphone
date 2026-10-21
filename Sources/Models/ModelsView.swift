@@ -79,6 +79,12 @@ struct ModelsView: View {
                                     primaryActionLabel: remotePrimaryActionLabel(for: entry),
                                     onPrimaryAction: { performRemotePrimaryAction(for: entry) }
                                 )
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    if entry.state == .installed {
+                                        performRemotePrimaryAction(for: entry)
+                                    }
+                                }
                             }
                         }
                     } else if segment == .onDevice && groupedSections.isEmpty {
@@ -399,9 +405,14 @@ struct ModelsView: View {
         )
     }
 
+    private func isRemoteModelSelected(_ entry: RemoteCatalogEntry) -> Bool {
+        guard let peer = peers.first else { return false }
+        return model.selectedModelId == "mac:\(peer.id)/\(entry.manifest.id)"
+    }
+
     private func remotePrimaryActionLabel(for entry: RemoteCatalogEntry) -> String {
         switch entry.state {
-        case .installed: return "Loaded on Mac"
+        case .installed: return isRemoteModelSelected(entry) ? "In use" : "Use on phone"
         case .downloading: return "Downloading…"
         case .paused: return "Paused"
         case .verifying: return "Checking…"
@@ -411,14 +422,23 @@ struct ModelsView: View {
     }
 
     private func performRemotePrimaryAction(for entry: RemoteCatalogEntry) {
-        guard let peer = peers.first,
-              let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) })
-        else { return }
-        let endpoint = PeerEndpoint(host: peer.addrs.first ?? "", port: peer.port, fingerprint: peer.certSha256)
-        let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
-        Task {
-            try? await client.startDownload(modelId: entry.manifest.id)
-            await reloadRemote()
+        guard let peer = peers.first else { return }
+        switch entry.state {
+        case .installed:
+            let remoteId = "mac:\(peer.id)/\(entry.manifest.id)"
+            model.selectedModelId = remoteId
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        case .available, .queued, .failed:
+            guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) })
+            else { return }
+            let endpoint = PeerEndpoint(host: peer.addrs.first ?? "", port: peer.port, fingerprint: peer.certSha256)
+            let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
+            Task {
+                try? await client.startDownload(modelId: entry.manifest.id)
+                await reloadRemote()
+            }
+        case .downloading, .paused, .verifying:
+            break
         }
     }
 
@@ -456,7 +476,7 @@ struct ModelsView: View {
 
     private func primaryActionLabel(for entry: CatalogEntry) -> String {
         switch entry.state {
-        case .installed: return "Open"
+        case .installed: return model.selectedModelId == entry.manifest.id ? "In use" : "Use"
         case .downloading: return "Pause"
         case .paused: return "Resume"
         case .verifying: return "Checking…"
@@ -470,7 +490,10 @@ struct ModelsView: View {
         case .downloading: try? model.core.pauseDownload(modelId: entry.manifest.id)
         case .paused: try? model.core.resumeDownload(modelId: entry.manifest.id)
         case .available, .queued, .failed: try? model.core.startDownload(modelId: entry.manifest.id)
-        case .installed, .verifying: break
+        case .installed:
+            model.selectedModelId = entry.manifest.id
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        case .verifying: break
         }
         reload()
     }

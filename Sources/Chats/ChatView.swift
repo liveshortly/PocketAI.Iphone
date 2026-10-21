@@ -45,11 +45,36 @@ struct ChatView: View {
     @State private var showPulseDetailSheet = false
     @State private var showJumpToLatest = false
     @State private var cursorBlink = false
+    @FocusState private var isComposerFocused: Bool
 
     #if DEBUG
     @State private var perfDiagnostics = PerfDiagnostics.shared
     @State private var latestPerfRecord: PerfDiagnostics.GenerationPerfRecord?
     #endif
+
+    private var currentModelId: String? {
+        if let msgModel = messages.last(where: { $0.modelId != nil })?.modelId {
+            return msgModel
+        }
+        return model.selectedModelId
+    }
+
+    private var remoteModelChipLabel: String? {
+        guard let id = currentModelId, id.hasPrefix("mac:") else { return nil }
+        let localId = RemoteEngine.localModelId(from: id)
+        let catalogName = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false))
+            .first { $0.manifest.id == localId || localId.hasPrefix($0.manifest.id) }?
+            .manifest.displayName
+        let displayName = catalogName ?? friendlyModelName(from: localId)
+        let peerName = model.core.peers().first?.name ?? "Mac"
+        return "\(displayName) · \(peerName)"
+    }
+
+    private func friendlyModelName(from localId: String) -> String {
+        let repoPart = localId.split(separator: "@").first.map(String.init) ?? localId
+        let name = repoPart.split(separator: "/").last.map(String.init) ?? repoPart
+        return name
+    }
 
     private var pulseStripState: PulseState {
         #if DEBUG
@@ -57,7 +82,13 @@ struct ChatView: View {
             return .idle
         }
         #endif
-        return isGenerating ? .generating(modelName: "On this iPhone", location: "On this iPhone", tokPerSec: 34) : .idle
+        if isGenerating {
+            let isRemote = currentModelId?.hasPrefix("mac:") ?? false
+            let location = isRemote ? (model.core.peers().first?.name ?? "On your Mac") : "On this iPhone"
+            let modelName = remoteModelChipLabel ?? (isRemote ? "Mac model" : "On this iPhone")
+            return .generating(modelName: modelName, location: location, tokPerSec: 34)
+        }
+        return .idle
     }
 
     private var lastReplyStats: LastReplyStats? {
@@ -159,8 +190,8 @@ struct ChatView: View {
 
                 Composer(
                     text: $composerText,
-                    modelChipLabel: nil, // ponytail: remote-model-use gate — wire when the remote model picker lands
-                    isFocused: false,
+                    modelChipLabel: remoteModelChipLabel,
+                    isFocused: isComposerFocused || remoteModelChipLabel != nil,
                     isGenerating: isGenerating,
                     hasAttachment: composerHasAttachment,
                     onAttach: { kind in
@@ -183,7 +214,8 @@ struct ChatView: View {
                     onMic: { startDictation(handsFree: false) },
                     onMicLongPress: { startDictation(handsFree: true) },
                     onSend: { send() },
-                    onStop: { stop() }
+                    onStop: { stop() },
+                    externalFocus: $isComposerFocused
                 )
                 .padding(.horizontal, PocketSpacing.gutterIphone)
                 .padding(.bottom, PocketSpacing.s8)

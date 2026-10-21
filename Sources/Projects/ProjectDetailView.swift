@@ -394,7 +394,7 @@ struct ProjectDetailView: View {
 
     private func newChatInProject() {
         guard let conversation = try? model.core.createConversation(
-            NewConversation(title: nil, projectId: projectId, modelId: nil)
+            NewConversation(title: nil, projectId: projectId, modelId: model.selectedModelId)
         ) else { return }
         activeConversationId = conversation.id
     }

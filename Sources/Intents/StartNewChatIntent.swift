@@ -12,7 +12,7 @@ struct StartNewChatIntent: AppIntent {
         let core = AppModel.shared.core
         do {
             _ = try core.createConversation(
-                NewConversation(title: nil, projectId: nil, modelId: nil)
+                NewConversation(title: nil, projectId: nil, modelId: AppModel.shared.selectedModelId)
             )
         } catch {
             throw PocketAIIntentError("PocketAI couldn't create a new chat: \(error.localizedDescription)")
