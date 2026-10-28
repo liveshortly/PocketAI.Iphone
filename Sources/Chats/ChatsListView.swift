@@ -7,6 +7,7 @@ import PocketUI
 /// Features large-title nav, date-sectioned grouping, rich preview snippets,
 /// native swipe actions, polished empty states, and project card management.
 struct ChatsListView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppModel.self) private var model
 
     @State private var segment = ProcessInfo.processInfo.arguments.contains("-PocketSegmentProjects") ? Segment.projects : Segment.chats
@@ -107,6 +108,11 @@ struct ChatsListView: View {
             }
             .background(PocketColor.bgCanvas)
             .navigationBarTitleDisplayMode(.inline)
+            // Without an opaque bar, scrolled content shows through the
+            // segmented control and search field — unreadable at large text
+            // sizes where the content is tall.
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(PocketColor.bgCanvas, for: .navigationBar)
             .toolbar {
                 // Single navigation model: the segmented control IS the title,
                 // replacing the redundant large-title + separate picker row.
@@ -442,18 +448,22 @@ struct ChatsListView: View {
             newChat(firstMessage: title)
         } label: {
             HStack(spacing: PocketSpacing.s12) {
+                // Capped: a glyph that grows without limit leaves the title a
+                // sliver of width, which is what made it hyphenate mid-word.
                 Image(systemName: icon)
-                    .font(.system(size: suggestionIconWidth * 0.63))
+                    .font(.system(size: min(suggestionIconWidth, 34) * 0.63))
                     .foregroundStyle(PocketColor.accent)
-                    .frame(width: suggestionIconWidth)
+                    .frame(width: min(suggestionIconWidth, 34))
                 Text(title)
                     .font(.pocket(.callout))
                     .foregroundStyle(PocketColor.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(PocketColor.textTertiary)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(PocketColor.textTertiary)
+                }
             }
             .padding(.horizontal, PocketSpacing.s16)
             .padding(.vertical, PocketSpacing.s12)
