@@ -678,7 +678,7 @@ struct HomeData: Sendable {
                 : .noModel(reason: "That Mac isn't available right now.")
         }
         if installedEntries.contains(where: { $0.manifest.id == id }) {
-            let name = nameIndex[id] ?? id
+            let name = nameIndex[id] ?? ModelNaming.short(id)
             return .ready(name: name, location: "On this iPhone")
         }
         return .noModel(reason: "The selected model isn't installed. Choose another.")
@@ -693,10 +693,12 @@ struct HomeData: Sendable {
             let pid = peerId(from: id)
             let inner = innerModelId(from: id)
             let peerName = peers.first(where: { $0.id == pid })?.name ?? "Mac"
-            let name = nameIndex[inner] ?? inner
+            // A model the catalog doesn't carry still gets a short label; the
+            // raw id is a fetch address, not something to print.
+            let name = nameIndex[inner] ?? ModelNaming.short(inner)
             return (name, peerName)
         }
-        return (nameIndex[id] ?? id, "On this iPhone")
+        return (nameIndex[id] ?? ModelNaming.short(id), "On this iPhone")
     }
 
     private static func peerId(from id: String) -> String {
