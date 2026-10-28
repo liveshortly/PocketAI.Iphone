@@ -9,6 +9,7 @@ import PocketUI
 /// states. Uses real safe areas (no fixed bottom padding — F01) and real
 /// download/disk bytes (F20), not runtime-RAM estimates.
 struct ModelsView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppModel.self) private var model
 
     /// Opens directly on the "On your Mac" segment (Devices → Mac capabilities).
@@ -354,30 +355,33 @@ struct ModelsView: View {
             detailId = hero.manifest.id
         } label: {
             VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-                HStack {
+                // At accessibility sizes the eyebrow and the badge cannot
+                // share a row: the label was squeezed into a column and
+                // hyphenated mid-word. Stack them instead.
+                heroHeaderLayout {
                     HStack(spacing: PocketSpacing.s4) {
                         PocketMarkView(state: .idle, size: 10)
                         Text("Recommended for this iPhone")
                             .font(.pocket(.caption))
                             .foregroundStyle(PocketColor.accent)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    Spacer()
                     FitBadge(kind: fitKind(hero.fit.verdict), reason: hero.fit.reason)
                 }
 
-                HStack(alignment: .center, spacing: PocketSpacing.s12) {
+                heroActionLayout {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(ModelNaming.short(hero.manifest.displayName))
                             .font(.pocket(.headline))
                             .foregroundStyle(PocketColor.textPrimary)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
                         Text(heroMetaLine(hero))
                             .font(.pocket(.caption))
                             .foregroundStyle(PocketColor.textSecondary)
-                            .lineLimit(1)
+                            .lineLimit(2)
                     }
-
-                    Spacer(minLength: PocketSpacing.s8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     Button {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -411,6 +415,20 @@ struct ModelsView: View {
     /// One compact meta line: family · quant · size · honest tok/s (measured
     /// bare, estimate marked "~…est." — never a measured-looking number on a
     /// model that has not run).
+    /// Row normally, column once the text is large enough that two items
+    /// cannot share a line without one being crushed.
+    private var heroHeaderLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: PocketSpacing.s8))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: PocketSpacing.s8))
+    }
+
+    private var heroActionLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: PocketSpacing.s12))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: PocketSpacing.s12))
+    }
+
     private func heroMetaLine(_ entry: CatalogEntry) -> String {
         var parts = ["\(entry.manifest.family) · \(entry.manifest.quant) · \(formatBytes(diskBytes(entry)))"]
         if let tok = entry.fit.measuredTokensPerSec {
