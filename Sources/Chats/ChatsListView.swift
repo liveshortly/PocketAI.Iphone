@@ -355,12 +355,16 @@ struct ChatsListView: View {
     private func conversationRow(_ conversation: ConversationSummary) -> some View {
         NavigationLink(value: Route.chat(conversation.id)) {
             HStack(alignment: .top, spacing: PocketSpacing.s12) {
+                // Capped: the avatar is decoration and the title is what
+                // identifies the chat, so an uncapped circle that took half
+                // the row hyphenated it ("Ex-plain this Rust bor-row").
+                let glyph = min(rowGlyphSize, 44)
                 ZStack {
                     Circle()
                         .fill(PocketColor.accentSoft)
-                        .frame(width: rowGlyphSize, height: rowGlyphSize)
+                        .frame(width: glyph, height: glyph)
                     Image(systemName: "bubble.left.fill")
-                        .font(.system(size: rowGlyphSize * 0.42))
+                        .font(.system(size: glyph * 0.42))
                         .foregroundStyle(PocketColor.accent)
                 }
                 .padding(.top, 2)
