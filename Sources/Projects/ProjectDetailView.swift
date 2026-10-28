@@ -12,6 +12,7 @@ import PocketUI
 struct ProjectDetailView: View {
     let projectId: String
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var project: Project?
     @State private var documents: [Document] = []
@@ -141,9 +142,19 @@ struct ProjectDetailView: View {
 
     // MARK: - Header Card
 
+    /// A label beside its action, until the type is large enough that sharing
+    /// the row leaves neither side a readable width.
+    private var headerLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: PocketSpacing.s8))
+            : AnyLayout(HStackLayout(alignment: .top))
+    }
+
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s12) {
-            HStack(alignment: .top) {
+            // A title beside a button has barely half the card to itself, which
+            // is what hyphenated "iOS Architec-ture" across three lines.
+            headerLayout {
                 VStack(alignment: .leading, spacing: PocketSpacing.s4) {
                     Text(project?.name ?? "Project")
                         .font(.pocket(.title))
@@ -154,7 +165,7 @@ struct ProjectDetailView: View {
                             .foregroundStyle(PocketColor.textTertiary)
                     }
                 }
-                Spacer()
+                Spacer(minLength: 0)
                 Button {
                     newProjectName = project?.name ?? ""
                     renamingProject = true
@@ -173,11 +184,11 @@ struct ProjectDetailView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-                HStack {
+                headerLayout {
                     Text("Instructions")
                         .font(.pocket(.headline))
                         .foregroundStyle(PocketColor.textSecondary)
-                    Spacer()
+                    Spacer(minLength: 0)
                     Button("Edit") {
                         editableInstructions = project?.instructions ?? ""
                         editingInstructions = true
