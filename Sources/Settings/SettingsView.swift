@@ -1,55 +1,81 @@
 import SwiftUI
 import PocketKit
+import PocketLiveShortly
 import PocketUI
 
-/// UI-11: Redesigned Settings + Privacy (S-SET, S-NP).
-/// Features grouped Form with native iOS section headers, icon badges,
-/// an at-a-glance Network Proof status card, and offline mode toggle.
+/// UI-11 / T6: Settings + Privacy (S-SET, S-NP).
+/// Native grouped list, sections Models / Voice / Privacy / Mac & devices /
+/// About (§7). Default chat model opens the shared `ModelPickerView` (incl.
+/// Apple + paired Macs). Storage is real disk bytes (F20); version/build come
+/// from the bundle (F23); Network Proof is scoped honestly to this session
+/// (F19). No fixed bottom padding — real safe areas (F01).
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
     @AppStorage("app.getpocketai.diagnosticsEnabled") private var diagnosticsEnabled = false
     @State private var offline = false
     @State private var egressCount = 0
+    @State private var defaultModelName = "Choose"
+    @State private var storageTotal: UInt64 = 0
+
+    /// Session scope is honest: Core's egress log is in-memory and resets each
+    /// launch, so we label it "this session", never a false "today" zero (F19).
+    private static let egressScopeLimit: UInt32 = 500
 
     var body: some View {
         NavigationStack {
             List {
-                Section {
+                // MARK: Models
+                Section("Models") {
                     NavigationLink {
-                        NetworkProofView(offline: $offline)
+                        ModelPickerView(
+                            scope: .defaultModel,
+                            selectedId: model.selectedModelId,
+                            onPicked: { model.selectedModelId = $0 }
+                        )
                     } label: {
-                        HStack(spacing: PocketSpacing.s12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(PocketColor.accentSoft)
-                                    .frame(width: 44, height: 44)
-                                Image(systemName: "checkmark.shield.fill")
-                                    .font(.system(.title2))
-                                    .foregroundStyle(PocketColor.statusOk)
-                            }
-                            .accessibilityHidden(true)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text("Network Proof")
-                                        .font(.pocket(.headline))
-                                        .foregroundStyle(PocketColor.textPrimary)
-                                    Spacer()
-                                    Text("\(egressCount)")
-                                        .font(.pocket(.title))
-                                        .foregroundStyle(PocketColor.accent)
-                                }
-                                Text(egressCount == 0 ? "0 outbound requests today · Verified on-device" : "\(egressCount) requests today")
-                                    .font(.pocket(.footnote))
-                                    .foregroundStyle(PocketColor.textSecondary)
-                            }
-                        }
-                        .padding(.vertical, PocketSpacing.s4)
+                        SettingsRow(icon: "cpu", tint: PocketColor.statusInfo, title: "Default chat model", accessory: .value(defaultModelName))
                     }
-                    .accessibilityIdentifier("settings_network_proof_row")
+                    .accessibilityIdentifier("settings_default_model_row")
+
+                    NavigationLink {
+                        StorageUsedView()
+                    } label: {
+                        SettingsRow(icon: "internaldrive", tint: PocketColor.textSecondary, title: "Storage used", accessory: .value(storageTotal == 0 ? "None" : formatBytes(storageTotal)))
+                    }
+                    .accessibilityIdentifier("settings_storage_row")
+
+                    NavigationLink {
+                        EnginesView()
+                    } label: {
+                        SettingsRow(icon: "bolt.fill", tint: PocketColor.statusWarn, title: "Engine availability", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Apple + MLX + llama.cpp" : "MLX + llama.cpp"))
+                    }
+                    .accessibilityIdentifier("settings_engines_row")
                 }
 
+                // MARK: Voice
+                Section("Voice") {
+                    SettingsRow(
+                        icon: "speaker.wave.2.fill",
+                        tint: PocketColor.accent,
+                        title: "Speak replies",
+                        accessory: .toggle($autoSpeakReplies)
+                    )
+                    NavigationLink {
+                        SpeechToTextView()
+                    } label: {
+                        SettingsRow(icon: "mic.fill", tint: PocketColor.statusInfo, title: "Speech-to-text", accessory: .navigation)
+                    }
+                    .accessibilityIdentifier("settings_speech_to_text_row")
+                    NavigationLink {
+                        TextToSpeechVoiceView()
+                    } label: {
+                        SettingsRow(icon: "waveform", tint: PocketColor.statusOk, title: "Text-to-speech voice", accessory: .navigation)
+                    }
+                    .accessibilityIdentifier("settings_tts_voice_row")
+                }
+
+                // MARK: Privacy
                 Section("Privacy") {
                     SettingsRow(
                         icon: "airplane",
@@ -58,6 +84,14 @@ struct SettingsView: View {
                         accessory: .toggle($offline)
                     )
                     .accessibilityIdentifier("settings_offline_row")
+
+                    NavigationLink {
+                        NetworkProofView(offline: $offline)
+                    } label: {
+                        SettingsRow(icon: "checkmark.shield.fill", tint: PocketColor.statusOk, title: "Network Proof", accessory: .value("\(egressCount) this session"))
+                    }
+                    .accessibilityIdentifier("settings_network_proof_row")
+
                     SettingsRow(
                         icon: "heart.text.square",
                         tint: PocketColor.accent,
@@ -73,62 +107,53 @@ struct SettingsView: View {
                         NavigationLink {
                             DiagnosticsPreviewView()
                         } label: {
-                            SettingsRow(
-                                icon: "envelope",
-                                tint: PocketColor.statusInfo,
-                                title: "Send diagnostic report…",
-                                accessory: .navigation
-                            )
+                            SettingsRow(icon: "envelope", tint: PocketColor.statusInfo, title: "Send diagnostic report…", accessory: .navigation)
                         }
                         .accessibilityLabel("Send diagnostic report")
                         .accessibilityHint("Opens a preview of the diagnostic report before sending")
                     }
                 }
 
-                Section("Models & Memory") {
-                    SettingsRow(icon: "cpu", tint: PocketColor.statusInfo, title: "Default model", accessory: .navigation)
-                    SettingsRow(icon: "internaldrive", tint: PocketColor.textSecondary, title: "Storage used", accessory: .navigation)
+                // MARK: Integrations
+                Section("Integrations") {
+                    NavigationLink {
+                        LSConnectView(account: model.liveShortly)
+                    } label: {
+                        SettingsRow(
+                            icon: "dot.radiowaves.left.and.right",
+                            tint: PocketColor.statusOk,
+                            title: "LiveShortly",
+                            accessory: .value(liveShortlyStatus))
+                    }
+                    .accessibilityIdentifier("settings_liveshortly_row")
                 }
 
-                Section("Engines") {
-                    SettingsRow(icon: "bolt.fill", tint: PocketColor.statusWarn, title: "MLX / llama.cpp", accessory: .navigation)
-                    SettingsRow(
-                        icon: "apple.logo",
-                        tint: PocketColor.textPrimary,
-                        title: "Apple Intelligence",
-                        accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Available" : "Unavailable")
-                    )
+                // MARK: Mac & devices
+                Section("Mac & devices") {
+                    NavigationLink {
+                        PairMacView()
+                    } label: {
+                        SettingsRow(icon: "laptopcomputer", tint: PocketColor.statusInfo, title: "Pair a Mac", accessory: .navigation)
+                    }
+                    .accessibilityIdentifier("settings_pair_mac_row")
                 }
 
-                Section("Voice") {
-                    SettingsRow(
-                        icon: "speaker.wave.2.fill",
-                        tint: PocketColor.accent,
-                        title: "Speak replies",
-                        accessory: .toggle($autoSpeakReplies)
-                    )
-                    SettingsRow(icon: "mic.fill", tint: PocketColor.statusInfo, title: "Speech-to-text", accessory: .navigation)
-                    SettingsRow(icon: "waveform", tint: PocketColor.statusOk, title: "Text-to-speech voice", accessory: .navigation)
-                }
-
-                Section("Mac & Devices") {
-                    SettingsRow(icon: "laptopcomputer", tint: PocketColor.statusInfo, title: "Pair a Mac", accessory: .navigation)
-                }
-
+                // MARK: About
                 Section("About") {
-                    SettingsRow(icon: "info.circle.fill", tint: PocketColor.textSecondary, title: "Version", accessory: .value("0.2.0"))
+                    SettingsRow(icon: "info.circle.fill", tint: PocketColor.textSecondary, title: "Version", accessory: .value(appVersionString))
                 }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(PocketColor.bgCanvas)
-            .padding(.bottom, 80)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
             .task {
                 offline = model.core.isOffline()
-                egressCount = model.core.egressLog(limit: 0).count
+                egressCount = model.core.egressLog(limit: Self.egressScopeLimit).count
+                refreshModelsInfo()
             }
+            .onChange(of: model.selectedModelId) { refreshModelsInfo() }
             .onChange(of: offline) { _, newValue in
                 model.core.setOfflineMode(on: newValue)
                 DiagnosticsLog.shared.append("Settings: offline mode set to \(newValue)")
@@ -138,13 +163,57 @@ struct SettingsView: View {
             }
         }
     }
+
+    private var liveShortlyStatus: String {
+        if case .connected(let user) = model.liveShortly.phase {
+            return user.name.isEmpty ? user.email : user.name
+        }
+        return "Not connected"
+    }
+
+    /// Version + build from the installed bundle — never a hardcoded string (F23).
+    private var appVersionString: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(short) (\(build))"
+    }
+
+    /// Resolve the default model's display name and the real on-disk total from
+    /// the merged installed catalog (incl. noncurated — F25). Apple's built-in
+    /// sentinel shows its name without a PocketAI-managed download.
+    private func refreshModelsInfo() {
+        let installed = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: true))
+        storageTotal = installed.reduce(0) { $0 + realDiskBytes($1) }
+
+        if let id = model.selectedModelId {
+            if id == AppleFoundationModelsEngine.modelId {
+                defaultModelName = "Apple Intelligence"
+            } else if let hit = installed.first(where: { $0.manifest.id == id }) {
+                defaultModelName = ModelNaming.short(hit.manifest.displayName)
+            } else if id.hasPrefix("mac:") {
+                defaultModelName = "On your Mac"
+            } else {
+                defaultModelName = "Choose"
+            }
+        } else {
+            defaultModelName = "Choose"
+        }
+    }
+
+    private func realDiskBytes(_ entry: CatalogEntry) -> UInt64 {
+        entry.fit.diskBytes != 0 ? entry.fit.diskBytes : entry.manifest.estRuntimeBytes
+    }
 }
 
-/// C16: Network Proof (`02` §7.9).
+/// C16: Network Proof (`02` §7.9). Scope is this session — Core's egress log is
+/// in-memory and resets on launch, so a durable "today" is not yet available
+/// (F19/§9.4). We report the real recorded requests, never a false zero.
 private struct NetworkProofView: View {
     @Environment(AppModel.self) private var model
     @Binding var offline: Bool
     @State private var entries: [EgressEntry] = []
+
+    private static let scopeLimit: UInt32 = 500
 
     var body: some View {
         List {
@@ -160,14 +229,16 @@ private struct NetworkProofView: View {
                 VStack(alignment: .leading, spacing: PocketSpacing.s8) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("\(entries.count)")
-                            .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                            .font(.pocket(.display))
                             .foregroundStyle(PocketColor.textPrimary)
-                        Text("requests today")
+                        Text("requests this session")
                             .font(.pocket(.headline))
                             .foregroundStyle(PocketColor.textSecondary)
+                            // Wraps beside the big count instead of truncating.
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    Text("PocketAI made \(entries.count) internet request\(entries.count == 1 ? "" : "s") today.")
+                    Text("PocketAI made \(entries.count) internet request\(entries.count == 1 ? "" : "s") since this app launched.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
 
@@ -187,7 +258,7 @@ private struct NetworkProofView: View {
             }
 
             if !entries.isEmpty {
-                Section("Today") {
+                Section("This session") {
                     ForEach(entries, id: \.ts) { entry in
                         VStack(alignment: .leading, spacing: PocketSpacing.s4) {
                             Text(entry.purpose).font(.pocket(.body))
@@ -208,10 +279,27 @@ private struct NetworkProofView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Network Proof")
         .navigationBarTitleDisplayMode(.inline)
-        .task { entries = model.core.egressLog(limit: 0) }
+        .task { entries = model.core.egressLog(limit: Self.scopeLimit) }
     }
 }
 
 private func formatBytes(_ bytes: UInt64) -> String {
     ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+}
+
+#Preview("Light") {
+    SettingsView()
+        .environment(AppModel())
+}
+
+#Preview("Dark") {
+    SettingsView()
+        .environment(AppModel())
+        .preferredColorScheme(.dark)
+}
+
+#Preview("AX3") {
+    SettingsView()
+        .environment(AppModel())
+        .environment(\.dynamicTypeSize, .accessibility3)
 }

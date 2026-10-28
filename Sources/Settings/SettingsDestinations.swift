@@ -1,0 +1,386 @@
+import SwiftUI
+import AVFoundation
+import Speech
+import PocketKit
+import PocketUI
+
+/// Destination screens for the Settings rows (completes the previously inert
+/// chevron rows in `SettingsView`). Each is reached via a `NavigationLink`.
+/// The default-model picker is the shared `ModelPickerView` (§5.3/§11.1).
+
+// MARK: - Storage used
+
+/// Lists installed models with their real on-disk size and a delete action.
+/// Size is actual download/disk bytes, never a runtime-RAM estimate (F20).
+struct StorageUsedView: View {
+    @Environment(AppModel.self) private var model
+    @State private var installed: [CatalogEntry] = []
+    @State private var pendingDelete: CatalogEntry?
+
+    private func diskBytes(_ entry: CatalogEntry) -> UInt64 {
+        entry.fit.diskBytes != 0 ? entry.fit.diskBytes : entry.manifest.estRuntimeBytes
+    }
+
+    private var total: UInt64 {
+        installed.reduce(0) { $0 + diskBytes($1) }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                HStack {
+                    Text("Total on this iPhone")
+                        .font(.pocket(.body))
+                        .foregroundStyle(PocketColor.textPrimary)
+                    Spacer()
+                    Text(formatBytes(total))
+                        .font(.pocket(.body).weight(.semibold))
+                        .foregroundStyle(PocketColor.textPrimary)
+                }
+            }
+
+            if installed.isEmpty {
+                Section {
+                    Text("No models are stored on this iPhone.")
+                        .font(.pocket(.footnote))
+                        .foregroundStyle(PocketColor.textSecondary)
+                }
+            } else {
+                Section("Models") {
+                    ForEach(installed, id: \.manifest.id) { entry in
+                        HStack(spacing: PocketSpacing.s12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(ModelNaming.short(entry.manifest.displayName))
+                                    .font(.pocket(.body))
+                                    .foregroundStyle(PocketColor.textPrimary)
+                                Text(formatBytes(diskBytes(entry)))
+                                    .font(.pocket(.caption))
+                                    .foregroundStyle(PocketColor.textSecondary)
+                            }
+                            Spacer()
+                            Button(role: .destructive) {
+                                pendingDelete = entry
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(PocketColor.statusBad)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Delete \(entry.manifest.displayName)")
+                        }
+                        .accessibilityIdentifier("storage_row_\(entry.manifest.id)")
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Storage used")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { reload() }
+        .confirmationDialog(
+            "Delete \(pendingDelete?.manifest.displayName ?? "model")?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let entry = pendingDelete {
+                    try? model.core.deleteModel(modelId: entry.manifest.id)
+                    if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
+                    reload()
+                }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: {
+            if let entry = pendingDelete {
+                Text("Frees \(formatBytes(diskBytes(entry))).")
+            }
+        }
+    }
+
+    private func reload() {
+        installed = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: true))
+    }
+}
+
+// MARK: - Engines
+
+/// Informational screen listing the inference engines and their availability.
+struct EnginesView: View {
+    var body: some View {
+        List {
+            Section {
+                engineRow(
+                    icon: "bolt.fill",
+                    tint: PocketColor.statusWarn,
+                    name: "MLX",
+                    detail: "Runs MLX models on Apple silicon. The default on-device engine.",
+                    status: "Bundled"
+                )
+                engineRow(
+                    icon: "cpu",
+                    tint: PocketColor.textSecondary,
+                    name: "llama.cpp",
+                    detail: "Runs GGUF models on-device via Metal. Built into the core.",
+                    status: "Bundled"
+                )
+                engineRow(
+                    icon: "apple.logo",
+                    tint: PocketColor.textPrimary,
+                    name: "Apple Intelligence",
+                    detail: "Apple's on-device foundation model (iOS 26+ on supported devices).",
+                    status: AppleFoundationModelsEngine.isAvailable ? "Available" : "Unavailable"
+                )
+            } footer: {
+                Text("PocketAI picks the right engine for each model automatically.")
+                    .font(.pocket(.caption))
+                    .foregroundStyle(PocketColor.textTertiary)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Engines")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func engineRow(icon: String, tint: Color, name: String, detail: String, status: String) -> some View {
+        HStack(alignment: .top, spacing: PocketSpacing.s12) {
+            RoundedRectangle(cornerRadius: 7)
+                .fill(tint)
+                .frame(width: 28, height: 28)
+                .overlay {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(PocketColor.accentOnAccent)
+                }
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.pocket(.body))
+                    .foregroundStyle(PocketColor.textPrimary)
+                Text(detail)
+                    .font(.pocket(.caption))
+                    .foregroundStyle(PocketColor.textSecondary)
+            }
+            Spacer(minLength: PocketSpacing.s8)
+            Text(status)
+                .font(.pocket(.caption))
+                .foregroundStyle(PocketColor.textSecondary)
+        }
+        .padding(.vertical, PocketSpacing.s4)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(status)
+    }
+}
+
+// MARK: - Speech-to-text
+
+/// Shows on-device Apple speech recognition availability for voice input.
+struct SpeechToTextView: View {
+    @State private var authStatus = SFSpeechRecognizer.authorizationStatus()
+
+    private var recognizer: SFSpeechRecognizer? { SFSpeechRecognizer() }
+
+    var body: some View {
+        let rec = recognizer
+        let langId = rec?.locale.identifier ?? Locale.current.identifier
+        return List {
+            Section("Apple Speech Recognition") {
+                LabeledContent("Language", value: Locale.current.localizedString(forIdentifier: langId) ?? langId)
+                LabeledContent("Available", value: (rec?.isAvailable ?? false) ? "Yes" : "No")
+                LabeledContent("On-device", value: (rec?.supportsOnDeviceRecognition ?? false) ? "Supported" : "Server-based")
+                LabeledContent("Permission", value: authLabel)
+            }
+
+            if authStatus == .denied || authStatus == .restricted {
+                Section {
+                    Button("Open iOS Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Text("Voice input is transcribed with Apple's Speech framework. When on-device recognition is supported, your audio stays on this iPhone.")
+                    .font(.pocket(.caption))
+                    .foregroundStyle(PocketColor.textTertiary)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Speech-to-text")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { authStatus = SFSpeechRecognizer.authorizationStatus() }
+    }
+
+    private var authLabel: String {
+        switch authStatus {
+        case .authorized: return "Allowed"
+        case .denied: return "Denied"
+        case .restricted: return "Restricted"
+        case .notDetermined: return "Not requested"
+        @unknown default: return "Unknown"
+        }
+    }
+}
+
+// MARK: - Text-to-speech voice
+
+/// Picks and previews an on-device TTS voice for the current locale. The
+/// selection is persisted so the reply-speaking path can read it.
+struct TextToSpeechVoiceView: View {
+    /// Shared with the playback path (empty = system default voice).
+    @AppStorage("app.getpocketai.ttsVoiceId") private var ttsVoiceId = ""
+    @State private var preview = AVSpeechSynthesizer()
+
+    private var voices: [AVSpeechSynthesisVoice] {
+        let lang = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+        let prefix = String(lang.prefix(2))
+        return AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix(prefix) }
+            .sorted { $0.name < $1.name }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Button {
+                    ttsVoiceId = ""
+                } label: {
+                    HStack {
+                        Text("System default")
+                            .font(.pocket(.body))
+                            .foregroundStyle(PocketColor.textPrimary)
+                        Spacer()
+                        if ttsVoiceId.isEmpty {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(PocketColor.accent)
+                        }
+                    }
+                }
+            }
+
+            if voices.isEmpty {
+                Section {
+                    Text("No voices for your language are installed. Add them in iOS Settings → Accessibility → Spoken Content → Voices.")
+                        .font(.pocket(.footnote))
+                        .foregroundStyle(PocketColor.textSecondary)
+                }
+            } else {
+                Section("\(Locale.current.identifier) voices") {
+                    ForEach(voices, id: \.identifier) { voice in
+                        Button {
+                            ttsVoiceId = voice.identifier
+                            speak(voice)
+                        } label: {
+                            HStack(spacing: PocketSpacing.s12) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(voice.name)
+                                        .font(.pocket(.body))
+                                        .foregroundStyle(PocketColor.textPrimary)
+                                    Text(voice.language)
+                                        .font(.pocket(.caption))
+                                        .foregroundStyle(PocketColor.textSecondary)
+                                }
+                                Spacer()
+                                if ttsVoiceId == voice.identifier {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(PocketColor.accent)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("tts_voice_row_\(voice.identifier)")
+                    }
+                }
+            }
+
+            Section {
+                Text("Tap a voice to hear a sample. Your choice is saved as the preferred voice for spoken replies.")
+                    .font(.pocket(.caption))
+                    .foregroundStyle(PocketColor.textTertiary)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Text-to-speech voice")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func speak(_ voice: AVSpeechSynthesisVoice) {
+        preview.stopSpeaking(at: .immediate)
+        let utterance = AVSpeechUtterance(string: "The quick brown fox jumps over the lazy dog.")
+        utterance.voice = voice
+        preview.speak(utterance)
+    }
+}
+
+// MARK: - Pair a Mac
+
+/// Entry point for pairing; the camera/QR flow itself lives in the Mac tab.
+struct PairMacView: View {
+    @Environment(AppModel.self) private var model
+    @State private var peers: [Peer] = []
+
+    var body: some View {
+        List {
+            if peers.isEmpty {
+                Section {
+                    stepCard(number: "1", title: "Open PocketAI on your Mac", subtitle: "Go to Devices → Pair iPhone to show your QR code.")
+                    stepCard(number: "2", title: "Open the Mac tab here", subtitle: "Tap Mac in the tab bar, then Scan pairing code to point this iPhone at your Mac.")
+                } header: {
+                    Text("Pair over local Wi-Fi")
+                } footer: {
+                    Text("Pairing uses the camera, so it runs from the Mac tab. Everything stays on your devices.")
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textTertiary)
+                }
+            } else {
+                Section {
+                    ForEach(peers, id: \.id) { peer in
+                        SettingsRow(
+                            icon: "laptopcomputer",
+                            tint: PocketColor.statusOk,
+                            title: peer.name,
+                            accessory: .value(peer.addrs.first ?? "Connected")
+                        )
+                    }
+                } header: {
+                    Text("Paired")
+                } footer: {
+                    Text("Manage or disconnect paired Macs from the Mac tab.")
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textTertiary)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Pair a Mac")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { peers = model.core.peers() }
+    }
+
+    private func stepCard(number: String, title: String, subtitle: String) -> some View {
+        HStack(alignment: .top, spacing: PocketSpacing.s12) {
+            ZStack {
+                Circle()
+                    .fill(PocketColor.accentSoft)
+                    .frame(width: 28, height: 28)
+                Text(number)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(PocketColor.accent)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.pocket(.headline))
+                    .foregroundStyle(PocketColor.textPrimary)
+                Text(subtitle)
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(.vertical, PocketSpacing.s4)
+    }
+}
+
+private func formatBytes(_ bytes: UInt64) -> String {
+    ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+}

@@ -209,8 +209,19 @@ final class ImageGenSheetViewModel {
 /// when no image model is installed.
 struct ImageGenerationSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var viewModel: ImageGenSheetViewModel
     var onAttachToChat: ((UIImage, URL) -> Void)?
+    @ScaledMetric(relativeTo: .body) private var previewPlaceholderHeight: CGFloat = 200
+
+    /// Label-beside-control rows run side by side until the text is large
+    /// enough that the control would clip, then stack. Same children, so no
+    /// duplicated view bodies.
+    private var rowLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: PocketSpacing.s8))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: PocketSpacing.s12))
+    }
 
     init(prompt: String = "", core: CoreClient, onAttachToChat: ((UIImage, URL) -> Void)? = nil) {
         _viewModel = State(initialValue: ImageGenSheetViewModel(prompt: prompt, core: core))
@@ -292,25 +303,27 @@ struct ImageGenerationSheet: View {
 
     private var parametersSection: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s12) {
-            HStack {
+            rowLayout {
                 Text("Size")
                     .font(.pocket(.callout))
                     .foregroundStyle(PocketColor.textPrimary)
-                Spacer()
+                // Takes whatever width is left instead of a fixed 220pt, so
+                // the segments breathe on a big phone and don't clip "1024"
+                // on a small one.
                 Picker("Size", selection: $viewModel.size) {
                     Text("512").tag(512)
                     Text("768").tag(768)
                     Text("1024").tag(1024)
                 }
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 220)
+                .frame(maxWidth: .infinity)
                 .disabled(viewModel.isBusy)
                 .accessibilityLabel("Image size picker")
             }
 
             Divider()
 
-            HStack {
+            rowLayout {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Steps")
                         .font(.pocket(.callout))
@@ -318,8 +331,9 @@ struct ImageGenerationSheet: View {
                     Text("Denoising iterations (1–4)")
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Stepper(value: $viewModel.steps, in: 1...4) {
                     Text("\(viewModel.steps)")
                         .font(.pocket(.body))
@@ -414,10 +428,12 @@ struct ImageGenerationSheet: View {
                         )
                         .accessibilityLabel("Live image preview step \(current) of \(total)")
                 } else {
+                    // Fills the card's width whatever the device, and the
+                    // reserved height follows the text size.
                     ProgressView()
                         .controlSize(.large)
                         .tint(PocketColor.accent)
-                        .frame(height: 200)
+                        .frame(maxWidth: .infinity, minHeight: previewPlaceholderHeight)
                 }
 
                 HStack(spacing: PocketSpacing.s8) {
@@ -446,7 +462,7 @@ struct ImageGenerationSheet: View {
                         .accessibilityLabel("Generated image for \(viewModel.prompt)")
 
                     VStack(spacing: PocketSpacing.s8) {
-                        HStack(spacing: PocketSpacing.s12) {
+                        rowLayout {
                             Button(action: { viewModel.saveToPhotos() }) {
                                 HStack(spacing: PocketSpacing.s4) {
                                     Image(systemName: viewModel.isSavedToPhotos ? "checkmark.circle.fill" : "square.and.arrow.down")
@@ -540,4 +556,10 @@ struct ImageGenerationSheet: View {
 #Preview("AX3") {
     ImageGenerationSheet(prompt: "A neon cyberpunk street at night", core: PreviewCore())
         .environment(\.dynamicTypeSize, .accessibility3)
+}
+
+/// Largest text size: the label/control rows must stack rather than clip.
+#Preview("AX5") {
+    ImageGenerationSheet(prompt: "A neon cyberpunk street at night", core: PreviewCore())
+        .environment(\.dynamicTypeSize, .accessibility5)
 }

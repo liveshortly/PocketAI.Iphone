@@ -1,5 +1,6 @@
 import SwiftUI
 import PocketKit
+import PocketLiveShortly
 import PocketUI
 
 /// UI-08/UI-16: Redesigned Chats list + Projects segment (S-CHAT list, S-PRJ).
@@ -14,12 +15,31 @@ struct ChatsListView: View {
     @State private var messagePreviews: [String: String] = [:]
     @State private var projects: [Project] = []
     @State private var projectDocCounts: [String: Int] = [:]
-    @State private var openConversationId: String?
-    @State private var openProjectId: String?
-    @State private var pendingInitialMessage: String?
+    /// Value-based navigation: rows are real NavigationLinks (native tap
+    /// handling + highlight), programmatic opens append to the same path.
+    private enum Route: Hashable {
+        case chat(String)
+        case project(String)
+    }
+    @State private var path: [Route] = []
+    /// First message for a just-created chat, keyed to that chat's id so a
+    /// later empty chat can never auto-send a stale suggestion.
+    @State private var pendingInitial: (id: String, text: String)?
     @State private var isShowingCreateProject = false
+    @State private var lsNewSession = false
+    @State private var installedModels: [CatalogEntry] = []
     @State private var renamingProject: Project?
     @State private var renameProjectName = ""
+    @State private var pendingDelete: ConversationSummary?
+    @State private var pendingDeleteProject: Project?
+    /// Multi-select (long-press a chat → Select, or toolbar Select).
+    @State private var editMode: EditMode = .inactive
+    @State private var selectedIds = Set<String>()
+    @State private var showBulkDeleteConfirm = false
+    // Row glyphs grow with the labels beside them; a fixed 36pt disc next to
+    // accessibility-sized text reads as a bug.
+    @ScaledMetric(relativeTo: .headline) private var rowGlyphSize: CGFloat = 36
+    @ScaledMetric(relativeTo: .callout) private var suggestionIconWidth: CGFloat = 24
 
     private enum Segment: String, CaseIterable {
         case chats = "Chats"
@@ -77,17 +97,8 @@ struct ChatsListView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Segmented picker pinned below navigation header
-                Picker("View", selection: $segment) {
-                    ForEach(Segment.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, PocketSpacing.gutterIphone)
-                .padding(.top, PocketSpacing.s8)
-                .padding(.bottom, PocketSpacing.s12)
-
+        NavigationStack(path: $path) {
+            Group {
                 if segment == .projects {
                     projectsContent
                 } else {
@@ -95,9 +106,20 @@ struct ChatsListView: View {
                 }
             }
             .background(PocketColor.bgCanvas)
-            .navigationTitle(segment == .chats ? "Chats" : "Projects")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Single navigation model: the segmented control IS the title,
+                // replacing the redundant large-title + separate picker row.
+                ToolbarItem(placement: .principal) {
+                    Picker("View", selection: $segment) {
+                        ForEach(Segment.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    // Fills the title area on any width instead of sitting at
+                    // a constant 240pt that only suited one phone.
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("chats_segment")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     if segment == .projects {
                         Button {
@@ -112,10 +134,48 @@ struct ChatsListView: View {
                         }
                         .accessibilityLabel("Create project")
                         .accessibilityHint("Opens sheet to create a new project")
+                    } else if editMode == .active {
+                        Button("Done") {
+                            withAnimation { editMode = .inactive }
+                            selectedIds = []
+                        }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(PocketColor.accent)
                     } else {
-                        Button {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            newChat(firstMessage: nil)
+                        // One menu, every way to start: local chat (current
+                        // model), Apple on-device, any installed local model,
+                        // or a LiveShortly agent session.
+                        Menu {
+                            Button {
+                                newChat(firstMessage: nil)
+                            } label: {
+                                Label("New chat", systemImage: "square.and.pencil")
+                            }
+                            if AppleFoundationModelsEngine.isAvailable {
+                                Button {
+                                    newChat(firstMessage: nil, modelId: AppleFoundationModelsEngine.modelId)
+                                } label: {
+                                    Label("Apple Intelligence", systemImage: "apple.logo")
+                                }
+                            }
+                            if !installedModels.isEmpty {
+                                Menu {
+                                    ForEach(installedModels, id: \.manifest.id) { entry in
+                                        Button(entry.manifest.displayName) {
+                                            newChat(firstMessage: nil, modelId: entry.manifest.id)
+                                        }
+                                    }
+                                } label: {
+                                    Label("Local model", systemImage: "cpu")
+                                }
+                            }
+                            if model.liveShortly.isConnected {
+                                Button {
+                                    lsNewSession = true
+                                } label: {
+                                    Label("LiveShortly session…", systemImage: "dot.radiowaves.left.and.right")
+                                }
+                            }
                         } label: {
                             Image(systemName: "square.and.pencil")
                                 .font(.system(size: 17, weight: .semibold))
@@ -127,20 +187,85 @@ struct ChatsListView: View {
                         .accessibilityIdentifier("new_chat_button")
                     }
                 }
+                if segment == .chats, editMode == .active {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Button(role: .destructive) {
+                            showBulkDeleteConfirm = true
+                        } label: {
+                            Text("Delete (\(selectedIds.count))")
+                                .fontWeight(.semibold)
+                        }
+                        .disabled(selectedIds.isEmpty)
+                        Spacer()
+                        Button("Select All") {
+                            selectedIds = Set(conversations.map(\.id))
+                        }
+                    }
+                }
             }
-            .task { reload() }
+            .task {
+                reload()
+                installedModels = model.core.catalog(
+                    filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: true))
+                // Open a conversation requested from Home / an App Intent (F26).
+                if let id = model.nav.consumePendingConversation() { path.append(.chat(id)) }
+                // Start a new chat with a suggested first message (onboarding).
+                if let first = model.nav.consumePendingFirstMessage() { newChat(firstMessage: first) }
+            }
+            .onChange(of: model.nav.pendingOpenConversationId) { _, newId in
+                if let id = newId { path.append(.chat(id)); model.nav.consumePendingConversation() }
+            }
             .onChange(of: searchText) { reload() }
-            .onChange(of: segment) { reload() }
-            .navigationDestination(item: $openConversationId) { id in
-                ChatView(conversationId: id, initialMessage: pendingInitialMessage)
+            .onChange(of: segment) {
+                reload()
+                editMode = .inactive
+                selectedIds = []
             }
-            .navigationDestination(item: $openProjectId) { id in
-                ProjectDetailView(projectId: id)
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .chat(let id):
+                    ChatView(conversationId: id, initialMessage: pendingInitial?.id == id ? pendingInitial?.text : nil)
+                case .project(let id):
+                    ProjectDetailView(projectId: id)
+                }
+            }
+            .onChange(of: path) { _, newValue in
+                if newValue.isEmpty {
+                    pendingInitial = nil
+                    reload() // titles/previews updated while a chat was open
+                }
             }
             .sheet(isPresented: $isShowingCreateProject) {
                 NewProjectSheet { name, instructions in
                     createProject(name: name, instructions: instructions)
                 }
+            }
+            .sheet(isPresented: $lsNewSession) {
+                LSNewSessionSheet(account: model.liveShortly)
+            }
+            .alert(
+                "Delete this chat?",
+                isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let c = pendingDelete { delete(c) }
+                    pendingDelete = nil
+                }
+                Button("Cancel", role: .cancel) { pendingDelete = nil }
+            } message: {
+                Text("This permanently deletes the conversation and its messages.")
+            }
+            .alert(
+                "Delete \(pendingDeleteProject?.name ?? "project")?",
+                isPresented: Binding(get: { pendingDeleteProject != nil }, set: { if !$0 { pendingDeleteProject = nil } })
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let p = pendingDeleteProject { deleteProject(p) }
+                    pendingDeleteProject = nil
+                }
+                Button("Cancel", role: .cancel) { pendingDeleteProject = nil }
+            } message: {
+                Text("This permanently deletes the project and its documents.")
             }
             .alert("Rename Project", isPresented: Binding(
                 get: { renamingProject != nil },
@@ -157,36 +282,79 @@ struct ChatsListView: View {
 
     @ViewBuilder
     private var chatsContent: some View {
-        if conversations.isEmpty {
-            emptyChatsState
-        } else {
-            List {
-                ForEach(groupedConversations) { group in
-                    Section(header: Text(group.title).font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)) {
-                        ForEach(group.conversations, id: \.id) { conversation in
-                            conversationRow(conversation)
+        // .searchable lives on the Group so the search field survives an empty
+        // result set — otherwise a no-hit query hides its own clear control.
+        Group {
+            // A connected LiveShortly account keeps the List branch alive even
+            // with zero local chats — its sessions ARE the content then.
+            if conversations.isEmpty && !model.liveShortly.isConnected {
+                if searchText.isEmpty {
+                    emptyChatsState
+                } else {
+                    noSearchResultsState
+                }
+            } else {
+                List(selection: $selectedIds) {
+                    LSSessionsSection(
+                        account: model.liveShortly,
+                        onNewSession: { lsNewSession = true })
+                    ForEach(groupedConversations) { group in
+                        Section(header: Text(group.title).font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)) {
+                            ForEach(group.conversations, id: \.id) { conversation in
+                                conversationRow(conversation)
+                                    .tag(conversation.id)
+                            }
                         }
                     }
                 }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+                .environment(\.editMode, $editMode)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .searchable(text: $searchText, prompt: "Search chats")
+        }
+        .searchable(text: $searchText, prompt: "Search chats")
+        .alert(
+            "Delete \(selectedIds.count) chat\(selectedIds.count == 1 ? "" : "s")?",
+            isPresented: $showBulkDeleteConfirm
+        ) {
+            Button("Delete", role: .destructive) {
+                for id in selectedIds { try? model.core.deleteConversation(id: id) }
+                selectedIds = []
+                editMode = .inactive
+                reload()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes the selected conversations and their messages.")
         }
     }
 
+    private var noSearchResultsState: some View {
+        VStack(spacing: PocketSpacing.s12) {
+            Image(systemName: "magnifyingglass")
+                .font(.title)
+                .foregroundStyle(PocketColor.textTertiary)
+            Text("No chats match “\(searchText)”")
+                .font(.pocket(.headline))
+                .foregroundStyle(PocketColor.textPrimary)
+                .multilineTextAlignment(.center)
+            Button("Clear search") { searchText = "" }
+                .buttonStyle(.bordered)
+                .tint(PocketColor.accent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(PocketSpacing.s32)
+    }
+
     private func conversationRow(_ conversation: ConversationSummary) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            openConversationId = conversation.id
-        } label: {
+        NavigationLink(value: Route.chat(conversation.id)) {
             HStack(alignment: .top, spacing: PocketSpacing.s12) {
                 ZStack {
                     Circle()
                         .fill(PocketColor.accentSoft)
-                        .frame(width: 36, height: 36)
+                        .frame(width: rowGlyphSize, height: rowGlyphSize)
                     Image(systemName: "bubble.left.fill")
-                        .font(.system(size: 15))
+                        .font(.system(size: rowGlyphSize * 0.42))
                         .foregroundStyle(PocketColor.accent)
                 }
                 .padding(.top, 2)
@@ -195,6 +363,7 @@ struct ChatsListView: View {
                     Text(conversation.title ?? "New chat")
                         .font(.pocket(.headline))
                         .foregroundStyle(PocketColor.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if let preview = messagePreviews[conversation.id], !preview.isEmpty {
                         Text(preview)
@@ -211,11 +380,18 @@ struct ChatsListView: View {
             }
             .padding(.vertical, PocketSpacing.s4)
         }
-        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Select Chats", systemImage: "checkmark.circle") {
+                selectedIds = [conversation.id]
+                withAnimation { editMode = .active }
+            }
+            Button("Archive", systemImage: "archivebox") { archive(conversation) }
+            Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = conversation }
+        }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                delete(conversation)
+                pendingDelete = conversation // confirm before deleting (F21)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -237,12 +413,16 @@ struct ChatsListView: View {
                 Text("Start your first chat")
                     .font(.pocket(.title))
                     .foregroundStyle(PocketColor.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Private AI that lives on your iPhone. Nothing leaves.")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, PocketSpacing.s24)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, PocketSpacing.s24)
 
             VStack(spacing: PocketSpacing.s12) {
                 suggestionButton(icon: "doc.text", title: "Summarize a long email")
@@ -253,6 +433,7 @@ struct ChatsListView: View {
 
             Spacer()
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func suggestionButton(icon: String, title: String) -> some View {
@@ -262,13 +443,14 @@ struct ChatsListView: View {
         } label: {
             HStack(spacing: PocketSpacing.s12) {
                 Image(systemName: icon)
-                    .font(.system(size: 15))
+                    .font(.system(size: suggestionIconWidth * 0.63))
                     .foregroundStyle(PocketColor.accent)
-                    .frame(width: 24)
+                    .frame(width: suggestionIconWidth)
                 Text(title)
                     .font(.pocket(.callout))
                     .foregroundStyle(PocketColor.textPrimary)
-                Spacer()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(PocketColor.textTertiary)
@@ -300,17 +482,14 @@ struct ChatsListView: View {
     }
 
     private func projectRow(_ project: Project) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            openProjectId = project.id
-        } label: {
+        NavigationLink(value: Route.project(project.id)) {
             HStack(alignment: .top, spacing: PocketSpacing.s12) {
                 ZStack {
                     Circle()
                         .fill(PocketColor.accentSoft)
-                        .frame(width: 36, height: 36)
+                        .frame(width: rowGlyphSize, height: rowGlyphSize)
                     Image(systemName: "folder.fill")
-                        .font(.system(size: 15))
+                        .font(.system(size: rowGlyphSize * 0.42))
                         .foregroundStyle(PocketColor.accent)
                 }
                 .padding(.top, 2)
@@ -348,7 +527,6 @@ struct ChatsListView: View {
             }
             .padding(.vertical, PocketSpacing.s4)
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("Project: \(project.name)")
         .contextMenu {
             Button("Rename", systemImage: "pencil") {
@@ -356,12 +534,12 @@ struct ChatsListView: View {
                 renameProjectName = project.name
             }
             Button("Delete", role: .destructive) {
-                deleteProject(project)
+                pendingDeleteProject = project
             }
         }
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                deleteProject(project)
+                pendingDeleteProject = project
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -390,12 +568,16 @@ struct ChatsListView: View {
                 Text(projects.isEmpty ? "No projects yet" : "No matching projects")
                     .font(.pocket(.title))
                     .foregroundStyle(PocketColor.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Group chats with customized instructions and documents.")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, PocketSpacing.s24)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, PocketSpacing.s24)
 
             if projects.isEmpty {
                 Button {
@@ -404,42 +586,50 @@ struct ChatsListView: View {
                 } label: {
                     Label("Create Project", systemImage: "plus")
                         .font(.pocket(.headline))
-                        .padding(.horizontal, PocketSpacing.s20)
+                        // Spans the content column rather than hugging a
+                        // constant, so it reads the same on every width.
+                        .frame(maxWidth: .infinity)
                         .padding(.vertical, PocketSpacing.s12)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(PocketColor.accent)
+                .padding(.horizontal, PocketSpacing.gutterIphone)
             }
 
             Spacer()
         }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Actions & Data Loading
 
     private func reload() {
+        // ponytail: flat limit 1000, add real pagination if anyone ever has more chats
         conversations = model.core.conversations(
-            query: ConversationQuery(search: searchText.isEmpty ? nil : searchText, archived: false, limit: 0, offset: 0)
+            query: ConversationQuery(search: searchText.isEmpty ? nil : searchText, archived: false, limit: 1000, offset: 0)
         )
-        // Extract preview snippets for conversations
-        var previews: [String: String] = [:]
-        for conv in conversations {
-            let msgs = model.core.messages(conversationId: conv.id)
-            if let lastMsg = msgs.last {
+        // Preview snippets are a per-conversation DB read each — do them off
+        // the main thread so typing in search never stutters.
+        let core = model.core
+        let ids = conversations.map(\.id)
+        Task.detached(priority: .userInitiated) {
+            var previews: [String: String] = [:]
+            for id in ids {
+                guard let lastMsg = core.messages(conversationId: id).last else { continue }
                 let text = lastMsg.parts.compactMap { part -> String? in
                     if case .text(let t) = part { return t }
                     return nil
                 }.joined(separator: " ")
                 // Strip markdown code fences and excessive newlines for a clean preview
-                let cleaned = text
+                previews[id] = text
                     .replacingOccurrences(of: "```[a-zA-Z]*", with: "", options: .regularExpression)
                     .replacingOccurrences(of: "```", with: "")
                     .replacingOccurrences(of: "\n", with: " ")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                previews[conv.id] = cleaned
             }
+            let done = previews
+            await MainActor.run { messagePreviews = done }
         }
-        messagePreviews = previews
 
         projects = model.core.listProjects()
         var counts: [String: Int] = [:]
@@ -449,17 +639,17 @@ struct ChatsListView: View {
         projectDocCounts = counts
     }
 
-    private func newChat(firstMessage: String?) {
-        guard let conversation = try? model.core.createConversation(NewConversation(title: nil, projectId: nil, modelId: model.selectedModelId)) else { return }
+    private func newChat(firstMessage: String?, modelId: String? = nil) {
+        guard let conversation = try? model.core.createConversation(NewConversation(title: nil, projectId: nil, modelId: modelId ?? model.selectedModelId)) else { return }
         reload()
-        pendingInitialMessage = firstMessage
-        openConversationId = conversation.id
+        pendingInitial = firstMessage.map { (conversation.id, $0) }
+        path.append(.chat(conversation.id))
     }
 
     private func createProject(name: String, instructions: String?) {
         guard let project = try? model.core.createProject(name: name, instructions: instructions) else { return }
         reload()
-        openProjectId = project.id
+        path.append(.project(project.id))
     }
 
     private func renameCurrentProject() {

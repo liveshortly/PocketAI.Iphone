@@ -172,6 +172,7 @@ public struct SharedInboxIngestSheet: View {
                 }
                 .padding(.horizontal, PocketSpacing.gutterIphone)
                 .padding(.vertical, PocketSpacing.s16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(PocketColor.bgCanvas)
             .navigationTitle("Add to Project")

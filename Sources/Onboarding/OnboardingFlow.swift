@@ -16,6 +16,7 @@ public struct OnboardingFlow: View {
     @State private var step: Step = .welcome
     @State private var selectedModelId: String?
     @State private var catalog: [CatalogEntry] = []
+    @State private var downloadStartError: String?
 
     public init(core: CoreClient, deviceProfile: DeviceProfile, onFinished: @escaping () -> Void) {
         self.core = core
@@ -42,10 +43,19 @@ public struct OnboardingFlow: View {
             case .pickModel:
                 OnboardingPickModelView(catalog: catalog) { modelId in
                     selectedModelId = modelId
+                    // F15/§9.4: the picked model becomes the real default, so new
+                    // chats start on it after onboarding — not a flow-local value.
+                    if let modelId { AppModel.shared.selectedModelId = modelId }
                     if let modelId, modelId != AppleFoundationModelsEngine.modelId {
-                        try? core.startDownload(modelId: modelId)
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                            step = .downloading
+                        do {
+                            try core.startDownload(modelId: modelId)
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                step = .downloading
+                            }
+                        } catch {
+                            // Stay on the picker and say why (disk/offline) —
+                            // never a silent dead end.
+                            downloadStartError = error.localizedDescription
                         }
                     } else {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -58,10 +68,19 @@ public struct OnboardingFlow: View {
                     core: core,
                     modelId: selectedModelId ?? "",
                     onSkipToApple: AppleFoundationModelsEngine.isAvailable ? {
+                        // "Try Apple while downloading" actually selects Apple's
+                        // route as the default (F15), keeping the download going.
+                        AppModel.shared.selectedModelId = AppleFoundationModelsEngine.modelId
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             step = .ready
                         }
                     } : nil,
+                    onBack: {
+                        // Cancel returns to the model picker — never a dead end.
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            step = .pickModel
+                        }
+                    },
                     onReady: {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             step = .ready
@@ -69,11 +88,24 @@ public struct OnboardingFlow: View {
                     }
                 )
             case .ready:
-                OnboardingReadyView(onStart: onFinished)
+                OnboardingReadyView(onStart: { suggestion in
+                    if let suggestion {
+                        AppModel.shared.nav.startNewChat(firstMessage: suggestion)
+                    }
+                    onFinished()
+                })
             }
         }
         .animation(.default, value: step)
         .background(PocketColor.bgCanvas)
+        .alert("Couldn't start the download", isPresented: Binding(
+            get: { downloadStartError != nil },
+            set: { if !$0 { downloadStartError = nil } }
+        )) {
+            Button("OK", role: .cancel) { downloadStartError = nil }
+        } message: {
+            Text(downloadStartError ?? "")
+        }
     }
 }
 
@@ -87,21 +119,25 @@ private struct OnboardingWelcomeView: View {
             VStack(spacing: PocketSpacing.s24) {
                 Spacer(minLength: 20)
 
-                PocketMarkView(state: .working(tokPerSec: 32), size: 96)
+                PocketMarkView(state: .idle, size: 96)
                     .padding(.bottom, PocketSpacing.s8)
 
                 VStack(spacing: PocketSpacing.s8) {
                     Text("Private AI that lives on your devices.")
-                        .font(.system(.title, design: .rounded).weight(.bold))
+                        .font(.pocket(.display))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(PocketColor.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text("Run modern open-weights models locally on Apple Silicon. Zero cloud, zero accounts, completely offline.")
                         .font(.pocket(.callout))
                         .foregroundStyle(PocketColor.textSecondary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, PocketSpacing.s12)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                // The hero was the only block without a gutter, so its display
+                // type ran edge-to-edge on every device.
+                .padding(.horizontal, PocketSpacing.gutterIphone)
 
                 VStack(spacing: PocketSpacing.s12) {
                     benefitCard(
@@ -112,7 +148,7 @@ private struct OnboardingWelcomeView: View {
                     benefitCard(
                         icon: "lock.shield.fill",
                         title: "Nothing leaves your device",
-                        subtitle: "Verify every socket live in Network Proof."
+                        subtitle: "See every network connection in the egress log."
                     )
                     benefitCard(
                         icon: "laptopcomputer",
@@ -191,8 +227,26 @@ private struct OnboardingDeviceCheckView: View {
     }
 
     var body: some View {
+        // Centred when it fits, scrollable when Dynamic Type makes it taller
+        // than the screen — never clipped.
+        ViewThatFits(in: .vertical) {
+            checklist
+            ScrollView { checklist }
+        }
+        .task {
+            for _ in rows {
+                try? await Task.sleep(nanoseconds: 280_000_000)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation { revealedRows += 1 }
+            }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            onContinue()
+        }
+    }
+
+    private var checklist: some View {
         VStack(spacing: PocketSpacing.s24) {
-            Spacer()
+            Spacer(minLength: PocketSpacing.s24)
 
             ZStack {
                 Circle()
@@ -202,8 +256,11 @@ private struct OnboardingDeviceCheckView: View {
             }
 
             Text("Checking your device")
-                .font(.system(.title, design: .rounded).weight(.bold))
+                .font(.pocket(.display))
                 .foregroundStyle(PocketColor.textPrimary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, PocketSpacing.gutterIphone)
 
             VStack(spacing: PocketSpacing.s12) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
@@ -226,24 +283,17 @@ private struct OnboardingDeviceCheckView: View {
             }
             .padding(.horizontal, PocketSpacing.gutterIphone)
 
-            Spacer()
+            Spacer(minLength: PocketSpacing.s24)
 
             Text("We read this on your device. It is never sent anywhere.")
                 .font(.pocket(.footnote))
                 .foregroundStyle(PocketColor.textTertiary)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, PocketSpacing.gutterIphone)
                 .padding(.bottom, PocketSpacing.s24)
         }
-        .task {
-            for _ in rows {
-                try? await Task.sleep(nanoseconds: 280_000_000)
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                withAnimation { revealedRows += 1 }
-            }
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            onContinue()
-        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -271,7 +321,7 @@ private struct OnboardingPickModelView: View {
             VStack(spacing: PocketSpacing.s24) {
                 VStack(spacing: PocketSpacing.s8) {
                     Text("Pick your first model")
-                        .font(.system(.title, design: .rounded).weight(.bold))
+                        .font(.pocket(.display))
                         .foregroundStyle(PocketColor.textPrimary)
 
                     Text("We test fit on your device before downloading.")
@@ -297,12 +347,12 @@ private struct OnboardingPickModelView: View {
                                 familyParamsQuant: "\(recommended.manifest.family) · \(recommended.manifest.quant)",
                                 fitKind: fitKind(recommended.fit.verdict),
                                 fitReason: recommended.fit.reason,
-                                sizeOnDisk: formatBytes(recommended.manifest.estRuntimeBytes),
+                                sizeOnDisk: formatBytes(recommended.fit.diskBytes != 0 ? recommended.fit.diskBytes : recommended.manifest.estRuntimeBytes),
                                 speedText: recommended.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
                                 speedIsMeasured: false,
                                 licenseLabel: recommended.manifest.license.spdx
                             ),
-                            primaryActionLabel: "Download \(formatBytes(recommended.manifest.estRuntimeBytes))",
+                            primaryActionLabel: "Download \(formatBytes(recommended.fit.diskBytes != 0 ? recommended.fit.diskBytes : recommended.manifest.estRuntimeBytes))",
                             onPrimaryAction: {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 onPick(recommended.manifest.id)
@@ -411,41 +461,109 @@ private struct OnboardingDownloadingView: View {
     let core: CoreClient
     let modelId: String
     let onSkipToApple: (() -> Void)?
+    let onBack: () -> Void
     let onReady: () -> Void
 
     @State private var entry: CatalogEntry?
 
+    private var isPaused: Bool {
+        if case .paused = entry?.state { return true }
+        return false
+    }
+
+    private var failureReason: String? {
+        if case .failed(let reason) = entry?.state { return reason }
+        return nil
+    }
+
+    /// Real download bytes (summed file sizes), not the runtime-RAM estimate.
+    private var downloadTotalBytes: Int64 {
+        guard let entry else { return 0 }
+        let b = entry.fit.diskBytes != 0 ? entry.fit.diskBytes : entry.manifest.estRuntimeBytes
+        return Int64(max(b, max(entry.bytesDone, 1)))
+    }
+
     private static let tips = [
         "Models stay completely on this device — nothing is uploaded.",
         "You can switch or download other models anytime in the Models tab.",
-        "Pair your Mac anytime to use its larger 70B+ models too.",
+        "Pair your Mac anytime to run its larger models from your phone.",
     ]
 
     var body: some View {
+        ViewThatFits(in: .vertical) {
+            progress
+            ScrollView { progress }
+        }
+        .task {
+            while true {
+                let updated = core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false))
+                    .first { $0.manifest.id == modelId }
+                entry = updated
+                if updated?.state == .installed {
+                    onReady()
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+        }
+    }
+
+    private var progress: some View {
         VStack(spacing: PocketSpacing.s24) {
-            Spacer()
+            Spacer(minLength: PocketSpacing.s16)
 
             PocketMarkView(state: .loading, size: 72)
 
             VStack(spacing: PocketSpacing.s8) {
                 Text("Downloading \(entry?.manifest.displayName ?? "model")…")
-                    .font(.system(.title2, design: .rounded).weight(.bold))
+                    .font(.pocket(.display))
                     .foregroundStyle(PocketColor.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text("Setting up on-device neural weights")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.horizontal, PocketSpacing.gutterIphone)
 
-            if let entry {
+            if let reason = failureReason {
+                VStack(spacing: PocketSpacing.s12) {
+                    Text(reason == "network"
+                         ? "Download failed — check your connection."
+                         : "Download failed (\(reason)).")
+                        .font(.pocket(.footnote))
+                        .foregroundStyle(PocketColor.statusBad)
+                        .multilineTextAlignment(.center)
+                    HStack(spacing: PocketSpacing.s16) {
+                        Button("Retry") { try? core.startDownload(modelId: modelId) }
+                            .buttonStyle(.borderedProminent)
+                            .tint(PocketColor.accent)
+                        Button("Choose another model") { onBack() }
+                            .buttonStyle(.bordered)
+                            .tint(PocketColor.accent)
+                    }
+                }
+                .padding(.horizontal, PocketSpacing.gutterIphone)
+            } else if let entry {
                 DownloadProgress(
-                    state: .downloading(
-                        bytesDone: Int64(entry.bytesDone),
-                        bytesTotal: Int64(entry.manifest.estRuntimeBytes),
-                        bytesPerSecond: 18_000_000
-                    ),
-                    onPauseResume: {},
-                    onCancel: {}
+                    state: isPaused
+                        ? .paused(bytesDone: Int64(entry.bytesDone), bytesTotal: downloadTotalBytes)
+                        : .downloading(
+                            bytesDone: Int64(entry.bytesDone),
+                            bytesTotal: downloadTotalBytes,
+                            bytesPerSecond: 0 // no fabricated rate; honest instruments
+                        ),
+                    onPauseResume: {
+                        if isPaused { try? core.resumeDownload(modelId: modelId) }
+                        else { try? core.pauseDownload(modelId: modelId) }
+                    },
+                    onCancel: {
+                        try? core.cancelDownload(modelId: modelId)
+                        onBack()
+                    }
                 )
                 .padding(.horizontal, PocketSpacing.gutterIphone)
             }
@@ -474,28 +592,18 @@ private struct OnboardingDownloadingView: View {
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(PocketColor.lineHairline))
             .padding(.horizontal, PocketSpacing.gutterIphone)
 
-            Spacer()
+            Spacer(minLength: PocketSpacing.s16)
         }
         .padding(.vertical, PocketSpacing.s32)
-        .task {
-            while true {
-                let updated = core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false))
-                    .first { $0.manifest.id == modelId }
-                entry = updated
-                if updated?.state == .installed {
-                    onReady()
-                    return
-                }
-                try? await Task.sleep(nanoseconds: 300_000_000)
-            }
-        }
+        .frame(maxWidth: .infinity)
     }
 }
 
 // MARK: - Ready View
 
 private struct OnboardingReadyView: View {
-    let onStart: () -> Void
+    /// nil = plain start; a string = start a chat with that suggestion sent.
+    let onStart: (String?) -> Void
 
     private static let suggestions = [
         ("Summarize a long email", "doc.text"),
@@ -504,25 +612,36 @@ private struct OnboardingReadyView: View {
     ]
 
     var body: some View {
+        ViewThatFits(in: .vertical) {
+            ready
+            ScrollView { ready }
+        }
+    }
+
+    private var ready: some View {
         VStack(spacing: PocketSpacing.s24) {
-            Spacer()
+            Spacer(minLength: PocketSpacing.s24)
 
             PocketMarkView(state: .idle, size: 80)
 
             VStack(spacing: PocketSpacing.s8) {
                 Text("You're ready")
-                    .font(.system(.title, design: .rounded).weight(.bold))
+                    .font(.pocket(.display))
                     .foregroundStyle(PocketColor.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text("Everything is set up to run entirely on this iPhone.")
                     .font(.pocket(.callout))
                     .foregroundStyle(PocketColor.textSecondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.horizontal, PocketSpacing.gutterIphone)
 
             VStack(spacing: PocketSpacing.s12) {
                 ForEach(Self.suggestions, id: \.0) { title, icon in
-                    Button(action: onStart) {
+                    Button(action: { onStart(title) }) {
                         HStack(spacing: PocketSpacing.s12) {
                             Image(systemName: icon)
                                 .font(.system(size: 15))
@@ -546,11 +665,11 @@ private struct OnboardingReadyView: View {
             }
             .padding(.horizontal, PocketSpacing.gutterIphone)
 
-            Spacer()
+            Spacer(minLength: PocketSpacing.s24)
 
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                onStart()
+                onStart(nil)
             } label: {
                 Text("Start chatting")
                     .font(.pocket(.headline))
@@ -562,5 +681,6 @@ private struct OnboardingReadyView: View {
             .padding(.horizontal, PocketSpacing.gutterIphone)
             .padding(.bottom, PocketSpacing.s16)
         }
+        .frame(maxWidth: .infinity)
     }
 }

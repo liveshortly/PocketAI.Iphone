@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import PocketKit
+import PocketLiveShortly
 import PocketUI
 
 /// UI-16: Project detail screen (S-PRJ)
@@ -15,6 +16,9 @@ struct ProjectDetailView: View {
     @State private var project: Project?
     @State private var documents: [Document] = []
     @State private var activeConversationId: String?
+    @State private var lsNewSession = false
+    @State private var projectChats: [ConversationSummary] = []
+    @State private var lsSessions: [LSSession] = []
 
     // Project rename & instructions
     @State private var renamingProject = false
@@ -38,12 +42,17 @@ struct ProjectDetailView: View {
 
                 // Primary action: Chat in project
                 newChatButton
+                newLSSessionButton
+
+                // Chats that live in this project (local + LiveShortly)
+                projectChatsSection
 
                 // Documents section
                 documentsSection
             }
             .padding(.horizontal, PocketSpacing.gutterIphone)
             .padding(.vertical, PocketSpacing.s16)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(PocketColor.bgCanvas)
         .navigationTitle(project?.name ?? "Project")
@@ -123,6 +132,10 @@ struct ProjectDetailView: View {
         }
         .navigationDestination(item: $activeConversationId) { convId in
             ChatView(conversationId: convId, projectId: projectId)
+        }
+        .onChange(of: activeConversationId) {
+            // Coming back from a chat: pick up new titles / new chats.
+            if activeConversationId == nil { loadProjectChats() }
         }
     }
 
@@ -215,6 +228,99 @@ struct ProjectDetailView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("New chat in this project")
         .accessibilityHint("Starts a new conversation grounded in this project's documents")
+    }
+
+    @ViewBuilder private var newLSSessionButton: some View {
+        if model.liveShortly.isConnected {
+            Button {
+                lsNewSession = true
+            } label: {
+                HStack(spacing: PocketSpacing.s8) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("New LiveShortly session")
+                        .font(.pocket(.headline))
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(PocketColor.accent)
+                .padding(.horizontal, PocketSpacing.s16)
+                .padding(.vertical, PocketSpacing.s12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(PocketColor.accentSoft)
+                )
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $lsNewSession) {
+                LSNewSessionSheet(account: model.liveShortly) { id in
+                    linkLSSession(id)
+                }
+            }
+            .accessibilityLabel("New LiveShortly session")
+        }
+    }
+
+    // MARK: - Chats in this project
+
+    @ViewBuilder private var projectChatsSection: some View {
+        if !projectChats.isEmpty || !lsSessions.isEmpty {
+            VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                Text("CHATS IN THIS PROJECT")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(PocketColor.textTertiary)
+                VStack(spacing: 0) {
+                    ForEach(lsSessions) { s in
+                        NavigationLink {
+                            LSSessionView(account: model.liveShortly, sessionID: s.id)
+                        } label: {
+                            LSSessionRow(session: s)
+                                .padding(.horizontal, PocketSpacing.s12)
+                                .padding(.vertical, PocketSpacing.s8)
+                        }
+                        .buttonStyle(.plain)
+                        if s.id != lsSessions.last?.id || !projectChats.isEmpty {
+                            Divider().overlay(PocketColor.lineHairline)
+                        }
+                    }
+                    ForEach(projectChats, id: \.id) { c in
+                        Button {
+                            activeConversationId = c.id
+                        } label: {
+                            HStack(spacing: PocketSpacing.s12) {
+                                Image(systemName: "bubble.left.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(PocketColor.accent)
+                                    .frame(width: 34, height: 34)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(PocketColor.accentSoft)
+                                    )
+                                Text(c.title ?? "New chat")
+                                    .font(.pocket(.body))
+                                    .lineLimit(1)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(PocketColor.textTertiary)
+                            }
+                            .padding(.horizontal, PocketSpacing.s12)
+                            .padding(.vertical, PocketSpacing.s8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if c.id != projectChats.last?.id {
+                            Divider().overlay(PocketColor.lineHairline)
+                        }
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
+                        .fill(PocketColor.bgSurface)
+                )
+            }
+        }
     }
 
     // MARK: - Documents Section
@@ -390,6 +496,40 @@ struct ProjectDetailView: View {
         let projects = model.core.listProjects()
         project = projects.first { $0.id == projectId }
         documents = model.core.listDocuments(projectId: projectId)
+        loadProjectChats()
+        Task { await loadLSSessions() }
+    }
+
+    private func loadProjectChats() {
+        // ponytail: the FFI list has no project filter — resolve per row
+        // against local sqlite; cheap at these counts.
+        let all = model.core.conversations(
+            query: ConversationQuery(search: nil, archived: false, limit: 1000, offset: 0))
+        projectChats = all.filter {
+            model.core.conversation(id: $0.id)?.projectId == projectId
+        }
+    }
+
+    // LiveShortly has no project concept server-side; the app remembers which
+    // sessions were started from this project.
+    private var lsLinkKey: String { "project.lsSessions.\(projectId)" }
+
+    private func linkLSSession(_ id: String) {
+        var ids = UserDefaults.standard.stringArray(forKey: lsLinkKey) ?? []
+        guard !ids.contains(id) else { return }
+        ids.append(id)
+        UserDefaults.standard.set(ids, forKey: lsLinkKey)
+        Task { await loadLSSessions() }
+    }
+
+    private func loadLSSessions() async {
+        let ids = Set(UserDefaults.standard.stringArray(forKey: lsLinkKey) ?? [])
+        guard !ids.isEmpty, let client = model.liveShortly.client else {
+            lsSessions = []
+            return
+        }
+        let mine = (try? await client.sessions(limit: 100)) ?? []
+        lsSessions = mine.filter { ids.contains($0.id) }
     }
 
     private func newChatInProject() {

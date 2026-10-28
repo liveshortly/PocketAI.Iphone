@@ -2,12 +2,17 @@ import SwiftUI
 import PocketKit
 import PocketUI
 
-/// UI-10: Redesigned Models catalog & manager (S-MOD).
-/// Features segmented navigation (On this iPhone / Browse / On your Mac),
-/// "Recommended for this iPhone" hero card, Fit badges, clean download progress,
-/// categorized model sections, and a refined detail sheet.
+/// UI-10 / T6: Models catalog & manager (S-MOD).
+/// Segmented navigation (On this iPhone / Browse / On your Mac), a compact
+/// horizontally-scrolling capability filter row + Fits chip, a lightweight
+/// sort menu, compact rows with live download rings, and honest empty/error
+/// states. Uses real safe areas (no fixed bottom padding — F01) and real
+/// download/disk bytes (F20), not runtime-RAM estimates.
 struct ModelsView: View {
     @Environment(AppModel.self) private var model
+
+    /// Opens directly on the "On your Mac" segment (Devices → Mac capabilities).
+    var startOnMac = false
 
     private enum Segment: String, CaseIterable {
         case onDevice = "On this iPhone"
@@ -15,17 +20,65 @@ struct ModelsView: View {
         case onMac = "On your Mac"
     }
 
+    private enum CapabilityFilter: String, CaseIterable {
+        case all = "All", text = "Text", vision = "Vision", voice = "Voice", images = "Images"
+    }
+
+    private enum SortOrder: String, CaseIterable {
+        case recommended = "Recommended", smallest = "Smallest download", name = "Name"
+    }
+
     @State private var segment = Segment.browse
     @State private var searchText = ""
-    @State private var fitsOnly = false
-    @State private var catalog: [CatalogEntry] = []
-    @State private var detail: CatalogEntry?
+    @State private var fitsOnly = true          // §6.1: default on in Browse
+    @State private var capabilityFilter = CapabilityFilter.all
+    @State private var sortOrder = SortOrder.recommended
+    @State private var catalog: [CatalogEntry] = []          // curated browse source
+    @State private var installedEntries: [CatalogEntry] = [] // merged installs (incl. noncurated — F25)
+    /// Live detail is resolved from this id on every render, never a captured
+    /// (stale) CatalogEntry (F09/§6.2).
+    @State private var detailId: String?
     @State private var pendingDelete: CatalogEntry?
     @State private var hubResults: [CatalogEntry] = []
     @State private var hubSearchError: String?
+    @State private var isSearchingHub = false
     @State private var peers: [Peer] = []
     @State private var remoteCatalog: [RemoteCatalogEntry] = []
     @State private var remoteError: String?
+    /// Honest instruments: measured download throughput per model id, derived
+    /// from real bytesDone deltas between polls — never a fabricated constant.
+    @State private var downloadRates: [String: Int64] = [:]
+    @State private var downloadSamples: [String: (bytes: UInt64, at: Date)] = [:]
+    @State private var network = NetworkMonitor.shared
+
+    /// Model ids the user explicitly paused, persisted so an interrupted (not
+    /// user-paused) download can be told apart and auto-resumed on launch /
+    /// reconnect — without ever resuming a download the user chose to stop.
+    private static let userPausedKey = "models.userPausedIds"
+    private func isUserPaused(_ id: String) -> Bool {
+        (UserDefaults.standard.array(forKey: Self.userPausedKey) as? [String] ?? []).contains(id)
+    }
+    private func setUserPaused(_ id: String, _ paused: Bool) {
+        var ids = Set(UserDefaults.standard.array(forKey: Self.userPausedKey) as? [String] ?? [])
+        if paused { ids.insert(id) } else { ids.remove(id) }
+        UserDefaults.standard.set(Array(ids), forKey: Self.userPausedKey)
+    }
+
+    private var hasInProgressDownloads: Bool {
+        catalog.contains { $0.state == .downloading || $0.state == .paused }
+    }
+
+    /// Paused but not by the user == interrupted (app killed / network drop):
+    /// safe to resume automatically once we're online again.
+    private func autoResumeInterrupted() {
+        guard network.isOnline else { return }
+        var didResume = false
+        for entry in catalog where entry.state == .paused && !isUserPaused(entry.manifest.id) {
+            try? model.core.resumeDownload(modelId: entry.manifest.id)
+            didResume = true
+        }
+        if didResume { reload() }
+    }
 
     private var availableSegments: [Segment] {
         peers.isEmpty ? [.onDevice, .browse] : [.onDevice, .browse, .onMac]
@@ -36,134 +89,93 @@ struct ModelsView: View {
             ?? catalog.first { $0.fit.verdict == .runsWell }
     }
 
+    /// Hero shows at most once, only while browsing unfiltered (§6.1): removed
+    /// during search or capability filtering. Fits-only is not a filter here.
+    private var showsHero: Bool {
+        segment == .browse && searchText.isEmpty && capabilityFilter == .all
+    }
+
+    private var hasActiveFilter: Bool {
+        !searchText.isEmpty || capabilityFilter != .all || (segment == .browse && fitsOnly)
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Segmented picker
                 Picker("Catalog", selection: $segment) {
                     ForEach(availableSegments, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, PocketSpacing.gutterIphone)
-                .padding(.top, PocketSpacing.s8)
-                .padding(.bottom, PocketSpacing.s8)
+                .padding(.top, PocketSpacing.s4)
+                .padding(.bottom, PocketSpacing.s4)
 
-                if segment == .browse {
-                    HStack {
-                        Toggle("Fits only", isOn: $fitsOnly)
-                            .font(.pocket(.footnote))
-                            .foregroundStyle(PocketColor.textSecondary)
-                    }
-                    .padding(.horizontal, PocketSpacing.gutterIphone)
-                    .padding(.bottom, PocketSpacing.s8)
+                if segment != .onMac {
+                    filterRow
+                        .padding(.bottom, PocketSpacing.s4)
                 }
 
-                List {
-                    // Hero card in Browse mode when no active search
-                    if segment == .browse, searchText.isEmpty, let hero = heroEntry {
-                        Section {
-                            heroCard(hero)
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                    }
-
-                    if segment == .onMac {
-                        if let remoteError {
-                            Text(remoteError).font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
-                        }
-                        Section("On your Mac") {
-                            ForEach(remoteCatalog) { entry in
-                                ModelRow(
-                                    data: remoteRowData(for: entry),
-                                    primaryActionLabel: remotePrimaryActionLabel(for: entry),
-                                    onPrimaryAction: { performRemotePrimaryAction(for: entry) }
-                                )
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if entry.state == .installed {
-                                        performRemotePrimaryAction(for: entry)
-                                    }
-                                }
-                            }
-                        }
-                    } else if segment == .onDevice && groupedSections.isEmpty {
-                        Section {
-                            emptyOnDeviceState
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(groupedSections) { section in
-                            modelSectionView(section)
-                        }
-                    }
-
-                    if segment == .browse, !searchText.isEmpty {
-                        Section {
-                            if model.core.isOffline() {
-                                Label("Offline mode is on — turn it off in Settings to search Hugging Face.", systemImage: "airplane")
-                                    .font(.pocket(.footnote))
-                                    .foregroundStyle(PocketColor.textSecondary)
-                            } else {
-                                Button {
-                                    Task { await searchHub() }
-                                } label: {
-                                    Label("Search Hugging Face for \"\(searchText)\"", systemImage: "magnifyingglass")
-                                }
-                            }
-                            if let hubSearchError {
-                                Text(hubSearchError).font(.pocket(.caption)).foregroundStyle(PocketColor.statusBad)
-                            }
-                            ForEach(hubResults, id: \.manifest.id) { entry in
-                                ModelRow(
-                                    data: rowData(for: entry),
-                                    primaryActionLabel: primaryActionLabel(for: entry),
-                                    onPrimaryAction: { performPrimaryAction(for: entry) }
-                                )
-                                .contentShape(Rectangle())
-                                .onTapGesture { detail = entry }
-                            }
-                        }
-                    }
-                }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
-                .searchable(text: $searchText, prompt: "Search models")
-                .padding(.bottom, 110)
+                list
             }
             .navigationTitle("Models")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .background(PocketColor.bgCanvas)
+            .toolbar {
+                if segment != .onMac {
+                    ToolbarItem(placement: .topBarTrailing) { sortMenu }
+                }
+            }
             .task {
+                network.start()
                 reload()
                 peers = model.core.peers()
+                autoResumeInterrupted()
+                if startOnMac, !peers.isEmpty, segment != .onMac {
+                    segment = .onMac
+                    await reloadRemote()
+                }
             }
-            .onChange(of: searchText) { reload() }
+            .task { await pollDownloads() }
+            .onChange(of: network.isOnline) { _, online in
+                if online { autoResumeInterrupted() }
+            }
+            .onChange(of: searchText) {
+                reload()
+                hubResults = []
+                hubSearchError = nil
+            }
             .onChange(of: segment) { _, newValue in
                 if newValue == .onMac { Task { await reloadRemote() } }
             }
-            .onChange(of: fitsOnly) { reload() }
             .refreshable {
                 reload()
                 if segment == .onMac { await reloadRemote() }
             }
-            .sheet(item: $detail) { entry in
-                ModelDetailSheet(
-                    entry: entry,
-                    primaryActionLabel: primaryActionLabel(for: entry),
-                    onPrimaryAction: { performPrimaryAction(for: entry) },
-                    onDelete: entry.state == .installed ? { pendingDelete = entry; detail = nil } : nil
-                )
+            .sheet(isPresented: Binding(get: { detailId != nil }, set: { if !$0 { detailId = nil } })) {
+                if let id = detailId, let entry = liveEntry(id: id) {
+                    ModelDetailSheet(
+                        entry: entry,
+                        primaryActionLabel: primaryActionLabel(for: entry),
+                        onPrimaryAction: { performPrimaryAction(for: entry) },
+                        onCancel: {
+                            try? model.core.cancelDownload(modelId: entry.manifest.id)
+                            reload()
+                            detailId = nil
+                        },
+                        onDelete: entry.state == .installed ? { pendingDelete = entry; detailId = nil } : nil,
+                        downloadBytesPerSecond: downloadRates[entry.manifest.id] ?? 0,
+                        isOffline: !network.isOnline || model.core.isOffline()
+                    )
+                }
             }
-            .confirmationDialog(
+            .alert(
                 "Delete \(pendingDelete?.manifest.displayName ?? "model")?",
-                isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-                titleVisibility: .visible
+                isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
             ) {
                 Button("Delete", role: .destructive) {
                     if let entry = pendingDelete {
                         try? model.core.deleteModel(modelId: entry.manifest.id)
+                        if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
                         reload()
                     }
                     pendingDelete = nil
@@ -171,73 +183,201 @@ struct ModelsView: View {
                 Button("Cancel", role: .cancel) { pendingDelete = nil }
             } message: {
                 if let entry = pendingDelete {
-                    Text("Frees \(formatBytes(entry.manifest.estRuntimeBytes)).")
+                    Text("Frees \(formatBytes(diskBytes(entry))).")
                 }
             }
         }
+    }
+
+    // MARK: - Filter row & sort
+
+    private var filterRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: PocketSpacing.s8) {
+                ForEach(CapabilityFilter.allCases, id: \.self) { cap in
+                    filterChip(cap.rawValue, selected: capabilityFilter == cap) {
+                        capabilityFilter = capabilityFilter == cap ? .all : cap
+                    }
+                }
+                if segment == .browse {
+                    Divider().frame(height: 20)
+                    fitsChip
+                }
+            }
+            .padding(.horizontal, PocketSpacing.gutterIphone)
+        }
+    }
+
+    private func filterChip(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.pocket(.footnote))
+                .fontWeight(selected ? .semibold : .regular)
+                .foregroundStyle(selected ? PocketColor.accentOnAccent : PocketColor.textSecondary)
+                .padding(.horizontal, PocketSpacing.s12)
+                .padding(.vertical, 6)
+                .background(selected ? PocketColor.accent : PocketColor.bgSunken, in: Capsule())
+                .frame(minHeight: 44) // 44pt hit target; visual capsule stays compact
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("models_filter_\(label)")
+    }
+
+    private var fitsChip: some View {
+        Button {
+            fitsOnly.toggle()
+        } label: {
+            HStack(spacing: PocketSpacing.s4) {
+                if fitsOnly { Image(systemName: "checkmark").font(.caption2.weight(.bold)) }
+                Text("Fits only").font(.pocket(.footnote)).fontWeight(fitsOnly ? .semibold : .regular)
+            }
+            .foregroundStyle(fitsOnly ? PocketColor.accentOnAccent : PocketColor.textSecondary)
+            .padding(.horizontal, PocketSpacing.s12)
+            .padding(.vertical, 6)
+            .background(fitsOnly ? PocketColor.accent : PocketColor.bgSunken, in: Capsule())
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(fitsOnly ? .isSelected : [])
+        .accessibilityIdentifier("models_filter_fits")
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort", selection: $sortOrder) {
+                ForEach(SortOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+        .accessibilityLabel("Sort models")
+        .accessibilityIdentifier("models_sort_menu")
+    }
+
+    // MARK: - List
+
+    private var list: some View {
+        List {
+            if (!network.isOnline || model.core.isOffline()), hasInProgressDownloads {
+                Section {
+                    offlineDownloadBanner
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
+
+            if showsHero, let hero = heroEntry {
+                Section {
+                    heroCard(hero)
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
+
+            if segment == .onMac {
+                if let remoteError {
+                    Text(remoteError).font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
+                }
+                Section("On your Mac") {
+                    ForEach(remoteCatalog) { entry in
+                        ModelRow(
+                            data: remoteRowData(for: entry),
+                            primaryActionLabel: remotePrimaryActionLabel(for: entry),
+                            onPrimaryAction: { performRemotePrimaryAction(for: entry) }
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if entry.state == .installed { performRemotePrimaryAction(for: entry) }
+                        }
+                    }
+                }
+            } else if groupedSections.isEmpty {
+                Section {
+                    emptyStateView
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            } else {
+                ForEach(groupedSections) { section in
+                    modelSectionView(section)
+                }
+            }
+
+            if segment == .browse, !searchText.isEmpty {
+                Section {
+                    if model.core.isOffline() {
+                        Label("Offline mode is on — turn it off in Settings to search Hugging Face.", systemImage: "airplane")
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textSecondary)
+                    } else if isSearchingHub {
+                        HStack(spacing: PocketSpacing.s8) {
+                            ProgressView()
+                            Text("Searching Hugging Face…")
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.textSecondary)
+                        }
+                    } else {
+                        Button {
+                            Task { await searchHub() }
+                        } label: {
+                            Label("Search Hugging Face for \"\(searchText)\"", systemImage: "magnifyingglass")
+                        }
+                    }
+                    if let hubSearchError {
+                        Text(hubSearchError).font(.pocket(.caption)).foregroundStyle(PocketColor.statusBad)
+                    }
+                    ForEach(hubResults, id: \.manifest.id) { entry in
+                        ModelRow(
+                            data: rowData(for: entry),
+                            primaryActionLabel: primaryActionLabel(for: entry),
+                            onPrimaryAction: { performPrimaryAction(for: entry) }
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture { detailId = entry.manifest.id }
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
+        .scrollContentBackground(.hidden)
+        .searchable(text: $searchText, prompt: "Search models")
     }
 
     // MARK: - Hero Card
 
     private func heroCard(_ hero: CatalogEntry) -> some View {
         Button {
-            detail = hero
+            detailId = hero.manifest.id
         } label: {
-            VStack(alignment: .leading, spacing: PocketSpacing.s12) {
+            VStack(alignment: .leading, spacing: PocketSpacing.s8) {
                 HStack {
                     HStack(spacing: PocketSpacing.s4) {
-                        PocketMarkView(state: .idle, size: 14)
-                        Text("RECOMMENDED FOR THIS IPHONE")
-                            .font(.system(.caption2, design: .rounded).weight(.bold))
+                        PocketMarkView(state: .idle, size: 10)
+                        Text("Recommended for this iPhone")
+                            .font(.pocket(.caption))
                             .foregroundStyle(PocketColor.accent)
                     }
-                    .padding(.horizontal, PocketSpacing.s8)
-                    .padding(.vertical, 4)
-                    .background(PocketColor.accentSoft, in: Capsule())
-
                     Spacer()
-
                     FitBadge(kind: fitKind(hero.fit.verdict), reason: hero.fit.reason)
                 }
 
-                VStack(alignment: .leading, spacing: PocketSpacing.s4) {
-                    Text(hero.manifest.displayName)
-                        .font(.pocket(.title))
-                        .foregroundStyle(PocketColor.textPrimary)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text("\(hero.manifest.family) · \(hero.manifest.quant) · \(formatBytes(hero.manifest.estRuntimeBytes))")
-                        .font(.pocket(.footnote))
-                        .foregroundStyle(PocketColor.textSecondary)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(hero.fit.reason)
-                        .font(.pocket(.caption))
-                        .foregroundStyle(PocketColor.textSecondary)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 2)
-                }
-
-                HStack(spacing: PocketSpacing.s12) {
-                    if let tok = hero.fit.estTokensPerSec {
-                        HStack(spacing: 4) {
-                            Image(systemName: "bolt.fill")
-                                .font(.caption2)
-                                .foregroundStyle(PocketColor.accent)
-                            Text("\(Int(tok)) tok/s")
-                                .font(.pocket(.caption))
-                                .foregroundStyle(PocketColor.textSecondary)
-                        }
+                HStack(alignment: .center, spacing: PocketSpacing.s12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(ModelNaming.short(hero.manifest.displayName))
+                            .font(.pocket(.headline))
+                            .foregroundStyle(PocketColor.textPrimary)
+                            .lineLimit(1)
+                        Text(heroMetaLine(hero))
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.textSecondary)
+                            .lineLimit(1)
                     }
 
-                    Text(hero.manifest.license.spdx)
-                        .font(.pocket(.caption))
-                        .foregroundStyle(PocketColor.textSecondary)
-
-                    Spacer()
+                    Spacer(minLength: PocketSpacing.s8)
 
                     Button {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -254,15 +394,42 @@ struct ModelsView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("model_action_button_\(hero.manifest.id)")
                 }
-                .padding(.top, PocketSpacing.s4)
+
+                if isManaged(hero.state) {
+                    managedStateView(hero)
+                }
             }
-            .padding(PocketSpacing.s16)
-            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(PocketColor.lineHairline))
+            .padding(PocketSpacing.s12)
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
+            .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("model_hero_\(hero.manifest.id)")
         .accessibilityValue(modelStateAccessibilityValue(hero.state))
+    }
+
+    /// One compact meta line: family · quant · size · honest tok/s (measured
+    /// bare, estimate marked "~…est." — never a measured-looking number on a
+    /// model that has not run).
+    private func heroMetaLine(_ entry: CatalogEntry) -> String {
+        var parts = ["\(entry.manifest.family) · \(entry.manifest.quant) · \(formatBytes(diskBytes(entry)))"]
+        if let tok = entry.fit.measuredTokensPerSec {
+            parts.append("\(Int(tok)) tok/s")
+        } else if let tok = entry.fit.estTokensPerSec {
+            parts.append("~\(Int(tok)) tok/s est.")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Empty states
+
+    @ViewBuilder
+    private var emptyStateView: some View {
+        if segment == .onDevice, installedEntries.isEmpty, !hasActiveFilter {
+            emptyOnDeviceState
+        } else {
+            filteredEmptyState
+        }
     }
 
     private var emptyOnDeviceState: some View {
@@ -283,14 +450,83 @@ struct ModelsView: View {
                 .foregroundStyle(PocketColor.textSecondary)
                 .multilineTextAlignment(.center)
 
-            Button("Browse catalog") {
-                segment = .browse
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(PocketColor.accent)
+            Button("Browse catalog") { segment = .browse }
+                .buttonStyle(.borderedProminent)
+                .tint(PocketColor.accent)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, PocketSpacing.s32)
+    }
+
+    /// Honest filtered-empty copy: names the active query/filter and offers
+    /// Clear filters — never "No models on this iPhone" for a filtered list.
+    private var filteredEmptyState: some View {
+        VStack(spacing: PocketSpacing.s12) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.title)
+                .foregroundStyle(PocketColor.textTertiary)
+            Text("No models match \(activeFilterDescription)")
+                .font(.pocket(.headline))
+                .foregroundStyle(PocketColor.textPrimary)
+                .multilineTextAlignment(.center)
+            Button("Clear filters") {
+                searchText = ""
+                capabilityFilter = .all
+                fitsOnly = false
+            }
+            .buttonStyle(.bordered)
+            .tint(PocketColor.accent)
+            .accessibilityIdentifier("models_clear_filters")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, PocketSpacing.s32)
+    }
+
+    private var activeFilterDescription: String {
+        var parts: [String] = []
+        if capabilityFilter != .all { parts.append("“\(capabilityFilter.rawValue)”") }
+        if segment == .browse, fitsOnly { parts.append("Fits only") }
+        if !searchText.isEmpty { parts.append("“\(searchText)”") }
+        return parts.isEmpty ? "these filters" : parts.joined(separator: " · ")
+    }
+
+    // MARK: - Offline download states
+
+    private var offlineDownloadBanner: some View {
+        HStack(spacing: PocketSpacing.s12) {
+            Image(systemName: model.core.isOffline() ? "airplane" : "wifi.slash")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(PocketColor.statusWarn)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.core.isOffline() ? "Paused — Offline mode is on" : "Waiting for network…")
+                    .font(.pocket(.footnote))
+                    .fontWeight(.medium)
+                    .foregroundStyle(PocketColor.textPrimary)
+                Text(model.core.isOffline()
+                     ? "Turn off Offline mode in Settings to resume downloads."
+                     : "Download paused — no connection. It resumes automatically when you're back online.")
+                    .font(.pocket(.caption))
+                    .foregroundStyle(PocketColor.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(PocketSpacing.s12)
+        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
+        .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
+    }
+
+    /// Replaces the progress ring while offline — no fabricated speed/ETA when
+    /// nothing can actually transfer. Honest instruments.
+    private func waitingForNetworkRow(_ entry: CatalogEntry) -> some View {
+        HStack(spacing: PocketSpacing.s12) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(PocketColor.statusWarn)
+            Text("Waiting for network · \(formatBytes(entry.bytesDone)) of \(formatBytes(transferTotal(entry)))")
+                .font(.pocket(.footnote))
+                .foregroundStyle(PocketColor.textSecondary)
+            Spacer()
+        }
     }
 
     // MARK: - Sections & Grouping
@@ -305,75 +541,320 @@ struct ModelsView: View {
     private func modelSectionView(_ section: ModelSection) -> some View {
         Section {
             ForEach(section.entries, id: \.manifest.id) { entry in
-                ModelRow(
-                    data: rowData(for: entry),
-                    primaryActionLabel: primaryActionLabel(for: entry),
-                    onPrimaryAction: { performPrimaryAction(for: entry) }
-                )
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("model_row_\(entry.manifest.id)")
-                .accessibilityValue(modelStateAccessibilityValue(entry.state))
-                .contentShape(Rectangle())
-                .onTapGesture { detail = entry }
+                rowView(for: entry)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("model_row_\(entry.manifest.id)")
+                    .accessibilityValue(modelStateAccessibilityValue(entry.state))
             }
         } header: {
             HStack(spacing: PocketSpacing.s8) {
-                Image(systemName: section.icon)
-                    .font(.pocket(.footnote))
-                Text(section.title)
-                    .font(.pocket(.footnote))
+                Image(systemName: section.icon).font(.pocket(.footnote))
+                Text(section.title).font(.pocket(.footnote))
             }
             .foregroundStyle(PocketColor.textSecondary)
         }
     }
 
+    /// A compact row. Installed/available use the shared `ModelRow`; any model
+    /// mid-transfer (queued/downloading/paused/verifying/failed) uses a managed
+    /// row whose Pause/Resume/Cancel controls have distinct hit targets and do
+    /// NOT open details (§6.2) — only the name taps through.
+    @ViewBuilder
+    private func rowView(for entry: CatalogEntry) -> some View {
+        if isManaged(entry.state) {
+            VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                Button {
+                    detailId = entry.manifest.id
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.manifest.displayName)
+                            .font(.pocket(.callout))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(PocketColor.textPrimary)
+                            .lineLimit(1)
+                        Text("\(entry.manifest.family) · \(entry.manifest.quant)")
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                managedStateView(entry)
+            }
+            .padding(.vertical, PocketSpacing.s4)
+        } else {
+            ModelRow(
+                data: rowData(for: entry),
+                primaryActionLabel: primaryActionLabel(for: entry),
+                onPrimaryAction: { performPrimaryAction(for: entry) }
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { detailId = entry.manifest.id }
+        }
+    }
+
+    /// The transfer-state presentation shared by rows, hero, and detail — one
+    /// honest view per state (§6.2 / §8).
+    @ViewBuilder
+    private func managedStateView(_ entry: CatalogEntry) -> some View {
+        let id = entry.manifest.id
+        switch entry.state {
+        case .downloading:
+            if !network.isOnline {
+                waitingForNetworkRow(entry)
+            } else {
+                DownloadProgress(
+                    state: .downloading(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(transferTotal(entry)), bytesPerSecond: downloadRates[id] ?? 0),
+                    onPauseResume: {
+                        try? model.core.pauseDownload(modelId: id)
+                        setUserPaused(id, true)
+                        reload()
+                    },
+                    onCancel: { try? model.core.cancelDownload(modelId: id); reload() }
+                )
+            }
+        case .paused:
+            if model.core.isOffline() {
+                offlineModePausedRow(entry)
+            } else if !network.isOnline {
+                waitingForNetworkRow(entry)
+            } else {
+                DownloadProgress(
+                    state: .paused(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(transferTotal(entry))),
+                    onPauseResume: {
+                        try? model.core.resumeDownload(modelId: id)
+                        setUserPaused(id, false)
+                        reload()
+                    },
+                    onCancel: { try? model.core.cancelDownload(modelId: id); reload() }
+                )
+            }
+        case .queued:
+            HStack(spacing: PocketSpacing.s12) {
+                Image(systemName: "clock").font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)
+                Text("Queued").font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)
+                Spacer()
+                Button("Cancel") { try? model.core.cancelDownload(modelId: id); reload() }
+                    .font(.pocket(.footnote))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(PocketColor.accent)
+            }
+        case .verifying:
+            HStack(spacing: PocketSpacing.s12) {
+                Image(systemName: "checkmark.shield").font(.pocket(.footnote)).foregroundStyle(PocketColor.statusInfo)
+                Text("Checking files…").font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)
+                Spacer()
+            }
+        case .failed(let reason):
+            VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                Text(failureText(reason))
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.statusBad)
+                HStack(spacing: PocketSpacing.s16) {
+                    Button("Retry") { try? model.core.startDownload(modelId: id); setUserPaused(id, false); reload() }
+                        .buttonStyle(.plain).foregroundStyle(PocketColor.accent)
+                    Button("Remove") { try? model.core.cancelDownload(modelId: id); reload() }
+                        .buttonStyle(.plain).foregroundStyle(PocketColor.textSecondary)
+                    Spacer()
+                }
+                .font(.pocket(.footnote))
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private func offlineModePausedRow(_ entry: CatalogEntry) -> some View {
+        HStack(spacing: PocketSpacing.s12) {
+            Image(systemName: "airplane").font(.system(size: 14, weight: .medium)).foregroundStyle(PocketColor.statusWarn)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Paused — Offline mode is on").font(.pocket(.footnote)).foregroundStyle(PocketColor.textPrimary)
+                Text("Turn off Offline mode in Settings to resume.").font(.pocket(.caption)).foregroundStyle(PocketColor.textSecondary)
+            }
+            Spacer()
+            Button("Cancel") { try? model.core.cancelDownload(modelId: entry.manifest.id); reload() }
+                .font(.pocket(.footnote)).buttonStyle(.plain).foregroundStyle(PocketColor.accent)
+        }
+    }
+
+    private func failureText(_ reason: String) -> String {
+        switch reason {
+        case "network": return "Download failed — check your connection, then retry."
+        case "disk": return "Download failed — not enough storage."
+        case "checksum": return "Download failed — files didn't verify. Retry to download again."
+        default: return "Download failed."
+        }
+    }
+
+    /// Entries shown in the On this iPhone segment: merged installs (incl.
+    /// noncurated — F25) plus any curated model mid-transfer, so a browse
+    /// capability filter can never hide transfer controls (queued/verifying
+    /// included — F09/§6.1).
+    private var onDeviceEntries: [CatalogEntry] {
+        var byId: [String: CatalogEntry] = [:]
+        for e in catalog where isManaged(e.state) || e.state == .installed { byId[e.manifest.id] = e }
+        for e in installedEntries { byId[e.manifest.id] = e }
+        return Array(byId.values)
+    }
+
     private var groupedSections: [ModelSection] {
+        if segment == .onDevice {
+            var entries = onDeviceEntries
+            if !searchText.isEmpty {
+                entries = entries.filter { $0.manifest.displayName.localizedCaseInsensitiveContains(searchText) }
+            }
+            if capabilityFilter != .all {
+                entries = entries.filter { matchesCapability($0.manifest) }
+            }
+            entries = sorted(entries)
+            return entries.isEmpty ? [] : [ModelSection(title: "On this iPhone", icon: "iphone", entries: entries)]
+        }
+
         var entries = catalog
         if !searchText.isEmpty {
             entries = entries.filter { $0.manifest.displayName.localizedCaseInsensitiveContains(searchText) }
         }
-        if segment == .onDevice {
-            entries = entries.filter { $0.state == .installed || $0.state == .downloading || $0.state == .paused }
-            return entries.isEmpty ? [] : [ModelSection(title: "On this iPhone", icon: "iphone", entries: entries)]
-        }
         if fitsOnly {
             entries = entries.filter { $0.fit.verdict == .runsWell || $0.fit.verdict == .runsSlow }
         }
-        var sections: [ModelSection] = []
 
+        // A specific capability filter → one flat, sorted "Results" section.
+        if capabilityFilter != .all {
+            entries = sorted(entries.filter { matchesCapability($0.manifest) })
+            return entries.isEmpty ? [] : [ModelSection(title: capabilityFilter.rawValue, icon: capabilityIcon, entries: entries)]
+        }
+
+        // Unfiltered Browse → capability-grouped sections.
+        var sections: [ModelSection] = []
         let text = entries.filter {
             $0.manifest.modalities.contains(.text)
                 && !$0.manifest.modalities.contains(.vision)
                 && !$0.manifest.modalities.contains(.image)
         }
-        if !text.isEmpty {
-            sections.append(ModelSection(title: "Text", icon: "text.bubble", entries: text))
-        }
+        if !text.isEmpty { sections.append(ModelSection(title: "Text", icon: "text.bubble", entries: sorted(text))) }
 
         let vision = entries.filter { $0.manifest.modalities.contains(.vision) }
-        if !vision.isEmpty {
-            sections.append(ModelSection(title: "Vision", icon: "eye", entries: vision))
-        }
+        if !vision.isEmpty { sections.append(ModelSection(title: "Vision", icon: "eye", entries: sorted(vision))) }
 
         let image = entries.filter { $0.manifest.modalities.contains(.image) }
-        if !image.isEmpty {
-            sections.append(ModelSection(title: "Image generation", icon: "photo", entries: image))
-        }
+        if !image.isEmpty { sections.append(ModelSection(title: "Image generation", icon: "photo", entries: sorted(image))) }
 
         let voice = entries.filter {
             $0.manifest.modalities.contains(.speechToText) || $0.manifest.modalities.contains(.textToSpeech)
         }
-        if !voice.isEmpty {
-            sections.append(ModelSection(title: "Voice", icon: "waveform", entries: voice))
-        }
+        if !voice.isEmpty { sections.append(ModelSection(title: "Voice", icon: "waveform", entries: sorted(voice))) }
 
         return sections
     }
 
+    private var capabilityIcon: String {
+        switch capabilityFilter {
+        case .all: return "square.grid.2x2"
+        case .text: return "text.bubble"
+        case .vision: return "eye"
+        case .voice: return "waveform"
+        case .images: return "photo"
+        }
+    }
+
+    private func matchesCapability(_ m: ModelManifest) -> Bool {
+        switch capabilityFilter {
+        case .all: return true
+        case .text: return m.modalities.contains(.text)       // includes text-capable vision models
+        case .vision: return m.modalities.contains(.vision)
+        case .voice: return m.modalities.contains(.speechToText) || m.modalities.contains(.textToSpeech)
+        case .images: return m.modalities.contains(.image)
+        }
+    }
+
+    private func sorted(_ entries: [CatalogEntry]) -> [CatalogEntry] {
+        switch sortOrder {
+        case .recommended: return entries
+        case .smallest: return entries.sorted { transferTotal($0) < transferTotal($1) }
+        case .name: return entries.sorted { $0.manifest.displayName.localizedCaseInsensitiveCompare($1.manifest.displayName) == .orderedAscending }
+        }
+    }
+
+    private func isManaged(_ state: ModelState) -> Bool {
+        switch state {
+        case .queued, .downloading, .paused, .verifying, .failed: return true
+        default: return false
+        }
+    }
+
+    /// Resolve a live entry by id across every local source (catalog, merged
+    /// installs, hub results), so detail/row/hero agree without reopening.
+    private func liveEntry(id: String) -> CatalogEntry? {
+        catalog.first { $0.manifest.id == id }
+            ?? installedEntries.first { $0.manifest.id == id }
+            ?? hubResults.first { $0.manifest.id == id }
+    }
+
+    /// Real download/disk size (summed manifest file sizes), never a runtime-RAM
+    /// estimate (F20). 0 when unknown (e.g. unresolved hub results).
+    private func diskBytes(_ entry: CatalogEntry) -> UInt64 {
+        entry.fit.diskBytes != 0 ? entry.fit.diskBytes : entry.manifest.estRuntimeBytes
+    }
+
+    /// Transfer total for a progress ring = real download bytes, with a nonzero
+    /// floor so the ring never divides by zero (§6.2 clamp/guard).
+    private func transferTotal(_ entry: CatalogEntry) -> UInt64 {
+        let b = diskBytes(entry)
+        return b == 0 ? max(entry.bytesDone, 1) : b
+    }
+
     private func reload() {
         catalog = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: true, installedOnly: false))
-        hubResults = []
-        hubSearchError = nil
+        // Full merged catalog, locally narrowed to installed + mid-transfer, so
+        // a non-curated (Hugging Face) download stays visible while in flight.
+        installedEntries = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false))
+            .filter { $0.state == .installed || isManaged($0.state) }
+    }
+
+    /// While any model is actively in-flight, re-read the catalog every ~0.7s so
+    /// bytesDone/state refresh, and derive a real throughput from consecutive
+    /// bytesDone samples. Idle ticks only do a cheap state scan + sleep and clear
+    /// stale rate samples.
+    private func pollDownloads() async {
+        while !Task.isCancelled {
+            let isActive = (catalog + installedEntries).contains {
+                $0.state == .downloading || $0.state == .verifying || $0.state == .queued
+            }
+            if !isActive {
+                if !downloadSamples.isEmpty { downloadSamples.removeAll() }
+                if !downloadRates.isEmpty { downloadRates.removeAll() }
+            } else {
+                catalog = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: true, installedOnly: false))
+                installedEntries = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: true))
+                let now = Date()
+                for entry in catalog where entry.state == .downloading {
+                    let id = entry.manifest.id
+                    if let prev = downloadSamples[id] {
+                        let elapsed = now.timeIntervalSince(prev.at)
+                        if elapsed >= 0.4, entry.bytesDone >= prev.bytes {
+                            downloadRates[id] = Int64(Double(entry.bytesDone - prev.bytes) / elapsed)
+                            downloadSamples[id] = (entry.bytesDone, now)
+                        }
+                    } else {
+                        downloadSamples[id] = (entry.bytesDone, now)
+                    }
+                }
+            }
+            try? await Task.sleep(nanoseconds: 700_000_000)
+        }
+    }
+
+    /// Current best address for a stored peer: a Bonjour-rediscovered override
+    /// (set after an IP change) wins over the stale stored address.
+    private func peerEndpoint(for peer: Peer) -> PeerEndpoint {
+        let override = PeerAddressBook.shared.override(forHostId: peer.name)
+        return PeerEndpoint(
+            host: override?.host ?? peer.addrs.first ?? "",
+            port: override?.port ?? peer.port,
+            fingerprint: peer.certSha256
+        )
     }
 
     private func reloadRemote() async {
@@ -382,12 +863,24 @@ struct ModelsView: View {
             remoteError = "No saved credential for \(peer.name) - try pairing again."
             return
         }
-        let endpoint = PeerEndpoint(host: peer.addrs.first ?? "", port: peer.port, fingerprint: peer.certSha256)
-        let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
+        let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: peerEndpoint(for: peer), token: token))
         do {
             remoteCatalog = try await client.catalog()
             remoteError = nil
         } catch {
+            if let resolved = await Browser.rediscover(hostId: peer.name) {
+                PeerAddressBook.shared.setOverride(resolved, forHostId: peer.name)
+                let endpoint = PeerEndpoint(host: resolved.host, port: resolved.port, fingerprint: peer.certSha256)
+                let retryClient = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
+                do {
+                    remoteCatalog = try await retryClient.catalog()
+                    remoteError = nil
+                    return
+                } catch {
+                    remoteError = "Couldn't reach \(peer.name): \(error.localizedDescription)"
+                    return
+                }
+            }
             remoteError = "Couldn't reach \(peer.name): \(error.localizedDescription)"
         }
     }
@@ -398,7 +891,7 @@ struct ModelsView: View {
             familyParamsQuant: "\(entry.manifest.family) · \(entry.manifest.quant)",
             fitKind: remoteFitKind(entry.fit.verdict),
             fitReason: "Fits on Mac: \(entry.fit.reason)",
-            sizeOnDisk: formatBytes(entry.manifest.estRuntimeBytes),
+            sizeOnDisk: entry.manifest.estRuntimeBytes != 0 ? formatBytes(entry.manifest.estRuntimeBytes) : nil,
             speedText: entry.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
             speedIsMeasured: false,
             licenseLabel: ""
@@ -412,10 +905,10 @@ struct ModelsView: View {
 
     private func remotePrimaryActionLabel(for entry: RemoteCatalogEntry) -> String {
         switch entry.state {
-        case .installed: return isRemoteModelSelected(entry) ? "In use" : "Use on phone"
+        case .installed: return isRemoteModelSelected(entry) ? "Default" : "Use on phone"
         case .downloading: return "Downloading…"
         case .paused: return "Paused"
-        case .verifying: return "Checking…"
+        case .verifying: return "Checking files…"
         case .failed: return "Retry"
         case .available, .queued: return "Download on Mac"
         }
@@ -431,8 +924,7 @@ struct ModelsView: View {
         case .available, .queued, .failed:
             guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) })
             else { return }
-            let endpoint = PeerEndpoint(host: peer.addrs.first ?? "", port: peer.port, fingerprint: peer.certSha256)
-            let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
+            let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: peerEndpoint(for: peer), token: token))
             Task {
                 try? await client.startDownload(modelId: entry.manifest.id)
                 await reloadRemote()
@@ -453,8 +945,16 @@ struct ModelsView: View {
 
     private func searchHub() async {
         hubSearchError = nil
+        isSearchingHub = true
+        defer { isSearchingHub = false }
+        // searchHub is a blocking network call — keep it off the main actor.
+        let core = model.core
+        let query = searchText
         do {
-            hubResults = try model.core.searchHub(query: searchText, format: .mlxSafetensors)
+            let results = try await Task.detached(priority: .userInitiated) {
+                try core.searchHub(query: query, format: .mlxSafetensors)
+            }.value
+            hubResults = results
         } catch {
             hubResults = []
             hubSearchError = "Search failed: \(error)"
@@ -467,33 +967,49 @@ struct ModelsView: View {
             familyParamsQuant: "\(entry.manifest.family) · \(entry.manifest.quant)",
             fitKind: fitKind(entry.fit.verdict),
             fitReason: entry.fit.reason,
-            sizeOnDisk: formatBytes(entry.manifest.estRuntimeBytes),
-            speedText: entry.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
+            sizeOnDisk: diskBytes(entry) != 0 ? formatBytes(diskBytes(entry)) : nil,
+            speedText: (entry.fit.measuredTokensPerSec ?? entry.fit.estTokensPerSec).map { "\(Int($0)) tok/s" },
             speedIsMeasured: entry.fit.measuredTokensPerSec != nil,
             licenseLabel: entry.manifest.license.spdx
         )
     }
 
+    /// Installed chat models get Default/Set as default (selection is "Default",
+    /// never "In use" — "In use" is reserved for a genuinely loaded model, which
+    /// Core does not currently expose, §6.2).
     private func primaryActionLabel(for entry: CatalogEntry) -> String {
         switch entry.state {
-        case .installed: return model.selectedModelId == entry.manifest.id ? "In use" : "Use"
+        case .installed: return model.selectedModelId == entry.manifest.id ? "Default" : "Set as default"
         case .downloading: return "Pause"
         case .paused: return "Resume"
-        case .verifying: return "Checking…"
+        case .verifying: return "Checking files…"
+        case .queued: return "Queued"
         case .failed: return "Retry"
-        case .available, .queued: return entry.fit.verdict == .willNotFit ? "Won't fit" : "Download"
+        case .available: return entry.fit.verdict == .willNotFit ? "Won't fit" : "Download"
         }
     }
 
     private func performPrimaryAction(for entry: CatalogEntry) {
+        let id = entry.manifest.id
         switch entry.state {
-        case .downloading: try? model.core.pauseDownload(modelId: entry.manifest.id)
-        case .paused: try? model.core.resumeDownload(modelId: entry.manifest.id)
-        case .available, .queued, .failed: try? model.core.startDownload(modelId: entry.manifest.id)
+        case .downloading:
+            try? model.core.pauseDownload(modelId: id)
+            setUserPaused(id, true)
+        case .paused:
+            try? model.core.resumeDownload(modelId: id)
+            setUserPaused(id, false)
+        case .available, .failed:
+            // "Won't fit" is honest — don't start a download that can't run.
+            guard entry.fit.verdict != .willNotFit else { break }
+            try? model.core.startDownload(modelId: id)
+            setUserPaused(id, false)
+        case .queued:
+            try? model.core.cancelDownload(modelId: id)
         case .installed:
-            model.selectedModelId = entry.manifest.id
+            model.selectedModelId = id
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        case .verifying: break
+        case .verifying:
+            break
         }
         reload()
     }
@@ -511,10 +1027,10 @@ struct ModelsView: View {
         switch state {
         case .available: return "available"
         case .downloading: return "downloading"
-        case .paused: return "paused"
+        case .paused: return model.core.isOffline() ? "paused, offline mode on" : "paused"
         case .installed: return "installed"
         case .queued: return "queued"
-        case .verifying: return "verifying"
+        case .verifying: return "checking files"
         case .failed(let reason): return "failed: \(reason)"
         }
     }
@@ -524,8 +1040,23 @@ private struct ModelDetailSheet: View {
     let entry: CatalogEntry
     let primaryActionLabel: String
     let onPrimaryAction: () -> Void
+    var onCancel: () -> Void = {}
     let onDelete: (() -> Void)?
+    /// Last measured throughput from the catalog screen's poller (0 = not yet measured).
+    var downloadBytesPerSecond: Int64 = 0
+    var isOffline = false
     @Environment(\.dismiss) private var dismiss
+
+    private var realDiskBytes: UInt64 {
+        entry.fit.diskBytes != 0 ? entry.fit.diskBytes : entry.manifest.estRuntimeBytes
+    }
+
+    private var isManaged: Bool {
+        switch entry.state {
+        case .queued, .downloading, .paused, .verifying, .failed: return true
+        default: return false
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -551,36 +1082,42 @@ private struct ModelDetailSheet: View {
                 Section("Specs") {
                     LabeledContent("Quantization", value: entry.manifest.quant)
                     LabeledContent("Context Length", value: "\(entry.manifest.contextLength) tokens")
-                    LabeledContent("Download Size", value: formatBytes(entry.manifest.estRuntimeBytes))
+                    if realDiskBytes != 0 {
+                        LabeledContent("Download Size", value: formatBytes(realDiskBytes))
+                    }
                     LabeledContent("Format", value: "\(entry.manifest.format)")
-                    if let speed = entry.fit.estTokensPerSec {
-                        LabeledContent("Estimated Speed", value: "\(Int(speed)) tok/s")
+                    if let speed = entry.fit.measuredTokensPerSec {
+                        LabeledContent("Speed", value: "\(Int(speed)) tok/s (measured)")
+                    } else if let speed = entry.fit.estTokensPerSec {
+                        LabeledContent("Speed", value: "~\(Int(speed)) tok/s (est.)")
                     }
                 }
 
                 Section("License & Source") {
                     LabeledContent("License", value: entry.manifest.license.spdx)
-                    if let url = URL(string: entry.manifest.license.url) {
+                    if let url = URL(string: "https://huggingface.co/\(entry.manifest.hfRepo)") {
                         Link(destination: url) {
                             HStack {
                                 Text("Hugging Face Model Page")
                                 Spacer()
-                                Image(systemName: "arrow.up.right")
-                                    .font(.caption)
+                                Image(systemName: "arrow.up.right").font(.caption)
+                            }
+                        }
+                    }
+                    if let licenseURL = URL(string: entry.manifest.license.url), !entry.manifest.license.url.isEmpty {
+                        Link(destination: licenseURL) {
+                            HStack {
+                                Text("License Terms")
+                                Spacer()
+                                Image(systemName: "arrow.up.right").font(.caption)
                             }
                         }
                     }
                 }
 
-                if entry.state == .downloading || entry.state == .paused {
-                    Section("Download Status") {
-                        DownloadProgress(
-                            state: entry.state == .paused
-                                ? .paused(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(entry.manifest.estRuntimeBytes))
-                                : .downloading(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(entry.manifest.estRuntimeBytes), bytesPerSecond: 18_000_000),
-                            onPauseResume: onPrimaryAction,
-                            onCancel: {}
-                        )
+                if isManaged {
+                    Section("Status") {
+                        detailStatus
                     }
                 }
 
@@ -593,6 +1130,7 @@ private struct ModelDetailSheet: View {
                             .fontWeight(.semibold)
                     }
                     .tint(PocketColor.accent)
+                    .disabled(disablePrimary)
 
                     if let onDelete {
                         Button(role: .destructive, action: onDelete) {
@@ -614,6 +1152,44 @@ private struct ModelDetailSheet: View {
         .presentationDetents([.medium, .large])
     }
 
+    @ViewBuilder
+    private var detailStatus: some View {
+        switch entry.state {
+        case .verifying:
+            Label("Checking files…", systemImage: "checkmark.shield").font(.pocket(.footnote))
+        case .queued:
+            Label("Queued", systemImage: "clock").font(.pocket(.footnote))
+        case .failed(let reason):
+            Text(reason == "network" ? "Download failed — check your connection." : "Download failed (\(reason)).")
+                .font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
+        case .downloading, .paused:
+            if isOffline {
+                HStack(spacing: PocketSpacing.s12) {
+                    Image(systemName: "wifi.slash").font(.system(size: 14, weight: .medium)).foregroundStyle(PocketColor.statusWarn)
+                    Text("Waiting · \(formatBytes(entry.bytesDone)) of \(formatBytes(realDiskBytes == 0 ? entry.bytesDone : realDiskBytes))")
+                        .font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)
+                    Spacer()
+                }
+            } else {
+                DownloadProgress(
+                    state: entry.state == .paused
+                        ? .paused(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(realDiskBytes == 0 ? max(entry.bytesDone, 1) : realDiskBytes))
+                        : .downloading(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(realDiskBytes == 0 ? max(entry.bytesDone, 1) : realDiskBytes), bytesPerSecond: downloadBytesPerSecond),
+                    onPauseResume: onPrimaryAction,
+                    onCancel: onCancel
+                )
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    /// Verifying can't honor a user control (§6.2): disable the primary button.
+    private var disablePrimary: Bool {
+        if case .verifying = entry.state { return true }
+        return false
+    }
+
     private var fitKind: FitBadgeKind {
         switch entry.fit.verdict {
         case .runsWell: return .runsWell
@@ -629,5 +1205,22 @@ extension CatalogEntry: @retroactive Identifiable {
 }
 
 private func formatBytes(_ bytes: UInt64) -> String {
-    ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .memory)
+    ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+}
+
+#Preview("Light") {
+    ModelsView()
+        .environment(AppModel())
+}
+
+#Preview("Dark") {
+    ModelsView()
+        .environment(AppModel())
+        .preferredColorScheme(.dark)
+}
+
+#Preview("AX3") {
+    ModelsView()
+        .environment(AppModel())
+        .environment(\.dynamicTypeSize, .accessibility3)
 }

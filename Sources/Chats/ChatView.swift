@@ -11,16 +11,19 @@ struct PendingAttachment: Identifiable, Sendable {
 
 /// UI-09: Chat screen (S-CHAT), `02` §7.2. Covers streaming, stop, retry,
 /// title rename, long-press actions, an error card, and the Pulse strip.
-/// Not implemented: model switch per chat (no model picker sheet yet,
-/// UI-13 scope; ponytail: remote-model-use gate — wire when the remote model picker lands),
-/// branch-from-here, state restoration after an app kill
-/// mid-reply (needs a real engine + background task, not exercisable
-/// here), and jump-to-latest (always auto-scrolls to bottom instead).
+/// Consecutive same-role messages are grouped (role affordance only on the
+/// first bubble of a run), and a jump-to-latest control appears when the user
+/// scrolls up while new tokens stream. Not implemented: model switch per chat
+/// (no model picker sheet yet, UI-13 scope; ponytail: remote-model-use gate —
+/// wire when the remote model picker lands), branch-from-here, and state
+/// restoration after an app kill mid-reply (needs a real engine + background
+/// task, not exercisable here).
 struct ChatView: View {
     let conversationId: String
     var projectId: String? = nil
     var initialMessage: String?
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
 
     @State private var title: String?
@@ -30,65 +33,180 @@ struct ChatView: View {
     @State private var streamTask: Task<Void, Never>?
     @State private var errorText: String?
     @State private var renamingTitle = false
+    @State private var showDeleteConfirm = false
     @State private var newTitle = ""
     @State private var voiceDictation = VoiceDictation()
     @State private var speechPlayback = SpeechPlayback()
+    @State private var showVoicePrimer = false
+    @State private var pendingHandsFree = false
 
     @State private var pendingAttachment: PendingAttachment?
     @State private var isPhotosPickerPresented = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isCameraPresented = false
     @State private var cameraUnavailableAlert = false
+    @State private var showVisionRequiredAlert = false
+    /// This conversation's bound model (F03/§9.1), loaded by ID in reload().
+    @State private var conversationModelId: String?
+    /// Catalog snapshot refreshed in reload() — header/composer lookups must
+    /// never call core.catalog() per render (it re-parses the bundled JSON).
+    @State private var cachedCatalog: [CatalogEntry] = []
+    /// Identifies the stream whose cleanup may run; a Stop + immediate Retry
+    /// must not let the old stream's teardown clobber the new one.
+    @State private var activeStreamId = UUID()
+    @State private var showModelPicker = false
+    @State private var showSwitchWhileGeneratingAlert = false
     @State private var showImageGenSheet = false
     @State private var imageGenPrompt = ""
     @State private var activeSourceTurn: ActiveSourceTurn?
     @State private var showPulseDetailSheet = false
     @State private var showJumpToLatest = false
+    @State private var isAtBottom = true
+    /// True only after a real user drag; programmatic scrolls never unpin.
+    @State private var userScrolledUp = false
+    @State private var didReconnectRetry = false
     @State private var cursorBlink = false
+    // Honest instruments: a live decode rate derived from the real stream,
+    // not a hardcoded constant. Updated as deltas arrive; the final
+    // `message.stats.decodeTps` remains the authoritative post-hoc number.
+    @State private var genStartTime: Date?
+    @State private var genCharCount: Int = 0
+    @State private var liveTokPerSec: Double = 0
     @FocusState private var isComposerFocused: Bool
+    // Chrome that sits next to text has to grow with it, or it shrinks into
+    // nothing at accessibility sizes while the labels beside it double.
+    @ScaledMetric(relativeTo: .body) private var attachThumbSize: CGFloat = 48
+    @ScaledMetric(relativeTo: .body) private var recordGlyphSize: CGFloat = 28
+    @ScaledMetric(relativeTo: .caption) private var streamCursorSize: CGFloat = 8
 
     #if DEBUG
     @State private var perfDiagnostics = PerfDiagnostics.shared
     @State private var latestPerfRecord: PerfDiagnostics.GenerationPerfRecord?
     #endif
 
+    /// Next-turn model for this conversation (F03/§5.1): the conversation's own
+    /// bound choice, never inferred from the last assistant message. Falls back
+    /// to the global default only while the chat is unbound.
     private var currentModelId: String? {
-        if let msgModel = messages.last(where: { $0.modelId != nil })?.modelId {
-            return msgModel
-        }
+        if let bound = conversationModelId, !bound.isEmpty { return bound }
         return model.selectedModelId
+    }
+
+    /// Is this model actually runnable right now (installed locally, or a remote
+    /// Mac route)? Used to self-heal a conversation bound to a deleted model.
+    private func isModelUsable(_ id: String) -> Bool {
+        if id.hasPrefix("mac:") { return true }
+        if id == AppleFoundationModelsEngine.modelId { return AppleFoundationModelsEngine.isAvailable }
+        return cachedCatalog.contains { $0.manifest.id == id && $0.state == .installed }
+    }
+
+    /// Whether the model that will serve this chat can see images. Remote
+    /// (`mac:`) models are allowed through (the Mac decides and reports back);
+    /// a local model is checked against its catalog `modalities`.
+    private var currentModelSupportsVision: Bool {
+        guard let id = currentModelId else { return false }
+        if id.hasPrefix("mac:") { return true }
+        return cachedCatalog.first { $0.manifest.id == id }?
+            .manifest.modalities.contains(.vision) ?? false
+    }
+
+    /// Name of an installed vision model to point the user at, if any.
+    private var installedVisionModelName: String? {
+        cachedCatalog
+            .first { $0.state == .installed && $0.manifest.modalities.contains(.vision) }?
+            .manifest.displayName
+    }
+
+    /// Real resident local model for the Pulse sheet. Empty when nothing local
+    /// is loaded (remote `mac:` routing resides on the Mac, not here) — honest
+    /// instruments, no fabricated "Qwen3 4B" placeholder.
+    private var pulseLoadedModels: [LoadedModelSummary] {
+        guard let id = currentModelId, !id.hasPrefix("mac:") else { return [] }
+        let catalogName = cachedCatalog.first { $0.manifest.id == id }?.manifest.displayName
+        let name = Self.humanLabel(catalogName) ?? friendlyModelName(from: id)
+        return [
+            LoadedModelSummary(
+                id: id,
+                name: name,
+                residentBytes: Self.appUsedMemoryBytes(),
+                onEject: {
+                    try? model.core.unloadModel(id: id)
+                    showPulseDetailSheet = false
+                }
+            )
+        ]
     }
 
     private var remoteModelChipLabel: String? {
         guard let id = currentModelId, id.hasPrefix("mac:") else { return nil }
         let localId = RemoteEngine.localModelId(from: id)
-        let catalogName = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false))
+        let catalogName = cachedCatalog
             .first { $0.manifest.id == localId || localId.hasPrefix($0.manifest.id) }?
             .manifest.displayName
-        let displayName = catalogName ?? friendlyModelName(from: localId)
-        let peerName = model.core.peers().first?.name ?? "Mac"
-        return "\(displayName) · \(peerName)"
+        let displayName = Self.humanLabel(catalogName) ?? friendlyModelName(from: localId)
+        // The Mac's *name*, never an id or an address.
+        let macName = Self.humanLabel(peerName(for: id)) ?? "Mac"
+        return "\(displayName) · \(macName)"
+    }
+
+    /// Keeps a label human: a value that is really a filesystem path (a models
+    /// directory, an Application Support container) collapses to its last
+    /// component, so no path can ever reach the screen.
+    private static func humanLabel(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        guard trimmed.hasPrefix("/") || trimmed.hasPrefix("~") || trimmed.hasPrefix("file:") else {
+            return trimmed
+        }
+        let last = (trimmed as NSString).lastPathComponent
+        return last.isEmpty ? nil : last
+    }
+
+    /// Header state mark (§5.1): animates while answering, static otherwise.
+    private var headerMarkState: PocketMarkState {
+        isGenerating ? .working(tokPerSec: liveTokPerSec > 0 ? liveTokPerSec : nil) : .idle
+    }
+
+    /// Model for the header subtitle (U2) — one short line. Remote routes name
+    /// the Mac they run on; local ones are just the model. Never a filesystem
+    /// path, and "Choose a model" while the conversation is unbound.
+    private var modelLocationLabel: String {
+        guard let id = currentModelId, !id.isEmpty else { return "Choose a model" }
+        if id.hasPrefix("mac:") { return remoteModelChipLabel ?? "Mac" }
+        if id == AppleFoundationModelsEngine.modelId { return "Apple Intelligence" }
+        let catalogName = cachedCatalog.first { $0.manifest.id == id }?.manifest.displayName
+        return Self.humanLabel(catalogName) ?? friendlyModelName(from: id)
+    }
+
+    /// Commits a per-chat model choice (U8): persist to the conversation and
+    /// refresh header/composer. Never changes the global default.
+    private func bindModel(_ id: String) {
+        try? model.core.setConversationModel(id: conversationId, modelId: id)
+        conversationModelId = id
+    }
+
+    /// Resolves the *specific* paired Mac encoded in a `mac:<peer>/<model>` id
+    /// (F16), never `peers().first`.
+    private func peerName(for remoteId: String?) -> String? {
+        guard let remoteId, let pid = RemoteEngine.peerId(from: remoteId) else { return nil }
+        return model.core.peers().first { $0.id == pid }?.name
     }
 
     private func friendlyModelName(from localId: String) -> String {
-        let repoPart = localId.split(separator: "@").first.map(String.init) ?? localId
-        let name = repoPart.split(separator: "/").last.map(String.init) ?? repoPart
-        return name
+        // One naming rule for both apps: ModelNaming also strips quantisation,
+        // format and release-date tokens, which this used to leave in.
+        ModelNaming.short(localId)
     }
 
-    private var pulseStripState: PulseState {
-        #if DEBUG
-        if PerfDiagnostics.isEnabled {
-            return .idle
+    /// Real device thermal state — never a hardcoded "Nominal".
+    private var thermalStateLabel: String {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: return "Nominal"
+        case .fair: return "Fair"
+        case .serious: return "Serious"
+        case .critical: return "Critical"
+        @unknown default: return "Unknown"
         }
-        #endif
-        if isGenerating {
-            let isRemote = currentModelId?.hasPrefix("mac:") ?? false
-            let location = isRemote ? (model.core.peers().first?.name ?? "On your Mac") : "On this iPhone"
-            let modelName = remoteModelChipLabel ?? (isRemote ? "Mac model" : "On this iPhone")
-            return .generating(modelName: modelName, location: location, tokPerSec: 34)
-        }
-        return .idle
     }
 
     private var lastReplyStats: LastReplyStats? {
@@ -117,7 +235,9 @@ struct ChatView: View {
         let selectedCitation: Int?
     }
 
-    var body: some View {
+    // Split into two computed views so SwiftUI's type-checker handles each
+    // modifier chain in reasonable time (the combined chain times out).
+    private var chatScaffold: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 VStack(spacing: 0) {
@@ -129,46 +249,56 @@ struct ChatView: View {
                         }
                     }
                     .defaultScrollAnchor(.bottom)
-                    .onChange(of: messages.count) { _, _ in
-                        scrollToLatest(proxy: proxy)
-                    }
-
-                    if showJumpToLatest {
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                scrollToLatest(proxy: proxy)
+                    .scrollDismissesKeyboard(.immediately)
+                    .onScrollGeometryChange(for: Bool.self) { geo in
+                        // Within ~32pt of the bottom counts as "pinned".
+                        geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 32
+                    } action: { _, atBottom in
+                        isAtBottom = atBottom
+                        if atBottom {
+                            // Back at the bottom (by hand or by tap): re-pin.
+                            userScrolledUp = false
+                            if showJumpToLatest {
+                                withAnimation(.easeOut(duration: 0.2)) { showJumpToLatest = false }
                             }
-                            showJumpToLatest = false
-                        } label: {
-                            HStack(spacing: PocketSpacing.s4) {
-                                Image(systemName: "arrow.down")
-                                    .font(.system(size: 11, weight: .bold))
-                                Text("Jump to latest")
-                                    .font(.pocket(.caption))
-                                    .fontWeight(.medium)
-                            }
-                            .foregroundStyle(PocketColor.accent)
-                            .padding(.horizontal, PocketSpacing.s12)
-                            .padding(.vertical, 7)
-                            .background(.regularMaterial, in: Capsule())
-                            .overlay(Capsule().strokeBorder(PocketColor.lineHairline))
-                            .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
                         }
-                        .buttonStyle(.plain)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .padding(.bottom, PocketSpacing.s8)
+                    }
+                    .onScrollPhaseChange { _, newPhase in
+                        // Only a real user drag may unpin the chat from the
+                        // bottom — programmatic/streaming scrolls never do.
+                        if newPhase == .interacting { userScrolledUp = true }
+                    }
+                    .onChange(of: messages.count) { _, _ in
+                        if userScrolledUp && !isAtBottom {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showJumpToLatest = true }
+                        } else {
+                            scrollToLatest(proxy: proxy, animated: false)
+                        }
+                    }
+                    .onChange(of: genCharCount) { _, _ in
+                        // Streaming grows the last bubble without changing the
+                        // message count; stay pinned unless the user scrolled up.
+                        if userScrolledUp && !isAtBottom {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showJumpToLatest = true }
+                        } else {
+                            scrollToLatest(proxy: proxy, animated: false)
+                        }
+                    }
+                    .task {
+                        // Open pinned to the latest message, instantly.
+                        scrollToLatest(proxy: proxy, animated: false)
+                    }
+                    .overlay(alignment: .bottom) {
+                        // Overlay, not stacked: showing it never shifts layout.
+                        if showJumpToLatest {
+                            jumpToLatestButton(proxy: proxy)
+                        }
                     }
                 }
             }
 
-            PulseStrip(
-                state: pulseStripState,
-                onTap: { showPulseDetailSheet = true }
-            )
-            .padding(.horizontal, PocketSpacing.gutterIphone)
-            .padding(.bottom, PocketSpacing.s8)
-
+            // §5.1: the live state now lives in the header mark, not a full-width
+            // bottom strip. Pulse details open from the header mark.
             #if DEBUG
             if PerfDiagnostics.isEnabled, let record = latestPerfRecord ?? perfDiagnostics.latestRecord {
                 perfDiagnosticsOverlay(record)
@@ -197,8 +327,10 @@ struct ChatView: View {
                     onAttach: { kind in
                         switch kind {
                         case .photo:
+                            guard currentModelSupportsVision else { showVisionRequiredAlert = true; return }
                             isPhotosPickerPresented = true
                         case .camera:
+                            guard currentModelSupportsVision else { showVisionRequiredAlert = true; return }
                             if CameraCaptureView.isCameraAvailable {
                                 isCameraPresented = true
                             } else {
@@ -227,6 +359,41 @@ struct ChatView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(PocketColor.bgCanvas, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: PocketSpacing.s8) {
+                    // Live state mark left of the title (§5.1); tap opens Pulse.
+                    Button { showPulseDetailSheet = true } label: {
+                        PocketMarkView(state: headerMarkState, size: 22)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Live status, opens Pulse")
+                    // The whole title block opens the per-chat model picker
+                    // (U2/U8) — a 9pt chevron alone was undiscoverable.
+                    Button {
+                        if isGenerating { showSwitchWhileGeneratingAlert = true } else { showModelPicker = true }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(title ?? "New chat")
+                                .font(.pocket(.headline))
+                                .lineLimit(1)
+                                .foregroundStyle(PocketColor.textPrimary)
+                            HStack(spacing: 3) {
+                                Text(modelLocationLabel)
+                                    .font(.pocket(.caption))
+                                    .foregroundStyle(PocketColor.accent)
+                                    .lineLimit(1)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(PocketColor.accent)
+                            }
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Model: \(modelLocationLabel). Tap to change.")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: PocketSpacing.s12) {
                     if speechPlayback.isSpeaking {
@@ -254,6 +421,9 @@ struct ChatView: View {
                     }
 
                     Menu {
+                        Button("Change model", systemImage: "cpu") {
+                            if isGenerating { showSwitchWhileGeneratingAlert = true } else { showModelPicker = true }
+                        }
                         Toggle("Speak replies", isOn: $autoSpeakReplies)
                         Divider()
                         Button("Generate image", systemImage: "sparkles") {
@@ -262,9 +432,11 @@ struct ChatView: View {
                         }
                         Divider()
                         Button("Rename") { newTitle = title ?? ""; renamingTitle = true }
-                        Button("Export as Markdown") {}
+                        ShareLink(item: markdownTranscript()) {
+                            Label("Export as Markdown", systemImage: "square.and.arrow.up")
+                        }
                         Button("Delete", role: .destructive) {
-                            try? model.core.deleteConversation(id: conversationId)
+                            showDeleteConfirm = true
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -273,6 +445,19 @@ struct ChatView: View {
                     }
                 }
             }
+        }
+        .alert("Delete this chat?", isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) {
+                do {
+                    try model.core.deleteConversation(id: conversationId)
+                    dismiss()
+                } catch {
+                    errorText = "Couldn't delete this chat: \(error.localizedDescription)"
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes the conversation and its messages.")
         }
         .alert("Rename chat", isPresented: $renamingTitle) {
             TextField("Title", text: $newTitle)
@@ -334,6 +519,17 @@ struct ChatView: View {
                 handlePickedImage(image)
             }
         }
+        .sheet(isPresented: $showVoicePrimer) {
+            PermissionPrimer(
+                icon: "mic.fill",
+                title: "Voice input",
+                message: "PocketAI uses the microphone and on-device speech recognition to turn your voice into text. Audio is transcribed on this iPhone and never leaves it.",
+                continueLabel: "Enable voice input",
+                onContinue: {
+                    Task { await voiceDictation.start(handsFree: pendingHandsFree) }
+                }
+            )
+        }
         .sheet(isPresented: $showImageGenSheet) {
             ImageGenerationSheet(
                 prompt: imageGenPrompt,
@@ -349,6 +545,34 @@ struct ChatView: View {
         } message: {
             Text("Camera is not available on this device or simulator.")
         }
+    }
+
+    var body: some View {
+        chatScaffold
+        .sheet(isPresented: $showModelPicker) {
+            NavigationStack {
+                ModelPickerView(
+                    scope: .conversation(id: conversationId),
+                    selectedId: currentModelId,
+                    onPicked: { bindModel($0) }
+                )
+            }
+        }
+        .alert("Stop to switch models", isPresented: $showSwitchWhileGeneratingAlert) {
+            Button("Stop", role: .destructive) { stop() }
+            Button("Keep going", role: .cancel) {}
+        } message: {
+            Text("Stop the current reply before switching models.")
+        }
+        .alert("This model can't see images", isPresented: $showVisionRequiredAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let name = installedVisionModelName {
+                Text("Switch to a vision model like \(name) to attach photos. Pick it in Models.")
+            } else {
+                Text("Download a vision model (e.g. Qwen3-VL) in Models to attach photos.")
+            }
+        }
         .sheet(item: $activeSourceTurn) { turn in
             if let currentProjectId = projectId {
                 SourceSheet(
@@ -362,20 +586,13 @@ struct ChatView: View {
         .sheet(isPresented: $showPulseDetailSheet) {
             NavigationStack {
                 PulseDetailSheet(
-                    ramUsedBytes: Int64(model.hooks.deviceProfile().appMemoryLimitBytes / 2),
+                    ramUsedBytes: Self.appUsedMemoryBytes(),
                     ramBudgetBytes: Int64(model.hooks.deviceProfile().appMemoryLimitBytes),
                     ramTotalBytes: Int64(model.hooks.deviceProfile().totalRamBytes),
-                    thermalLabel: "Nominal",
-                    loadedModels: [
-                        LoadedModelSummary(
-                            id: "qwen3-4b",
-                            name: "Qwen3 4B",
-                            residentBytes: Int64(model.hooks.deviceProfile().appMemoryLimitBytes / 3),
-                            onEject: { showPulseDetailSheet = false }
-                        )
-                    ],
+                    thermalLabel: thermalStateLabel,
+                    loadedModels: pulseLoadedModels,
                     lastReply: lastReplyStats,
-                    egressCountToday: model.core.egressLog(limit: 0).count
+                    egressCountToday: model.core.egressLog(limit: 500).count
                 )
                 .navigationTitle("Pulse Diagnostics")
                 .navigationBarTitleDisplayMode(.inline)
@@ -432,13 +649,18 @@ struct ChatView: View {
 
     @ViewBuilder
     private var messageList: some View {
-        VStack(alignment: .leading, spacing: PocketSpacing.s16) {
-            ForEach(messages, id: \.id) { message in
-                messageRow(message)
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                // A message starts a new group when the role differs from the
+                // one before it; grouped messages sit tight, groups breathe.
+                let isGroupStart = index == 0 || messages[index - 1].role != message.role
+                messageRow(message, showHeader: isGroupStart)
                     .id(message.id)
+                    .padding(.top, index == 0 ? 0 : (isGroupStart ? PocketSpacing.s16 : PocketSpacing.s4))
             }
             if let errorText {
                 errorCard(errorText)
+                    .padding(.top, PocketSpacing.s16)
             }
         }
         .padding(.horizontal, PocketSpacing.gutterIphone)
@@ -446,7 +668,7 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    private func messageRow(_ message: Message) -> some View {
+    private func messageRow(_ message: Message, showHeader: Bool) -> some View {
         let text = textForMessage(message)
         let thumbnails = imagesForMessage(message)
 
@@ -466,32 +688,36 @@ struct ChatView: View {
             let isCurrentStreaming = isGenerating && message.id == messages.last?.id
             #endif
             VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-                HStack(spacing: PocketSpacing.s8) {
-                    PocketMarkView(state: isCurrentStreaming ? .working(tokPerSec: 34) : .idle, size: 20)
-                    Text("PocketAI")
-                        .font(.pocket(.caption))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(PocketColor.textPrimary)
+                // Role affordance only on the first bubble of a run (grouping).
+                if showHeader {
+                    HStack(spacing: PocketSpacing.s8) {
+                        PocketMarkView(state: isCurrentStreaming ? .working(tokPerSec: liveTokPerSec) : .idle, size: 20)
+                        Text("PocketAI")
+                            .font(.pocket(.caption))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(PocketColor.textPrimary)
 
-                    if let stats = message.stats {
-                        Text("·")
-                            .font(.pocket(.caption))
-                            .foregroundStyle(PocketColor.textTertiary)
-                        Text("\(Int(stats.decodeTps)) tok/s")
-                            .font(.pocket(.caption))
-                            .foregroundStyle(PocketColor.textTertiary)
+                        if let stats = message.stats {
+                            Text("·")
+                                .font(.pocket(.caption))
+                                .foregroundStyle(PocketColor.textTertiary)
+                            Text("\(Int(stats.decodeTps)) tok/s")
+                                .font(.pocket(.caption))
+                                .foregroundStyle(PocketColor.textTertiary)
+                        }
+                        Spacer()
                     }
-                    Spacer()
+                    .padding(.bottom, 2)
                 }
-                .padding(.bottom, 2)
 
                 HStack(alignment: .bottom, spacing: 4) {
                     MessageView(
                         text: text,
                         reasoning: message.reasoning,
+                        isThinking: message.status == .streaming && message.stats == nil,
                         statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
                         onCopy: { UIPasteboard.general.string = text },
-                        onRetry: { retry(after: message) },
+                        onRetry: { regenerateLastTurn() },
                         onSpeak: {
                             if isCurrentSpeaking {
                                 speechPlayback.stop()
@@ -505,55 +731,63 @@ struct ChatView: View {
                     if isCurrentStreaming {
                         Circle()
                             .fill(PocketColor.accent)
-                            .frame(width: 8, height: 8)
+                            .frame(width: streamCursorSize, height: streamCursorSize)
                             .opacity(cursorBlink ? 1.0 : 0.2)
+                            .animation(.easeInOut(duration: 0.45), value: cursorBlink)
                             .padding(.bottom, 4)
                     }
                 }
 
                 if projectId != nil {
                     let citations = extractCitationNumbers(from: text)
-                    HStack(spacing: PocketSpacing.s8) {
-                        Button {
-                            openSourceSheet(for: message, selectedCitation: nil)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "quote.opening")
-                                    .font(.system(size: 11))
-                                Text("Sources")
-                                    .font(.pocket(.footnote))
-                            }
-                            .foregroundStyle(PocketColor.accent)
-                            .padding(.horizontal, PocketSpacing.s8)
-                            .padding(.vertical, 4)
-                            .background(PocketColor.bgRaised, in: Capsule())
-                            .overlay(Capsule().strokeBorder(PocketColor.lineHairline))
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Sources")
-                        .accessibilityHint("Opens sources sheet listing project document hits")
-
-                        ForEach(citations, id: \.self) { num in
+                    // A run of citation chips outgrows a narrow phone (and any
+                    // phone at large text), so the row scrolls instead of
+                    // clipping. It stays put while the chips fit.
+                    ScrollView(.horizontal) {
+                        HStack(spacing: PocketSpacing.s8) {
                             Button {
-                                openSourceSheet(for: message, selectedCitation: num)
+                                openSourceSheet(for: message, selectedCitation: nil)
                             } label: {
-                                Text("[\(num)]")
-                                    .font(.pocket(.footnote))
-                                    .foregroundStyle(PocketColor.accent)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 4)
-                                    .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 6))
-                                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(PocketColor.lineHairline))
-                                    .frame(minWidth: 44, minHeight: 44)
-                                    .contentShape(Rectangle())
+                                HStack(spacing: 4) {
+                                    Image(systemName: "quote.opening")
+                                        .font(.system(size: 11))
+                                    Text("Sources")
+                                        .font(.pocket(.footnote))
+                                }
+                                .foregroundStyle(PocketColor.accent)
+                                .padding(.horizontal, PocketSpacing.s8)
+                                .padding(.vertical, 4)
+                                .background(PocketColor.bgRaised, in: Capsule())
+                                .overlay(Capsule().strokeBorder(PocketColor.lineHairline))
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Citation \(num)")
-                            .accessibilityHint("Opens chunk for citation \(num)")
+                            .accessibilityLabel("Sources")
+                            .accessibilityHint("Opens sources sheet listing project document hits")
+
+                            ForEach(citations, id: \.self) { num in
+                                Button {
+                                    openSourceSheet(for: message, selectedCitation: num)
+                                } label: {
+                                    Text("[\(num)]")
+                                        .font(.pocket(.footnote))
+                                        .foregroundStyle(PocketColor.accent)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 4)
+                                        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 6))
+                                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(PocketColor.lineHairline))
+                                        .frame(minWidth: 44, minHeight: 44)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Citation \(num)")
+                                .accessibilityHint("Opens chunk for citation \(num)")
+                            }
                         }
                     }
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                     // ponytail: inline [n] tap-through needs MessageView token parsing
                 }
             }
@@ -575,7 +809,7 @@ struct ChatView: View {
                         openSourceSheet(for: message, selectedCitation: nil)
                     }
                 }
-                Button("Retry") { retry(after: message) }
+                Button("Retry") { regenerateLastTurn() }
             }
         }
     }
@@ -612,7 +846,34 @@ struct ChatView: View {
         return messages.last(where: { $0.role == "user" }).map { textForMessage($0) }
     }
 
-    private func scrollToLatest(proxy: ScrollViewProxy) {
+    private func jumpToLatestButton(proxy: ScrollViewProxy) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            scrollToLatest(proxy: proxy)
+            showJumpToLatest = false
+            userScrolledUp = false
+        } label: {
+            HStack(spacing: PocketSpacing.s4) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 11, weight: .bold))
+                Text("Jump to latest")
+                    .font(.pocket(.caption))
+                    .fontWeight(.medium)
+            }
+            .foregroundStyle(PocketColor.accent)
+            .padding(.horizontal, PocketSpacing.s12)
+            .padding(.vertical, 7)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(PocketColor.lineHairline))
+            .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .padding(.bottom, PocketSpacing.s8)
+        .accessibilityLabel("Jump to latest message")
+    }
+
+    private func scrollToLatest(proxy: ScrollViewProxy, animated: Bool = true) {
         guard let last = messages.last else { return }
         #if DEBUG
         if PerfDiagnostics.isEnabled {
@@ -620,23 +881,27 @@ struct ChatView: View {
             return
         }
         #endif
-        withAnimation {
+        if animated {
+            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+        } else {
             proxy.scrollTo(last.id, anchor: .bottom)
         }
     }
 
     private func errorCard(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-            Text(text).font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
+            Text(text)
+                .font(.pocket(.footnote))
+                .foregroundStyle(PocketColor.statusBad)
+                .fixedSize(horizontal: false, vertical: true)
             Button("Retry") {
                 errorText = nil
-                if let last = messages.last(where: { $0.role == "user" }) {
-                    retry(after: last)
-                }
+                regenerateLastTurn()
             }
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(PocketSpacing.s12)
         .background(PocketColor.bgSunken)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -644,13 +909,16 @@ struct ChatView: View {
 
     private func reload() {
         messages = model.core.messages(conversationId: conversationId)
-        let summary = model.core.conversations(query: ConversationQuery(search: nil, archived: nil, limit: 0, offset: 0))
-            .first { $0.id == conversationId }
-        title = summary?.title
+        cachedCatalog = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false))
+        // Resolve this conversation directly by ID (F17) — never page-scan
+        // conversations(), which misses older chats past the default window.
+        if let convo = model.core.conversation(id: conversationId) {
+            title = convo.title
+            conversationModelId = convo.modelId
+        }
     }
 
     private func send(handsFree: Bool = false) {
-        NSLog("PERF_DEBUG: send() ENTERED with composerText='%@'", composerText)
         let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("/image") {
             let prompt = trimmed.dropFirst(6).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -681,92 +949,207 @@ struct ChatView: View {
         pendingAttachment = nil
         errorText = nil
         isGenerating = true
+        genStartTime = Date()
+        genCharCount = 0
+        liveTokPerSec = 0
+        let streamId = UUID()
+        activeStreamId = streamId
         let shouldAutoSpeak = handsFree || autoSpeakReplies
 
+        // Bind this conversation to a usable model only when it is unbound or its
+        // bound model is no longer runnable (deleted) — never overwrite a valid
+        // per-chat choice with the global default on send (F04/§9.1). The proper
+        // "model unavailable — choose another" UI + per-chat picker is T5/U8.
+        let boundUsable = conversationModelId.map(isModelUsable) ?? false
+        if !boundUsable, let fallback = model.selectedModelId, isModelUsable(fallback) {
+            try? model.core.setConversationModel(id: conversationId, modelId: fallback)
+            conversationModelId = fallback
+        }
+
+        // Vision runs through the MLX VLM engine (PocketMLXEngine handles
+        // `.imageRef` parts); the composer only allows attachments when the
+        // active model supports vision, so a non-VLM never receives an image.
+        var parts: [ContentPart] = []
+        if let attachment {
+            parts.append(.imageRef(path: attachment.fileURL.path))
+        }
+        if !text.isEmpty {
+            parts.append(.text(text: text))
+        }
+
+        // Instant local echo: the user's bubble appears the moment they hit
+        // send — never after model load/inference. The .done reload replaces
+        // it with the persisted row.
+        messages.removeAll { $0.id == "local-echo-user" }
+        messages.append(Message(
+            id: "local-echo-user", conversationId: conversationId, role: "user",
+            parts: parts, reasoning: nil, stats: nil, modelId: nil,
+            createdAt: Int64(Date().timeIntervalSince1970 * 1000), status: .done
+        ))
+        // And an empty streaming bubble right away, so the reply visibly
+        // "starts" while the model is still loading.
+        upsertStreamingPlaceholder(text: "")
+
+        let input = UserInput(parts: parts)
         streamTask = Task {
-            NSLog("PERF_DEBUG: streamTask started for text='%@'", text)
-            // ponytail: vision inference needs the MLX VLM engine registered (APL-14 follow-up)
-            var parts: [ContentPart] = []
-            if let attachment {
-                parts.append(.imageRef(path: attachment.fileURL.path))
-            }
-            if !text.isEmpty {
-                parts.append(.text(text: text))
-            }
-            let input = UserInput(parts: parts)
-            var partialText = ""
-            do {
-                let stream = model.core.sendMessage(conversationId: conversationId, input: input)
-                reload()
-                for try await event in stream {
-                    switch event {
-                    case .delta(let delta):
-                        partialText += delta.text
-                        upsertStreamingPlaceholder(text: partialText)
-                    case .done(let finalMessage):
-                        NSLog("PERF_DEBUG: done event received with stats=%@", String(describing: finalMessage.stats))
-                        #if DEBUG
-                        if PerfDiagnostics.isEnabled {
-                            latestPerfRecord = perfDiagnostics.recordGeneration(
-                                model: finalMessage.modelId ?? "preview-model",
-                                stats: finalMessage.stats,
-                                fallbackTtftMs: 120,
-                                fallbackDecodeTps: 25
-                            )
-                            NSLog("PERF_DEBUG: recorded latestPerfRecord ttft=%f", latestPerfRecord?.ttftMs ?? -1)
-                        }
-                        #endif
-                        reload()
-                        if title == nil { reload() }
-                        if shouldAutoSpeak {
-                            let textToSpeak = textForMessage(finalMessage)
-                            let toSpeak = textToSpeak.isEmpty ? partialText : textToSpeak
-                            let trimmed = toSpeak.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !trimmed.isEmpty {
-                                speechPlayback.speak(trimmed)
-                            }
+            await consumeStream(model.core.sendMessage(conversationId: conversationId, input: input), shouldAutoSpeak: shouldAutoSpeak, streamId: streamId)
+        }
+    }
+
+    /// Regenerates the latest assistant reply for this conversation (F12): drops
+    /// the failed/stopped attempt and re-runs from existing history. Never
+    /// duplicates the user input or sends the assistant text back as a prompt.
+    private func regenerateLastTurn() {
+        guard !isGenerating else { return }
+        errorText = nil
+        isGenerating = true
+        genStartTime = Date()
+        genCharCount = 0
+        liveTokPerSec = 0
+        let streamId = UUID()
+        activeStreamId = streamId
+        let shouldAutoSpeak = autoSpeakReplies
+        reload() // show the dropped assistant attempt disappearing
+        upsertStreamingPlaceholder(text: "")
+        streamTask = Task {
+            await consumeStream(model.core.regenerate(conversationId: conversationId), shouldAutoSpeak: shouldAutoSpeak, streamId: streamId)
+        }
+    }
+
+    /// Shared consumption for a send or a regenerate stream.
+    @MainActor
+    private func consumeStream(_ stream: AsyncThrowingStream<ChatStreamEvent, Error>, shouldAutoSpeak: Bool, streamId: UUID) async {
+        var partialText = ""
+        var partialReasoning = ""
+        do {
+            // No reload here: it would race the core's DB write and wipe the
+            // instant local echo. The .done event reloads with persisted rows.
+            for try await event in stream {
+                switch event {
+                case .delta(let delta):
+                    partialText += delta.text
+                    partialReasoning += delta.reasoning
+                    genCharCount += delta.text.count + delta.reasoning.count
+                    if let start = genStartTime {
+                        let elapsed = Date().timeIntervalSince(start)
+                        // ~4 chars/token is the standard rough estimate; the
+                        // exact tok/s arrives with the final message stats.
+                        if elapsed > 0.2 { liveTokPerSec = (Double(genCharCount) / 4.0) / elapsed }
+                    }
+                    upsertStreamingPlaceholder(text: partialText, reasoning: partialReasoning)
+                case .done(let finalMessage):
+                    if let tps = finalMessage.stats?.decodeTps { liveTokPerSec = Double(tps) }
+                    #if DEBUG
+                    if PerfDiagnostics.isEnabled {
+                        latestPerfRecord = perfDiagnostics.recordGeneration(
+                            model: finalMessage.modelId ?? "preview-model",
+                            stats: finalMessage.stats,
+                            fallbackTtftMs: 120,
+                            fallbackDecodeTps: 25
+                        )
+                    }
+                    #endif
+                    reload()
+                    if title == nil { reload() }
+                    if shouldAutoSpeak {
+                        let textToSpeak = textForMessage(finalMessage)
+                        let toSpeak = textToSpeak.isEmpty ? partialText : textToSpeak
+                        let trimmed = toSpeak.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty {
+                            speechPlayback.speak(trimmed)
                         }
                     }
                 }
-            } catch {
-                errorText = "Something went wrong: \(error.localizedDescription)"
             }
-            isGenerating = false
-            reload()
+        } catch {
+            if await handleRemoteReconnect(error: error) {
+                // A reconnect + single retry was kicked off; that new turn
+                // owns the generation state, so skip this turn's cleanup.
+                return
+            }
+            if activeStreamId == streamId { errorText = friendlyError(error) }
         }
+        // Only the stream that still owns the screen may clean up — a Stop
+        // followed by an immediate Retry must not be clobbered by the old
+        // stream's late teardown.
+        guard activeStreamId == streamId else { return }
+        isGenerating = false
+        liveTokPerSec = 0
+        genStartTime = nil
+        reload()
+    }
+
+    /// Phone browse-to-reconnect (APL-08): a remote (`mac:`) turn that fails
+    /// with a connection error is most likely a Mac IP change. Rediscover the
+    /// same hostId on the LAN once, park the corrected address, and re-run the
+    /// turn a single time. Bounded to one attempt per screen so a truly-down
+    /// Mac still falls through to the clear error + the manual Retry button.
+    @MainActor
+    private func handleRemoteReconnect(error: Error) async -> Bool {
+        guard let id = currentModelId, id.hasPrefix("mac:"), !didReconnectRetry else { return false }
+        let desc = "\(error)".lowercased()
+        let looksLikeConnection = ["could not connect", "cannot connect", "connection", "network",
+                                   "unreachable", "refused", "timed out", "offline", "lost"]
+            .contains { desc.contains($0) }
+        guard looksLikeConnection else { return false }
+        didReconnectRetry = true
+        // Reconnect the *specific* paired Mac for this chat (F16), not peers().first.
+        guard let pid = RemoteEngine.peerId(from: currentModelId ?? ""),
+              let peer = model.core.peers().first(where: { $0.id == pid }),
+              let resolved = await Browser.rediscover(hostId: peer.name) else { return false }
+        PeerAddressBook.shared.setOverride(resolved, forHostId: peer.name)
+        guard messages.contains(where: { $0.role == "user" }) else { return false }
+        isGenerating = false
+        regenerateLastTurn()
+        return true
+    }
+
+    /// Turns a raw engine/core error into actionable guidance. The most common
+    /// first-run failure is "no model installed / loadable" — guide the user to
+    /// Models rather than showing a generic "Something went wrong".
+    private func friendlyError(_ error: Error) -> String {
+        let desc = error.localizedDescription.lowercased()
+        if desc.contains("no model") || desc.contains("not installed") || desc.contains("not exist")
+            || desc.contains("config.json") || desc.contains("no engine") || desc.contains("notfound") {
+            // Append the raw cause so a masked load/engine failure is visible.
+            return "No model is ready yet. (\(error.localizedDescription))"
+        }
+        if desc.contains("not entitled") || desc.contains("notentitled") {
+            return "This needs PocketAI Pro. Unlock it in Settings."
+        }
+        return "Something went wrong: \(error.localizedDescription)"
     }
 
     /// Shows the in-flight reply growing in place rather than waiting for
     /// `sendMessage`'s final `.done` event - `messages(conversationId:)`
     /// only reflects the persisted row, so this overlays a synthetic one.
-    private func upsertStreamingPlaceholder(text: String) {
+    private func upsertStreamingPlaceholder(text: String, reasoning: String = "") {
         let placeholderId = "streaming-placeholder"
         if let index = messages.firstIndex(where: { $0.id == placeholderId }) {
-            messages[index] = streamingMessage(id: placeholderId, text: text)
+            messages[index] = streamingMessage(id: placeholderId, text: text, reasoning: reasoning)
         } else {
-            messages.append(streamingMessage(id: placeholderId, text: text))
+            messages.append(streamingMessage(id: placeholderId, text: text, reasoning: reasoning))
         }
     }
 
-    private func streamingMessage(id: String, text: String) -> Message {
+    private func streamingMessage(id: String, text: String, reasoning: String = "") -> Message {
         Message(
             id: id, conversationId: conversationId, role: "assistant",
-            parts: [.text(text: text)], reasoning: nil, stats: nil, modelId: nil,
+            parts: [.text(text: text)], reasoning: reasoning.isEmpty ? nil : reasoning,
+            stats: nil, modelId: nil,
             createdAt: Int64(Date().timeIntervalSince1970 * 1000), status: .streaming
         )
     }
 
     private func stop() {
+        // Reach the engine directly (F11) so a synchronous generate stops, then
+        // tear down the stream. Idempotent; no-op if nothing is running.
+        model.core.cancelConversation(id: conversationId)
         streamTask?.cancel()
         streamTask = nil
+        activeStreamId = UUID() // orphan the old stream's cleanup
         isGenerating = false
         speechPlayback.stop()
-    }
-
-    private func retry(after message: Message) {
-        let text = textForMessage(message)
-        composerText = text
-        send()
     }
 
     private var speakingAffordance: some View {
@@ -855,7 +1238,7 @@ struct ChatView: View {
             Button(action: { finishRecording() }) {
                 Image(systemName: voiceDictation.isHandsFree ? "arrow.up" : "checkmark")
                     .foregroundStyle(PocketColor.accentOnAccent)
-                    .frame(width: 28, height: 28)
+                    .frame(width: recordGlyphSize, height: recordGlyphSize)
                     .background(PocketColor.accent, in: Circle())
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
@@ -873,6 +1256,12 @@ struct ChatView: View {
     private func startDictation(handsFree: Bool) {
         speechPlayback.stop()
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        // Explain mic + speech in-context before the one-shot system prompts.
+        if VoicePermissions.needsPrimer {
+            pendingHandsFree = handsFree
+            showVoicePrimer = true
+            return
+        }
         Task {
             await voiceDictation.start(handsFree: handsFree)
         }
@@ -910,7 +1299,7 @@ struct ChatView: View {
                 Image(uiImage: pending.image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 48, height: 48)
+                    .frame(width: attachThumbSize, height: attachThumbSize)
                     .clipShape(RoundedRectangle(cornerRadius: PocketSpacing.s8))
                     .overlay(
                         RoundedRectangle(cornerRadius: PocketSpacing.s8)
@@ -918,6 +1307,8 @@ struct ChatView: View {
                     )
                     .accessibilityLabel("Pending image attachment")
 
+                // Takes the width a Spacer used to eat, so the filename keeps
+                // the room it has instead of truncating early.
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Image attached")
                         .font(.pocket(.callout))
@@ -926,9 +1317,9 @@ struct ChatView: View {
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textSecondary)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button(action: { removePendingAttachment() }) {
                     Image(systemName: "xmark.circle.fill")
@@ -951,10 +1342,17 @@ struct ChatView: View {
         removePendingAttachment()
         let tempDir = FileManager.default.temporaryDirectory
         let fileURL = tempDir.appendingPathComponent("attach-\(UUID().uuidString).jpg")
-        if let data = image.jpegData(compressionQuality: 0.85) {
-            try? data.write(to: fileURL)
+        do {
+            guard let data = image.jpegData(compressionQuality: 0.85) else {
+                errorText = "Couldn't read that image."
+                return
+            }
+            try data.write(to: fileURL)
             pendingAttachment = PendingAttachment(id: UUID(), image: image, fileURL: fileURL)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } catch {
+            // Never show a chip pointing at a file that doesn't exist.
+            errorText = "Couldn't attach the image: \(error.localizedDescription)"
         }
     }
 
@@ -974,6 +1372,31 @@ struct ChatView: View {
             }
             return nil
         }
+    }
+
+    /// Builds a Markdown transcript of the conversation for ShareLink export.
+    private func markdownTranscript() -> String {
+        var out = "# \(title ?? "PocketAI chat")\n\n"
+        for message in messages where message.id != "streaming-placeholder" {
+            let who = message.role == "user" ? "You" : "PocketAI"
+            let body = textForMessage(message).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !body.isEmpty else { continue }
+            out += "**\(who):**\n\n\(body)\n\n"
+        }
+        return out
+    }
+
+    /// Real app memory footprint (phys_footprint — the figure iOS uses for
+    /// jetsam), not a fabricated fraction of the limit. Honest-instruments.
+    static func appUsedMemoryBytes() -> Int64 {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let kr = withUnsafeMutablePointer(to: &info) { ptr in
+            ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return kr == KERN_SUCCESS ? Int64(info.phys_footprint) : 0
     }
 
     private func textForMessage(_ message: Message) -> String {

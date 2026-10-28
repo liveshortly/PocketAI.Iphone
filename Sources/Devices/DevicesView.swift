@@ -79,13 +79,16 @@ struct DevicesView: View {
                         .font(.pocket(.title))
                         .foregroundStyle(PocketColor.textPrimary)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text("Pair over local Wi-Fi to run larger models using your Mac's unified memory. Everything stays on your devices.")
                         .font(.pocket(.callout))
                         .foregroundStyle(PocketColor.textSecondary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, PocketSpacing.s16)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                // The heading had no gutter, so it ran to the screen edges.
+                .padding(.horizontal, PocketSpacing.gutterIphone)
 
                 // Step cards
                 VStack(spacing: PocketSpacing.s12) {
@@ -135,47 +138,55 @@ struct DevicesView: View {
         }
     }
 
+    /// The card grows with its content instead of being pinned to a fixed
+    /// height, and the connecting beams compress on narrow screens.
     private var hardwareIllustration: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(PocketColor.bgRaised)
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(PocketColor.lineHairline))
-                .frame(height: 160)
+        HStack(spacing: PocketSpacing.s24) {
+            VStack(spacing: 6) {
+                Image(systemName: "laptopcomputer")
+                    .font(.system(size: 48))
+                    .foregroundStyle(PocketColor.textPrimary)
+                Text("Mac")
+                    .font(.pocket(.caption))
+                    .foregroundStyle(PocketColor.textSecondary)
+            }
 
-            HStack(spacing: PocketSpacing.s24) {
-                VStack(spacing: 6) {
-                    Image(systemName: "laptopcomputer")
-                        .font(.system(size: 48))
-                        .foregroundStyle(PocketColor.textPrimary)
-                    Text("Mac")
-                        .font(.pocket(.caption))
-                        .foregroundStyle(PocketColor.textSecondary)
-                }
+            // Connecting beam with Spark Mark
+            HStack(spacing: 4) {
+                beam
 
-                // Connecting beam with Spark Mark
-                HStack(spacing: 4) {
-                    Rectangle()
-                        .fill(PocketColor.lineStrong)
-                        .frame(width: 24, height: 2)
+                PocketMarkView(state: .working(tokPerSec: nil), size: 36)
 
-                    PocketMarkView(state: .working(tokPerSec: nil), size: 36)
+                beam
+            }
 
-                    Rectangle()
-                        .fill(PocketColor.lineStrong)
-                        .frame(width: 24, height: 2)
-                }
-
-                VStack(spacing: 6) {
-                    Image(systemName: "iphone.gen3")
-                        .font(.system(size: 44))
-                        .foregroundStyle(PocketColor.textPrimary)
-                    Text("iPhone")
-                        .font(.pocket(.caption))
-                        .foregroundStyle(PocketColor.textSecondary)
-                }
+            VStack(spacing: 6) {
+                Image(systemName: "iphone.gen3")
+                    .font(.system(size: 44))
+                    .foregroundStyle(PocketColor.textPrimary)
+                Text("iPhone")
+                    .font(.pocket(.caption))
+                    .foregroundStyle(PocketColor.textSecondary)
             }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, PocketSpacing.s40)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(PocketColor.bgRaised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(PocketColor.lineHairline)
+        )
         .padding(.horizontal, PocketSpacing.gutterIphone)
+    }
+
+    private var beam: some View {
+        Rectangle()
+            .fill(PocketColor.lineStrong)
+            .frame(maxWidth: 24)
+            .frame(height: 2)
     }
 
     private func stepCard(number: String, title: String, subtitle: String) -> some View {
@@ -224,6 +235,7 @@ struct DevicesView: View {
                             Text(peer.name)
                                 .font(.pocket(.title))
                                 .foregroundStyle(PocketColor.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
 
                             HStack(spacing: 6) {
                                 Circle()
@@ -245,21 +257,26 @@ struct DevicesView: View {
                             Text("Network Address")
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
-                            Spacer()
+                            Spacer(minLength: PocketSpacing.s8)
                             Text(addr)
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textPrimary)
+                                .multilineTextAlignment(.trailing)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
 
-                    HStack {
+                    HStack(alignment: .top) {
                         Text("Status")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textSecondary)
-                        Spacer()
+                        Spacer(minLength: PocketSpacing.s8)
+                        // Wraps instead of truncating at large type.
                         Text("Paired — its models appear in the model picker")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textPrimary)
+                            .multilineTextAlignment(.trailing)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(.vertical, PocketSpacing.s8)
@@ -419,17 +436,25 @@ private struct PairingFlowView: View {
                         Text("Connecting to \(offer?.hostName ?? "your Mac")…")
                             .font(.pocket(.headline))
                             .foregroundStyle(PocketColor.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .padding(.horizontal, PocketSpacing.gutterIphone)
                 case .waitingForApproval:
                     VStack(spacing: PocketSpacing.s20) {
                         PocketMarkView(state: .loading, size: 72)
                         Text("Waiting for you to allow on your Mac")
                             .font(.pocket(.headline))
                             .foregroundStyle(PocketColor.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                         Text("Check the prompt on your Mac's screen.")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .padding(.horizontal, PocketSpacing.gutterIphone)
                 case .success:
                     VStack(spacing: PocketSpacing.s20) {
                         Image(systemName: "checkmark.circle.fill")
