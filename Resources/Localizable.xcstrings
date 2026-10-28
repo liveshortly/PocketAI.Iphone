@@ -1,0 +1,3163 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "1024": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1024"
+          }
+        }
+      }
+    },
+    "512": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "512"
+          }
+        }
+      }
+    },
+    "768": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "768"
+          }
+        }
+      }
+    },
+    "About": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        }
+      }
+    },
+    "Add PDF, Markdown, or text files to ground chats in this project.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add PDF, Markdown, or text files to ground chats in this project."
+          }
+        }
+      }
+    },
+    "Add document": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add document"
+          }
+        }
+      }
+    },
+    "Add to Project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to Project"
+          }
+        }
+      }
+    },
+    "Apple Intelligence": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence"
+          }
+        }
+      }
+    },
+    "Apple Mail is not configured on this device. You can copy the report and email it manually to support@getpocketai.app.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Mail is not configured on this device. You can copy the report and email it manually to support@getpocketai.app."
+          }
+        }
+      }
+    },
+    "Apple Mail not configured notice": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Mail not configured notice"
+          }
+        }
+      }
+    },
+    "Apple Speech Recognition": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Speech Recognition"
+          }
+        }
+      }
+    },
+    "Apple-managed purchases, system speech downloads, and anything you open yourself in a browser or Mail aren't counted here.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple-managed purchases, system speech downloads, and anything you open yourself in a browser or Mail aren't counted here."
+          }
+        }
+      }
+    },
+    "Archive": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archive"
+          }
+        }
+      }
+    },
+    "Attach generated image to chat message": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach generated image to chat message"
+          }
+        }
+      }
+    },
+    "Attach to Chat": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach to Chat"
+          }
+        }
+      }
+    },
+    "Available": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available"
+          }
+        }
+      }
+    },
+    "Browse catalog": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse catalog"
+          }
+        }
+      }
+    },
+    "CHATS IN THIS PROJECT": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CHATS IN THIS PROJECT"
+          }
+        }
+      }
+    },
+    "Camera Unavailable": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera Unavailable"
+          }
+        }
+      }
+    },
+    "Camera is not available on this device or simulator.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera is not available on this device or simulator."
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "Cancel Generation": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel Generation"
+          }
+        }
+      }
+    },
+    "Cancel creating project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel creating project"
+          }
+        }
+      }
+    },
+    "Cancel download": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel download"
+          }
+        }
+      }
+    },
+    "Cancel image generation": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel image generation"
+          }
+        }
+      }
+    },
+    "Cancel voice recording": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel voice recording"
+          }
+        }
+      }
+    },
+    "Catalog": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Catalog"
+          }
+        }
+      }
+    },
+    "Change model": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change model"
+          }
+        }
+      }
+    },
+    "Chats": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chats"
+          }
+        }
+      }
+    },
+    "Check the prompt on your Mac's screen.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the prompt on your Mac's screen."
+          }
+        }
+      }
+    },
+    "Checking files…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking files…"
+          }
+        }
+      }
+    },
+    "Checking your device": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking your device"
+          }
+        }
+      }
+    },
+    "Choose File": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose File"
+          }
+        }
+      }
+    },
+    "Choose a Mac model": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a Mac model"
+          }
+        }
+      }
+    },
+    "Choose another model": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose another model"
+          }
+        }
+      }
+    },
+    "Choose file to add": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose file to add"
+          }
+        }
+      }
+    },
+    "Clear filters": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear filters"
+          }
+        }
+      }
+    },
+    "Clear search": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear search"
+          }
+        }
+      }
+    },
+    "Close": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "Close image generation": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close image generation"
+          }
+        }
+      }
+    },
+    "Connect": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect"
+          }
+        }
+      }
+    },
+    "Connections to your paired Mac are listed under Devices.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connections to your paired Mac are listed under Devices."
+          }
+        }
+      }
+    },
+    "Context Length": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Context Length"
+          }
+        }
+      }
+    },
+    "Copy": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      }
+    },
+    "Copy JSON payload to clipboard": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy JSON payload to clipboard"
+          }
+        }
+      }
+    },
+    "Copy diagnostic report to clipboard": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy diagnostic report to clipboard"
+          }
+        }
+      }
+    },
+    "Copy to clipboard": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy to clipboard"
+          }
+        }
+      }
+    },
+    "Couldn't start the download": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't start the download"
+          }
+        }
+      }
+    },
+    "Create": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create"
+          }
+        }
+      }
+    },
+    "Create Project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Project"
+          }
+        }
+      }
+    },
+    "Create a new project and add these items": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a new project and add these items"
+          }
+        }
+      }
+    },
+    "Create project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create project"
+          }
+        }
+      }
+    },
+    "Creates the project with specified name and instructions": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creates the project with specified name and instructions"
+          }
+        }
+      }
+    },
+    "Custom Address": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom Address"
+          }
+        }
+      }
+    },
+    "DIAGNOSTICS PAYLOAD": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DIAGNOSTICS PAYLOAD"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "Delete from Device": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete from Device"
+          }
+        }
+      }
+    },
+    "Delete this chat?": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete this chat?"
+          }
+        }
+      }
+    },
+    "Denoising iterations (1–4)": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denoising iterations (1–4)"
+          }
+        }
+      }
+    },
+    "Describe the image you want to generate…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Describe the image you want to generate…"
+          }
+        }
+      }
+    },
+    "Diagnostic Report": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostic Report"
+          }
+        }
+      }
+    },
+    "Diagnostic report JSON payload": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostic report JSON payload"
+          }
+        }
+      }
+    },
+    "Diagnostic report copied to clipboard.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostic report copied to clipboard."
+          }
+        }
+      }
+    },
+    "Discard All": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard All"
+          }
+        }
+      }
+    },
+    "Discards the recorded audio": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discards the recorded audio"
+          }
+        }
+      }
+    },
+    "Disconnect": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnect"
+          }
+        }
+      }
+    },
+    "Disconnect Mac": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnect Mac"
+          }
+        }
+      }
+    },
+    "Dismiss error": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss error"
+          }
+        }
+      }
+    },
+    "Dismiss sources": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss sources"
+          }
+        }
+      }
+    },
+    "Document Import Error": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Document Import Error"
+          }
+        }
+      }
+    },
+    "Documents": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documents"
+          }
+        }
+      }
+    },
+    "Don't have PocketAI on Mac? getpocketai.app": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't have PocketAI on Mac? getpocketai.app"
+          }
+        }
+      }
+    },
+    "Done": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "Download Size": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download Size"
+          }
+        }
+      }
+    },
+    "Download a model in Models, or pair your Mac.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download a model in Models, or pair your Mac."
+          }
+        }
+      }
+    },
+    "Download a vision model (e.g. Qwen3-VL) in Models to attach photos.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download a vision model (e.g. Qwen3-VL) in Models to attach photos."
+          }
+        }
+      }
+    },
+    "Download models from the Browse tab to run them offline.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download models from the Browse tab to run them offline."
+          }
+        }
+      }
+    },
+    "Edit": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        }
+      }
+    },
+    "Edit Instructions": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Instructions"
+          }
+        }
+      }
+    },
+    "Edit instructions": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit instructions"
+          }
+        }
+      }
+    },
+    "Edit project instructions": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit project instructions"
+          }
+        }
+      }
+    },
+    "Edits project name": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edits project name"
+          }
+        }
+      }
+    },
+    "Enables the option to send an in-app diagnostic report to support": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enables the option to send an in-app diagnostic report to support"
+          }
+        }
+      }
+    },
+    "Engines": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engines"
+          }
+        }
+      }
+    },
+    "Enter code manually": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter code manually"
+          }
+        }
+      }
+    },
+    "Enter the host and code shown on your Mac": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the host and code shown on your Mac"
+          }
+        }
+      }
+    },
+    "Everything is set up to run entirely on this iPhone.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everything is set up to run entirely on this iPhone."
+          }
+        }
+      }
+    },
+    "Export as Markdown": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export as Markdown"
+          }
+        }
+      }
+    },
+    "Fits only": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fits only"
+          }
+        }
+      }
+    },
+    "Format": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format"
+          }
+        }
+      }
+    },
+    "Generate": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate"
+          }
+        }
+      }
+    },
+    "Generate Image": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate Image"
+          }
+        }
+      }
+    },
+    "Generate image": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate image"
+          }
+        }
+      }
+    },
+    "Generation steps": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generation steps"
+          }
+        }
+      }
+    },
+    "Get started": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get started"
+          }
+        }
+      }
+    },
+    "Group chats with customized instructions and documents.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group chats with customized instructions and documents."
+          }
+        }
+      }
+    },
+    "Hands-free": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hands-free"
+          }
+        }
+      }
+    },
+    "Home": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Home"
+          }
+        }
+      }
+    },
+    "How can I help you today?": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How can I help you today?"
+          }
+        }
+      }
+    },
+    "Hugging Face Model Page": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hugging Face Model Page"
+          }
+        }
+      }
+    },
+    "Image attached": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image attached"
+          }
+        }
+      }
+    },
+    "Image prompt input": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image prompt input"
+          }
+        }
+      }
+    },
+    "Image size picker": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image size picker"
+          }
+        }
+      }
+    },
+    "Instructions": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instructions"
+          }
+        }
+      }
+    },
+    "Instructions (optional)": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instructions (optional)"
+          }
+        }
+      }
+    },
+    "Integrations": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Integrations"
+          }
+        }
+      }
+    },
+    "Jump to latest": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jump to latest"
+          }
+        }
+      }
+    },
+    "Jump to latest message": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jump to latest message"
+          }
+        }
+      }
+    },
+    "Keep going": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep going"
+          }
+        }
+      }
+    },
+    "Language": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language"
+          }
+        }
+      }
+    },
+    "License": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "License"
+          }
+        }
+      }
+    },
+    "License & Source": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "License & Source"
+          }
+        }
+      }
+    },
+    "License Terms": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "License Terms"
+          }
+        }
+      }
+    },
+    "Listening": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening"
+          }
+        }
+      }
+    },
+    "Live status, opens Pulse": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live status, opens Pulse"
+          }
+        }
+      }
+    },
+    "LiveShortly session…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LiveShortly session…"
+          }
+        }
+      }
+    },
+    "Loading SDXL-Turbo model…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading SDXL-Turbo model…"
+          }
+        }
+      }
+    },
+    "Loading image generation model": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading image generation model"
+          }
+        }
+      }
+    },
+    "Local model": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local model"
+          }
+        }
+      }
+    },
+    "Mac": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac"
+          }
+        }
+      }
+    },
+    "Mac & devices": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac & devices"
+          }
+        }
+      }
+    },
+    "Mac Capabilities": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac Capabilities"
+          }
+        }
+      }
+    },
+    "Manage models": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage models"
+          }
+        }
+      }
+    },
+    "Manage or disconnect paired Macs from the Mac tab.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage or disconnect paired Macs from the Mac tab."
+          }
+        }
+      }
+    },
+    "Model Details": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model Details"
+          }
+        }
+      }
+    },
+    "Models": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Models"
+          }
+        }
+      }
+    },
+    "Network Address": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network Address"
+          }
+        }
+      }
+    },
+    "Network Proof": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network Proof"
+          }
+        }
+      }
+    },
+    "New LiveShortly session": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New LiveShortly session"
+          }
+        }
+      }
+    },
+    "New Project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Project"
+          }
+        }
+      }
+    },
+    "New Project…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Project…"
+          }
+        }
+      }
+    },
+    "New chat": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New chat"
+          }
+        }
+      }
+    },
+    "New chat in this project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New chat in this project"
+          }
+        }
+      }
+    },
+    "No Sources Found": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Sources Found"
+          }
+        }
+      }
+    },
+    "No chat models yet": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No chat models yet"
+          }
+        }
+      }
+    },
+    "No custom instructions set. Tap Edit to add instructions guiding assistant answers.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No custom instructions set. Tap Edit to add instructions guiding assistant answers."
+          }
+        }
+      }
+    },
+    "No documents yet": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No documents yet"
+          }
+        }
+      }
+    },
+    "No download required · Built into iOS": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No download required · Built into iOS"
+          }
+        }
+      }
+    },
+    "No existing projects found.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No existing projects found."
+          }
+        }
+      }
+    },
+    "No matching passages found in project documents for this query.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching passages found in project documents for this query."
+          }
+        }
+      }
+    },
+    "No models are stored on this iPhone.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No models are stored on this iPhone."
+          }
+        }
+      }
+    },
+    "No models on this iPhone": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No models on this iPhone"
+          }
+        }
+      }
+    },
+    "No pending items in inbox.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pending items in inbox."
+          }
+        }
+      }
+    },
+    "No voices for your language are installed. Add them in iOS Settings → Accessibility → Spoken Content → Voices.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No voices for your language are installed. Add them in iOS Settings → Accessibility → Spoken Content → Voices."
+          }
+        }
+      }
+    },
+    "Not now": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not now"
+          }
+        }
+      }
+    },
+    "OK": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "Offline mode": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline mode"
+          }
+        }
+      }
+    },
+    "Offline mode is on — turn it off in Settings to search Hugging Face.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline mode is on — turn it off in Settings to search Hugging Face."
+          }
+        }
+      }
+    },
+    "Offline mode — PocketAI internet requests paused": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline mode — PocketAI internet requests paused"
+          }
+        }
+      }
+    },
+    "On this iPhone": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this iPhone"
+          }
+        }
+      }
+    },
+    "On your Mac": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On your Mac"
+          }
+        }
+      }
+    },
+    "On-device": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device"
+          }
+        }
+      }
+    },
+    "Open Settings": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        }
+      }
+    },
+    "Open iOS Settings": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open iOS Settings"
+          }
+        }
+      }
+    },
+    "Opens a preview of the diagnostic report before sending": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens a preview of the diagnostic report before sending"
+          }
+        }
+      }
+    },
+    "Opens file picker to add a document to this project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens file picker to add a document to this project"
+          }
+        }
+      }
+    },
+    "Opens sheet to create a new project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens sheet to create a new project"
+          }
+        }
+      }
+    },
+    "Opens sources sheet listing project document hits": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens sources sheet listing project document hits"
+          }
+        }
+      }
+    },
+    "Other options": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other options"
+          }
+        }
+      }
+    },
+    "PERF": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PERF"
+          }
+        }
+      }
+    },
+    "PROMPT": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PROMPT"
+          }
+        }
+      }
+    },
+    "Pair Mac": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair Mac"
+          }
+        }
+      }
+    },
+    "Pair a Mac": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair a Mac"
+          }
+        }
+      }
+    },
+    "Pair over local Wi-Fi": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair over local Wi-Fi"
+          }
+        }
+      }
+    },
+    "Pair over local Wi-Fi to run larger models using your Mac's unified memory. Everything stays on your devices.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair over local Wi-Fi to run larger models using your Mac's unified memory. Everything stays on your devices."
+          }
+        }
+      }
+    },
+    "Paired": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paired"
+          }
+        }
+      }
+    },
+    "Paired with Mac": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paired with Mac"
+          }
+        }
+      }
+    },
+    "Paired · Tap to manage": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paired · Tap to manage"
+          }
+        }
+      }
+    },
+    "Paired — its models appear in the model picker": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paired — its models appear in the model picker"
+          }
+        }
+      }
+    },
+    "Pairing uses the camera, so it runs from the Mac tab. Everything stays on your devices.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing uses the camera, so it runs from the Mac tab. Everything stays on your devices."
+          }
+        }
+      }
+    },
+    "Paused — Offline mode is on": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused — Offline mode is on"
+          }
+        }
+      }
+    },
+    "Pending image attachment": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pending image attachment"
+          }
+        }
+      }
+    },
+    "Permission": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permission"
+          }
+        }
+      }
+    },
+    "Photo Library Access Denied": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo Library Access Denied"
+          }
+        }
+      }
+    },
+    "Pick your first model": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick your first model"
+          }
+        }
+      }
+    },
+    "PocketAI": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PocketAI"
+          }
+        }
+      }
+    },
+    "PocketAI does not send diagnostics automatically. You can review the exact payload below before choosing to send it to support via email. No chat content, prompts, or sensitive keys are included.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PocketAI does not send diagnostics automatically. You can review the exact payload below before choosing to send it to support via email. No chat content, prompts, or sensitive keys are included."
+          }
+        }
+      }
+    },
+    "PocketAI is unavailable": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PocketAI is unavailable"
+          }
+        }
+      }
+    },
+    "PocketAI needs permission to save generated images to your photo library. You can grant access in Settings.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PocketAI needs permission to save generated images to your photo library. You can grant access in Settings."
+          }
+        }
+      }
+    },
+    "PocketAI picks the right engine for each model automatically.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PocketAI picks the right engine for each model automatically."
+          }
+        }
+      }
+    },
+    "Privacy": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy"
+          }
+        }
+      }
+    },
+    "Private AI that lives on your devices.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private AI that lives on your devices."
+          }
+        }
+      }
+    },
+    "Private AI that lives on your iPhone. Nothing leaves.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private AI that lives on your iPhone. Nothing leaves."
+          }
+        }
+      }
+    },
+    "Private on-device intelligence": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private on-device intelligence"
+          }
+        }
+      }
+    },
+    "Project Details": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project Details"
+          }
+        }
+      }
+    },
+    "Project Instructions": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project Instructions"
+          }
+        }
+      }
+    },
+    "Project instructions": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project instructions"
+          }
+        }
+      }
+    },
+    "Project name": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project name"
+          }
+        }
+      }
+    },
+    "Project options": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project options"
+          }
+        }
+      }
+    },
+    "Pulse Diagnostics": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulse Diagnostics"
+          }
+        }
+      }
+    },
+    "Quantization": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantization"
+          }
+        }
+      }
+    },
+    "Query": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Query"
+          }
+        }
+      }
+    },
+    "Queued": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Queued"
+          }
+        }
+      }
+    },
+    "Recommended for this iPhone": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommended for this iPhone"
+          }
+        }
+      }
+    },
+    "Remove": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        }
+      }
+    },
+    "Remove attached image": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove attached image"
+          }
+        }
+      }
+    },
+    "Removes this document from the project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removes this document from the project"
+          }
+        }
+      }
+    },
+    "Rename": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename"
+          }
+        }
+      }
+    },
+    "Rename Project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename Project"
+          }
+        }
+      }
+    },
+    "Rename chat": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename chat"
+          }
+        }
+      }
+    },
+    "Rename project": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename project"
+          }
+        }
+      }
+    },
+    "Retry": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        }
+      }
+    },
+    "Review diagnostic report": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review diagnostic report"
+          }
+        }
+      }
+    },
+    "Run modern open-weights models locally on Apple Silicon. Zero cloud, zero accounts, completely offline.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run modern open-weights models locally on Apple Silicon. Zero cloud, zero accounts, completely offline."
+          }
+        }
+      }
+    },
+    "Save": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        }
+      }
+    },
+    "Save Error": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save Error"
+          }
+        }
+      }
+    },
+    "Scan pairing code": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan pairing code"
+          }
+        }
+      }
+    },
+    "Search chats": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search chats"
+          }
+        }
+      }
+    },
+    "Search models": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search models"
+          }
+        }
+      }
+    },
+    "Search projects": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search projects"
+          }
+        }
+      }
+    },
+    "Searching Hugging Face…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searching Hugging Face…"
+          }
+        }
+      }
+    },
+    "Searching project documents…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searching project documents…"
+          }
+        }
+      }
+    },
+    "Select All": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select All"
+          }
+        }
+      }
+    },
+    "Select Chats": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select Chats"
+          }
+        }
+      }
+    },
+    "Send diagnostic report": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send diagnostic report"
+          }
+        }
+      }
+    },
+    "Send diagnostic report via Mail": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send diagnostic report via Mail"
+          }
+        }
+      }
+    },
+    "Send…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send…"
+          }
+        }
+      }
+    },
+    "Setting up on-device neural weights": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setting up on-device neural weights"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
+    "Share": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share"
+          }
+        }
+      }
+    },
+    "Share diagnostic reports": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share diagnostic reports"
+          }
+        }
+      }
+    },
+    "Share generated image": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share generated image"
+          }
+        }
+      }
+    },
+    "Shared Items": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared Items"
+          }
+        }
+      }
+    },
+    "Size": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size"
+          }
+        }
+      }
+    },
+    "Some items were skipped": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some items were skipped"
+          }
+        }
+      }
+    },
+    "Sort": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort"
+          }
+        }
+      }
+    },
+    "Sort models": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort models"
+          }
+        }
+      }
+    },
+    "Sources": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sources"
+          }
+        }
+      }
+    },
+    "Speak": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speak"
+          }
+        }
+      }
+    },
+    "Speak replies": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speak replies"
+          }
+        }
+      }
+    },
+    "Speak reply aloud": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speak reply aloud"
+          }
+        }
+      }
+    },
+    "Speaking reply…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaking reply…"
+          }
+        }
+      }
+    },
+    "Specs": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Specs"
+          }
+        }
+      }
+    },
+    "Speech-to-text": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech-to-text"
+          }
+        }
+      }
+    },
+    "Speed": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed"
+          }
+        }
+      }
+    },
+    "Start chatting": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start chatting"
+          }
+        }
+      }
+    },
+    "Start instantly with Apple Intelligence": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start instantly with Apple Intelligence"
+          }
+        }
+      }
+    },
+    "Start your first chat": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start your first chat"
+          }
+        }
+      }
+    },
+    "Starts a new conversation grounded in this project's documents": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starts a new conversation grounded in this project's documents"
+          }
+        }
+      }
+    },
+    "Starts on-device image generation with SDXL-Turbo": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starts on-device image generation with SDXL-Turbo"
+          }
+        }
+      }
+    },
+    "Status": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        }
+      }
+    },
+    "Steps": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steps"
+          }
+        }
+      }
+    },
+    "Stop": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        }
+      }
+    },
+    "Stop Speaking": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop Speaking"
+          }
+        }
+      }
+    },
+    "Stop speaking": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop speaking"
+          }
+        }
+      }
+    },
+    "Stop the current reply before switching models.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop the current reply before switching models."
+          }
+        }
+      }
+    },
+    "Stop to switch models": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop to switch models"
+          }
+        }
+      }
+    },
+    "Stops audio playback of the reply": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stops audio playback of the reply"
+          }
+        }
+      }
+    },
+    "Stops speaking reply aloud": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stops speaking reply aloud"
+          }
+        }
+      }
+    },
+    "Storage used": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Storage used"
+          }
+        }
+      }
+    },
+    "System default": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System default"
+          }
+        }
+      }
+    },
+    "Tap a voice to hear a sample. Your choice is saved as the preferred voice for spoken replies.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap a voice to hear a sample. Your choice is saved as the preferred voice for spoken replies."
+          }
+        }
+      }
+    },
+    "Text-to-speech voice": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text-to-speech voice"
+          }
+        }
+      }
+    },
+    "The on-device engine couldn't start. Your chats and models are safe on this iPhone. Please restart the app to try again.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The on-device engine couldn't start. Your chats and models are safe on this iPhone. Please restart the app to try again."
+          }
+        }
+      }
+    },
+    "This model can't see images": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This model can't see images"
+          }
+        }
+      }
+    },
+    "This permanently deletes the conversation and its messages.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This permanently deletes the conversation and its messages."
+          }
+        }
+      }
+    },
+    "This permanently deletes the project and its documents.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This permanently deletes the project and its documents."
+          }
+        }
+      }
+    },
+    "This permanently deletes the selected conversations and their messages.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This permanently deletes the selected conversations and their messages."
+          }
+        }
+      }
+    },
+    "This session": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session"
+          }
+        }
+      }
+    },
+    "Title": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Title"
+          }
+        }
+      }
+    },
+    "Toggles automatic speech for assistant replies": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggles automatic speech for assistant replies"
+          }
+        }
+      }
+    },
+    "Total on this iPhone": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total on this iPhone"
+          }
+        }
+      }
+    },
+    "Transcribing voice input": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribing voice input"
+          }
+        }
+      }
+    },
+    "Transcribing…": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribing…"
+          }
+        }
+      }
+    },
+    "Try Again": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try Again"
+          }
+        }
+      }
+    },
+    "Try Apple's model while you wait": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try Apple's model while you wait"
+          }
+        }
+      }
+    },
+    "Try again": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
+    },
+    "Turn off Offline mode in Settings to resume.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off Offline mode in Settings to resume."
+          }
+        }
+      }
+    },
+    "Use discovered address": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use discovered address"
+          }
+        }
+      }
+    },
+    "Use your Mac's models from this iPhone": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use your Mac's models from this iPhone"
+          }
+        }
+      }
+    },
+    "View": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View"
+          }
+        }
+      }
+    },
+    "Voice": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice"
+          }
+        }
+      }
+    },
+    "Voice Input Error": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice Input Error"
+          }
+        }
+      }
+    },
+    "Voice Input Permission Required": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice Input Permission Required"
+          }
+        }
+      }
+    },
+    "Voice input is transcribed with Apple's Speech framework. When on-device recognition is supported, your audio stays on this iPhone.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice input is transcribed with Apple's Speech framework. When on-device recognition is supported, your audio stays on this iPhone."
+          }
+        }
+      }
+    },
+    "Waiting for you to allow on your Mac": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for you to allow on your Mac"
+          }
+        }
+      }
+    },
+    "We read this on your device. It is never sent anywhere.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "We read this on your device. It is never sent anywhere."
+          }
+        }
+      }
+    },
+    "We test fit on your device before downloading.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "We test fit on your device before downloading."
+          }
+        }
+      }
+    },
+    "Wi-Fi recommended": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi recommended"
+          }
+        }
+      }
+    },
+    "You can pair again anytime by scanning the code on your Mac.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can pair again anytime by scanning the code on your Mac."
+          }
+        }
+      }
+    },
+    "You're ready": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You're ready"
+          }
+        }
+      }
+    },
+    "Your Mac's models now appear in the model picker.": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac's models now appear in the model picker."
+          }
+        }
+      }
+    },
+    "host:port#code": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "host:port#code"
+          }
+        }
+      }
+    },
+    "iPhone": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone"
+          }
+        }
+      }
+    },
+    "requests this session": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "requests this session"
+          }
+        }
+      }
+    },
+    "·": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "·"
+          }
+        }
+      }
+    },
+    "•": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "•"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
