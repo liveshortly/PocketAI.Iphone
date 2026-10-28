@@ -9,7 +9,14 @@ struct DevicesView: View {
     @Environment(AppModel.self) private var model
     @State private var peers: [Peer] = []
     @State private var showPairing = false
+    @State private var showPairingPrimer = false
     @State private var peerToRevoke: Peer?
+    /// User-typed `host[:port]` for this Mac — the only way to reach it over a
+    /// VPN / mesh network (Tailscale MagicDNS), where Bonjour never answers.
+    @State private var manualAddress = ""
+    @State private var manualAddressError: String?
+    /// Whether we've already explained + triggered the Local Network prompt once.
+    @AppStorage("perm.primedPairing") private var primedPairing = false
 
     var body: some View {
         NavigationStack {
@@ -26,6 +33,19 @@ struct DevicesView: View {
             .task { reload() }
             .sheet(isPresented: $showPairing) {
                 PairingFlowView { reload() }
+            }
+            .sheet(isPresented: $showPairingPrimer) {
+                PermissionPrimer(
+                    icon: "wifi",
+                    title: "Find your Mac",
+                    message: "PocketAI uses the camera to scan your Mac's pairing code and Local Network access to connect to it. Everything stays on your local network.",
+                    continueLabel: "Continue",
+                    onContinue: {
+                        primedPairing = true
+                        LocalNetworkPrimer.request()
+                        showPairing = true
+                    }
+                )
             }
             .confirmationDialog(
                 "Disconnect \(peerToRevoke?.name ?? "Mac")?",
@@ -85,7 +105,7 @@ struct DevicesView: View {
                 // CTA Button
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    showPairing = true
+                    startPairing()
                 } label: {
                     HStack(spacing: PocketSpacing.s8) {
                         Image(systemName: "qrcode.viewfinder")
@@ -209,7 +229,9 @@ struct DevicesView: View {
                                 Circle()
                                     .fill(PocketColor.statusOk)
                                     .frame(width: 8, height: 8)
-                                Text("Connected · Local Wi-Fi")
+                                // Honest: pairing is a stored credential, not a
+                                // live link — reachability shows when it's used.
+                                Text("Paired")
                                     .font(.pocket(.caption))
                                     .foregroundStyle(PocketColor.statusOk)
                             }
@@ -235,7 +257,7 @@ struct DevicesView: View {
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textSecondary)
                         Spacer()
-                        Text("Ready for remote inference")
+                        Text("Paired — its models appear in the model picker")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textPrimary)
                     }
@@ -243,15 +265,42 @@ struct DevicesView: View {
                 .padding(.vertical, PocketSpacing.s8)
             }
 
-            Section("Mac Capabilities") {
-                NavigationLink {
-                    // Models view auto-selects Mac segment when paired
-                    Text("Mac Catalog")
-                } label: {
-                    SettingsRow(icon: "cpu", title: "Load model on Mac…", accessory: .navigation)
+            Section {
+                TextField("mac.tailnet.ts.net or 100.64.0.3:\(peer.port)", text: $manualAddress)
+                    .font(.pocket(.mono))
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .onSubmit { saveManualAddress(for: peer) }
+
+                if let manualAddressError {
+                    Text(manualAddressError)
+                        .font(.pocket(.footnote))
+                        .foregroundStyle(PocketColor.statusBad)
                 }
 
-                SettingsRow(icon: "info.circle", title: "Server info & API key", accessory: .navigation)
+                HStack {
+                    Button("Save") { saveManualAddress(for: peer) }
+                    Spacer()
+                    Button("Use discovered address", role: .destructive) {
+                        manualAddress = ""
+                        saveManualAddress(for: peer)
+                    }
+                    .disabled(manualAddress.isEmpty)
+                }
+                .font(.pocket(.callout))
+            } header: {
+                Text("Custom Address")
+            } footer: {
+                Text("Optional. Use your Mac's hostname (and port, if it isn't \(String(peer.port))) to reach it over a VPN or mesh network like Tailscale, where local discovery doesn't work. This address is preferred over the discovered one. The connection is still verified against your Mac's paired certificate.")
+            }
+
+            Section("Mac Capabilities") {
+                NavigationLink {
+                    ModelsView(startOnMac: true)
+                } label: {
+                    SettingsRow(icon: "cpu", title: "Browse models on this Mac…", accessory: .navigation)
+                }
             }
 
             Section {
@@ -267,8 +316,38 @@ struct DevicesView: View {
         .scrollContentBackground(.hidden)
     }
 
+    private func startPairing() {
+        // First run (or camera still undetermined): explain camera + local
+        // network before the system prompts fire. Afterwards, go straight in.
+        if !primedPairing || CameraPermissions.needsPrimer {
+            showPairingPrimer = true
+        } else {
+            showPairing = true
+        }
+    }
+
     private func reload() {
         peers = model.core.peers()
+        if let peer = peers.first {
+            manualAddress = PeerAddressBook.shared.manualAddress(forHostId: peer.name)
+                .map { "\($0.host):\($0.port)" } ?? ""
+        }
+    }
+
+    /// Persists (or clears, when empty) the typed address for this Mac. Every
+    /// `PeerClient` builder reads it through `PeerAddressBook.override`, so one
+    /// write here redirects chat, catalog and reconnect alike.
+    private func saveManualAddress(for peer: Peer) {
+        let ok = PeerAddressBook.shared.setManualAddress(
+            manualAddress, defaultPort: peer.port, forHostId: peer.name
+        )
+        manualAddressError = ok
+            ? nil
+            : "Enter a hostname or IP, optionally with :port — e.g. mac.tailnet.ts.net:\(peer.port)."
+        if ok {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            reload()
+        }
     }
 
     private func revoke(_ peer: Peer) {
@@ -287,6 +366,10 @@ private struct PairingFlowView: View {
     @State private var step = Step.scan
     @State private var manualCode = ""
     @State private var offer: PairingOffer?
+    /// Kept so Cancel / dismiss actually stop the pairing work — otherwise the
+    /// poll loop spins forever and onPaired can fire after the sheet is gone.
+    @State private var pairTask: Task<Void, Never>?
+    @State private var pollTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -391,10 +474,21 @@ private struct PairingFlowView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        cancelPairing()
+                        dismiss()
+                    }
                 }
             }
+            .onDisappear { cancelPairing() }
         }
+    }
+
+    private func cancelPairing() {
+        pairTask?.cancel()
+        pollTask?.cancel()
+        pairTask = nil
+        pollTask = nil
     }
 
     private func handle(code: String) {
@@ -406,22 +500,30 @@ private struct PairingFlowView: View {
         self.offer = offer
 
         guard let liveCore = model.core as? LiveCore else {
-            step = .waitingForApproval
-            let approved = ApprovedPairing(
-                hostId: offer.hostId, certFingerprint: offer.certFingerprint,
-                addr: offer.addrs.first ?? "", port: offer.port,
-                deviceId: UUID().uuidString, tokenKeychainRef: "peer-\(offer.hostId)"
-            )
-            _ = try? model.core.savePeer(approved)
-            step = .success
-            onPaired()
+            // Only the explicit preview harness may fake a pairing; a degraded
+            // real app (core failed to open) gets an honest error instead.
+            if ProcessInfo.processInfo.arguments.contains("-PocketPreviewCore") {
+                step = .waitingForApproval
+                let approved = ApprovedPairing(
+                    hostId: offer.hostId, certFingerprint: offer.certFingerprint,
+                    addr: offer.addrs.first ?? "", port: offer.port,
+                    deviceId: UUID().uuidString, tokenKeychainRef: "peer-\(offer.hostId)"
+                )
+                _ = try? model.core.savePeer(approved)
+                step = .success
+                onPaired()
+            } else {
+                step = .error("Pairing isn't available right now — the on-device engine didn't start. Restart the app and try again.")
+            }
             return
         }
 
         let coordinator = PairingCoordinator(core: liveCore.rawCore, keychain: model.hooks)
-        let pairTask = Task { await coordinator.pair(qr: code) }
-        Task {
-            while !pairTask.isCancelled {
+        pairTask = Task { await coordinator.pair(qr: code) }
+        pollTask = Task {
+            // Bounded: 2 minutes at 200ms ticks, then an honest timeout error.
+            for _ in 0..<600 {
+                if Task.isCancelled { return }
                 switch coordinator.phase {
                 case .waitingForApproval:
                     step = .waitingForApproval
@@ -440,6 +542,8 @@ private struct PairingFlowView: View {
                 }
                 try? await Task.sleep(nanoseconds: 200_000_000)
             }
+            pairTask?.cancel()
+            step = .error("Pairing timed out. Make sure your Mac is awake and on the same Wi-Fi, then try again.")
         }
     }
 }
