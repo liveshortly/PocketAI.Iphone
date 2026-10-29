@@ -14,15 +14,15 @@ struct ModelPickerView: View {
 
         var heading: String {
             switch self {
-            case .defaultModel: return "Default model"
-            case .conversation: return "Model for this chat"
+            case .defaultModel: return String(localized: "Default model")
+            case .conversation: return String(localized: "Model for this chat")
             }
         }
 
         var footer: String {
             switch self {
-            case .defaultModel: return "Used for new chats. Existing chats keep their selected model."
-            case .conversation: return "Changes the model for this conversation only. History is preserved."
+            case .defaultModel: return String(localized: "Used for new chats. Existing chats keep their selected model.")
+            case .conversation: return String(localized: "Changes the model for this conversation only. History is preserved.")
             }
         }
     }
@@ -61,7 +61,7 @@ struct ModelPickerView: View {
                 Section("Apple Intelligence") {
                     row(id: AppleFoundationModelsEngine.modelId,
                         name: "Apple Intelligence",
-                        detail: "Built in · On this iPhone")
+                        detail: String(localized: "Built in · On this iPhone"))
                 }
             }
 
@@ -140,8 +140,8 @@ struct ModelPickerView: View {
 
     private func capabilityLine(_ manifest: ModelManifest) -> String {
         var caps: [String] = []
-        if manifest.modalities.contains(.text) { caps.append("Text") }
-        if manifest.modalities.contains(.vision) { caps.append("Vision") }
+        if manifest.modalities.contains(.text) { caps.append(String(localized: "Text")) }
+        if manifest.modalities.contains(.vision) { caps.append(String(localized: "Vision")) }
         return caps.isEmpty ? manifest.family : caps.joined(separator: " + ")
     }
 

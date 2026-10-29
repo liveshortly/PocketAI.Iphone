@@ -9,16 +9,17 @@ struct StartNewChatIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let core = AppModel.shared.core
+        let model = AppModel.shared
         do {
-            _ = try core.createConversation(
-                NewConversation(title: nil, projectId: nil, modelId: AppModel.shared.selectedModelId)
+            let convo = try model.core.createConversation(
+                NewConversation(title: nil, projectId: nil, modelId: model.selectedModelId)
             )
+            // Routes the shell to Chats and opens the exact new conversation
+            // (F26, §9.4) via the shared navigation state used by Home.
+            model.nav.openConversation(id: convo.id)
         } catch {
-            throw PocketAIIntentError("PocketAI couldn't create a new chat: \(error.localizedDescription)")
+            throw PocketAIIntentError(String(localized: "PocketAI couldn't create a new chat: \(error.localizedDescription)"))
         }
-
-        // ponytail: Deep-linking to the exact new conversation is deferred until a navigation coordinator is implemented.
         return .result(dialog: "Started a new chat in PocketAI.")
     }
 }

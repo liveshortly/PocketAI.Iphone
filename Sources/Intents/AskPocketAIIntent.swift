@@ -24,8 +24,10 @@ struct AskPocketAIIntent: AppIntent {
                 NewConversation(title: "Siri", projectId: nil, modelId: AppModel.shared.selectedModelId)
             )
         } catch {
-            throw PocketAIIntentError("PocketAI couldn't generate a response.")
+            throw PocketAIIntentError(String(localized: "PocketAI couldn't generate a response: \(error.localizedDescription)"))
         }
+        // Keep Siri one-shots out of the visible Chats list.
+        try? core.archiveConversation(id: conversation.id, archived: true)
 
         let input = UserInput(parts: [.text(text: prompt)])
         var answer = ""
@@ -39,7 +41,7 @@ struct AskPocketAIIntent: AppIntent {
                 }
             }
         } catch {
-            throw PocketAIIntentError("PocketAI couldn't generate a response.")
+            throw PocketAIIntentError(String(localized: "PocketAI couldn't generate a response: \(error.localizedDescription)"))
         }
 
         return .result(value: answer, dialog: IntentDialog(stringLiteral: answer))

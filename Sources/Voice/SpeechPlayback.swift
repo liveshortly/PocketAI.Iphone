@@ -37,14 +37,16 @@ public final class SpeechPlayback: NSObject {
         self.currentText = trimmed
         self.isSpeaking = true
 
-        AccessibilityNotification.Announcement("Speaking reply").post()
+        AccessibilityNotification.Announcement(String(localized: "Speaking reply")).post()
 
         let filePath = fileURL.path
         synthTask = Task { [weak self] in
             do {
+                // Honor the voice chosen in Settings → Text-to-speech voice.
+                let voiceId = UserDefaults.standard.string(forKey: "app.getpocketai.ttsVoiceId") ?? ""
                 try await Task.detached {
                     let engine = AppleTextToSpeechEngine()
-                    try engine.synthesize(text: trimmed, voice: "", outPath: filePath)
+                    try engine.synthesize(text: trimmed, voice: voiceId, outPath: filePath)
                 }.value
 
                 guard !Task.isCancelled else {
@@ -74,7 +76,7 @@ public final class SpeechPlayback: NSObject {
         stopPlaybackOnly()
         resetState()
         if wasSpeaking {
-            AccessibilityNotification.Announcement("Speech stopped").post()
+            AccessibilityNotification.Announcement(String(localized: "Speech stopped")).post()
         }
     }
 

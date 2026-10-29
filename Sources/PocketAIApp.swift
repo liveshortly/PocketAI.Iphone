@@ -1,8 +1,29 @@
 import SwiftUI
+import UIKit
 import PocketKit
+
+/// The download coordinator runs on a background URLSession, so iOS relaunches
+/// the app to deliver its events; this hands the completion handler through to
+/// the coordinator (touching AppModel.shared recreates the session on a cold
+/// relaunch, which is what makes those events flow at all).
+final class PocketAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        guard let live = AppModel.shared.core as? LiveCore,
+              live.handleBackgroundSessionEvents(identifier: identifier, completionHandler: completionHandler)
+        else {
+            completionHandler()
+            return
+        }
+    }
+}
 
 @main
 struct PocketAIApp: App {
+    @UIApplicationDelegateAdaptor(PocketAppDelegate.self) private var appDelegate
     @State private var model = AppModel.shared
 
     init() {

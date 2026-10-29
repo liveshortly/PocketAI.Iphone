@@ -14,7 +14,7 @@ struct SettingsView: View {
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
     @AppStorage("app.getpocketai.diagnosticsEnabled") private var diagnosticsEnabled = false
     @State private var egressCount = 0
-    @State private var defaultModelName = "Choose"
+    @State private var defaultModelName = String(localized: "Choose")
     @State private var storageTotal: UInt64 = 0
 
     /// Reads and writes the one shared flag. Settings and Network Proof both
@@ -44,21 +44,21 @@ struct SettingsView: View {
                             onPicked: { model.selectedModelId = $0 }
                         )
                     } label: {
-                        SettingsRow(icon: "cpu", title: "Default chat model", accessory: .value(defaultModelName))
+                        SettingsRow(icon: "cpu", title: String(localized: "Default chat model"), accessory: .value(defaultModelName))
                     }
                     .accessibilityIdentifier("settings_default_model_row")
 
                     NavigationLink {
                         StorageUsedView()
                     } label: {
-                        SettingsRow(icon: "internaldrive", title: "Storage used", accessory: .value(storageTotal == 0 ? "None" : formatBytes(storageTotal)))
+                        SettingsRow(icon: "internaldrive", title: String(localized: "Storage used"), accessory: .value(storageTotal == 0 ? String(localized: "None") : formatBytes(storageTotal)))
                     }
                     .accessibilityIdentifier("settings_storage_row")
 
                     NavigationLink {
                         EnginesView()
                     } label: {
-                        SettingsRow(icon: "bolt.fill", title: "Engine availability", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Apple + MLX + llama.cpp" : "MLX + llama.cpp"))
+                        SettingsRow(icon: "bolt.fill", title: String(localized: "Engine availability"), accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Apple + MLX + llama.cpp" : "MLX + llama.cpp"))
                     }
                     .accessibilityIdentifier("settings_engines_row")
                 }
@@ -67,19 +67,19 @@ struct SettingsView: View {
                 Section("Voice") {
                     SettingsRow(
                         icon: "speaker.wave.2.fill",
-                        title: "Speak replies",
+                        title: String(localized: "Speak replies"),
                         accessory: .toggle($autoSpeakReplies)
                     )
                     NavigationLink {
                         SpeechToTextView()
                     } label: {
-                        SettingsRow(icon: "mic.fill", title: "Speech-to-text", accessory: .none)
+                        SettingsRow(icon: "mic.fill", title: String(localized: "Speech-to-text"), accessory: .none)
                     }
                     .accessibilityIdentifier("settings_speech_to_text_row")
                     NavigationLink {
                         TextToSpeechVoiceView()
                     } label: {
-                        SettingsRow(icon: "waveform", title: "Text-to-speech voice", accessory: .none)
+                        SettingsRow(icon: "waveform", title: String(localized: "Text-to-speech voice"), accessory: .none)
                     }
                     .accessibilityIdentifier("settings_tts_voice_row")
                 }
@@ -88,7 +88,7 @@ struct SettingsView: View {
                 Section("Privacy") {
                     SettingsRow(
                         icon: "airplane",
-                        title: "Offline mode",
+                        title: String(localized: "Offline mode"),
                         accessory: .toggle(offlineBinding)
                     )
                     .accessibilityIdentifier("settings_offline_row")
@@ -96,13 +96,13 @@ struct SettingsView: View {
                     NavigationLink {
                         NetworkProofView(offline: offlineBinding)
                     } label: {
-                        SettingsRow(icon: "checkmark.shield.fill", title: "Network Proof", accessory: .value("\(egressCount) this session"))
+                        SettingsRow(icon: "checkmark.shield.fill", title: String(localized: "Network Proof"), accessory: .value(String(localized: "\(egressCount) this session")))
                     }
                     .accessibilityIdentifier("settings_network_proof_row")
 
                     SettingsRow(
                         icon: "heart.text.square",
-                        title: "Share diagnostic reports",
+                        title: String(localized: "Share diagnostic reports"),
                         accessory: .toggle($diagnosticsEnabled)
                     )
                     .accessibilityElement(children: .combine)
@@ -114,7 +114,7 @@ struct SettingsView: View {
                         NavigationLink {
                             DiagnosticsPreviewView()
                         } label: {
-                            SettingsRow(icon: "envelope", title: "Send diagnostic report…", accessory: .none)
+                            SettingsRow(icon: "envelope", title: String(localized: "Send diagnostic report…"), accessory: .none)
                         }
                         .accessibilityLabel("Send diagnostic report")
                         .accessibilityHint("Opens a preview of the diagnostic report before sending")
@@ -139,14 +139,14 @@ struct SettingsView: View {
                     NavigationLink {
                         PairMacView()
                     } label: {
-                        SettingsRow(icon: "laptopcomputer", title: "Pair a Mac", accessory: .none)
+                        SettingsRow(icon: "laptopcomputer", title: String(localized: "Pair a Mac"), accessory: .none)
                     }
                     .accessibilityIdentifier("settings_pair_mac_row")
                 }
 
                 // MARK: About
                 Section("About") {
-                    SettingsRow(icon: "info.circle.fill", title: "Version", accessory: .value(appVersionString))
+                    SettingsRow(icon: "info.circle.fill", title: String(localized: "Version"), accessory: .value(appVersionString))
                 }
             }
             .listStyle(.insetGrouped)
@@ -172,7 +172,7 @@ struct SettingsView: View {
         if case .connected(let user) = model.liveShortly.phase {
             return user.name.isEmpty ? user.email : user.name
         }
-        return "Not connected"
+        return String(localized: "Not connected")
     }
 
     /// Version + build from the installed bundle — never a hardcoded string (F23).
@@ -195,12 +195,12 @@ struct SettingsView: View {
             } else if let hit = installed.first(where: { $0.manifest.id == id }) {
                 defaultModelName = ModelNaming.short(hit.manifest.displayName)
             } else if id.hasPrefix("mac:") {
-                defaultModelName = "On your Mac"
+                defaultModelName = String(localized: "On your Mac")
             } else {
-                defaultModelName = "Choose"
+                defaultModelName = String(localized: "Choose")
             }
         } else {
-            defaultModelName = "Choose"
+            defaultModelName = String(localized: "Choose")
         }
     }
 

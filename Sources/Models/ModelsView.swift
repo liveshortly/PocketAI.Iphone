@@ -18,18 +18,47 @@ struct ModelsView: View {
     /// not create one of its own.
     var embedded = false
 
+    // Raw values stay English: they are the persisted selection and, for
+    // CapabilityFilter, the `models_filter_*` accessibility identifiers the UI
+    // tests match on. `label` is the translated on-screen text.
     private enum Segment: String, CaseIterable {
         case onDevice = "On this iPhone"
         case browse = "Browse"
         case onMac = "On your Mac"
+
+        var label: String {
+            switch self {
+            case .onDevice: String(localized: "On this iPhone")
+            case .browse: String(localized: "Browse")
+            case .onMac: String(localized: "On your Mac")
+            }
+        }
     }
 
     private enum CapabilityFilter: String, CaseIterable {
         case all = "All", text = "Text", vision = "Vision", voice = "Voice", images = "Images"
+
+        var label: String {
+            switch self {
+            case .all: String(localized: "All")
+            case .text: String(localized: "Text")
+            case .vision: String(localized: "Vision")
+            case .voice: String(localized: "Voice")
+            case .images: String(localized: "Images")
+            }
+        }
     }
 
     private enum SortOrder: String, CaseIterable {
         case recommended = "Recommended", smallest = "Smallest download", name = "Name"
+
+        var label: String {
+            switch self {
+            case .recommended: String(localized: "Recommended")
+            case .smallest: String(localized: "Smallest download")
+            case .name: String(localized: "Name")
+            }
+        }
     }
 
     @State private var segment = Segment.browse
@@ -122,7 +151,7 @@ struct ModelsView: View {
     private var catalogScreen: some View {
         VStack(spacing: 0) {
                 Picker("Catalog", selection: $segment) {
-                    ForEach(availableSegments, id: \.self) { Text($0.rawValue).tag($0) }
+                    ForEach(availableSegments, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, PocketSpacing.gutterIphone)
@@ -191,7 +220,7 @@ struct ModelsView: View {
                 }
             }
             .alert(
-                "Delete \(pendingDelete?.manifest.displayName ?? "model")?",
+                "Delete \(pendingDelete?.manifest.displayName ?? String(localized: "model"))?",
                 isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
             ) {
                 Button("Delete", role: .destructive) {
@@ -200,7 +229,7 @@ struct ModelsView: View {
                             try model.core.deleteModel(modelId: entry.manifest.id)
                             if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
                         } catch {
-                            actionError = "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)"
+                            actionError = String(localized: "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)")
                         }
                         reload()
                     }
@@ -228,7 +257,7 @@ struct ModelsView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: PocketSpacing.s8) {
                 ForEach(CapabilityFilter.allCases, id: \.self) { cap in
-                    filterChip(cap.rawValue, selected: capabilityFilter == cap) {
+                    filterChip(cap.label, id: cap.rawValue, selected: capabilityFilter == cap) {
                         capabilityFilter = capabilityFilter == cap ? .all : cap
                     }
                 }
@@ -241,7 +270,7 @@ struct ModelsView: View {
         }
     }
 
-    private func filterChip(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func filterChip(_ label: String, id: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
                 .font(.pocket(.footnote))
@@ -255,7 +284,7 @@ struct ModelsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("models_filter_\(label)")
+        .accessibilityIdentifier("models_filter_\(id)")
     }
 
     private var fitsChip: some View {
@@ -281,7 +310,7 @@ struct ModelsView: View {
     private var sortMenu: some View {
         Menu {
             Picker("Sort", selection: $sortOrder) {
-                ForEach(SortOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(SortOrder.allCases, id: \.self) { Text($0.label).tag($0) }
             }
         } label: {
             Image(systemName: "arrow.up.arrow.down")
@@ -468,9 +497,9 @@ struct ModelsView: View {
     private func heroMetaLine(_ entry: CatalogEntry) -> String {
         var parts = ["\(entry.manifest.family) · \(entry.manifest.quant) · \(formatBytes(diskBytes(entry)))"]
         if let tok = entry.fit.measuredTokensPerSec {
-            parts.append("\(Int(tok)) tok/s")
+            parts.append(String(localized: "\(Int(tok)) tok/s"))
         } else if let tok = entry.fit.estTokensPerSec {
-            parts.append("~\(Int(tok)) tok/s est.")
+            parts.append(String(localized: "~\(Int(tok)) tok/s est."))
         }
         return parts.joined(separator: " · ")
     }
@@ -538,10 +567,10 @@ struct ModelsView: View {
 
     private var activeFilterDescription: String {
         var parts: [String] = []
-        if capabilityFilter != .all { parts.append("“\(capabilityFilter.rawValue)”") }
-        if segment == .browse, fitsOnly { parts.append("Fits only") }
+        if capabilityFilter != .all { parts.append("“\(capabilityFilter.label)”") }
+        if segment == .browse, fitsOnly { parts.append(String(localized: "Fits only")) }
         if !searchText.isEmpty { parts.append("“\(searchText)”") }
-        return parts.isEmpty ? "these filters" : parts.joined(separator: " · ")
+        return parts.isEmpty ? String(localized: "these filters") : parts.joined(separator: " · ")
     }
 
     // MARK: - Offline download states
@@ -735,10 +764,10 @@ struct ModelsView: View {
 
     private func failureText(_ reason: String) -> String {
         switch reason {
-        case "network": return "Download failed — check your connection, then retry."
-        case "disk": return "Download failed — not enough storage."
-        case "checksum": return "Download failed — files didn't verify. Retry to download again."
-        default: return "Download failed."
+        case "network": return String(localized: "Download failed — check your connection, then retry.")
+        case "disk": return String(localized: "Download failed — not enough storage.")
+        case "checksum": return String(localized: "Download failed — files didn't verify. Retry to download again.")
+        default: return String(localized: "Download failed.")
         }
     }
 
@@ -763,7 +792,7 @@ struct ModelsView: View {
                 entries = entries.filter { matchesCapability($0.manifest) }
             }
             entries = sorted(entries)
-            return entries.isEmpty ? [] : [ModelSection(title: "On this iPhone", icon: "iphone", entries: entries)]
+            return entries.isEmpty ? [] : [ModelSection(title: String(localized: "On this iPhone"), icon: "iphone", entries: entries)]
         }
 
         var entries = catalog
@@ -777,7 +806,7 @@ struct ModelsView: View {
         // A specific capability filter → one flat, sorted "Results" section.
         if capabilityFilter != .all {
             entries = sorted(entries.filter { matchesCapability($0.manifest) })
-            return entries.isEmpty ? [] : [ModelSection(title: capabilityFilter.rawValue, icon: capabilityIcon, entries: entries)]
+            return entries.isEmpty ? [] : [ModelSection(title: capabilityFilter.label, icon: capabilityIcon, entries: entries)]
         }
 
         // Unfiltered Browse → capability-grouped sections.
@@ -787,18 +816,18 @@ struct ModelsView: View {
                 && !$0.manifest.modalities.contains(.vision)
                 && !$0.manifest.modalities.contains(.image)
         }
-        if !text.isEmpty { sections.append(ModelSection(title: "Text", icon: "text.bubble", entries: sorted(text))) }
+        if !text.isEmpty { sections.append(ModelSection(title: String(localized: "Text"), icon: "text.bubble", entries: sorted(text))) }
 
         let vision = entries.filter { $0.manifest.modalities.contains(.vision) }
-        if !vision.isEmpty { sections.append(ModelSection(title: "Vision", icon: "eye", entries: sorted(vision))) }
+        if !vision.isEmpty { sections.append(ModelSection(title: String(localized: "Vision"), icon: "eye", entries: sorted(vision))) }
 
         let image = entries.filter { $0.manifest.modalities.contains(.image) }
-        if !image.isEmpty { sections.append(ModelSection(title: "Image generation", icon: "photo", entries: sorted(image))) }
+        if !image.isEmpty { sections.append(ModelSection(title: String(localized: "Image generation"), icon: "photo", entries: sorted(image))) }
 
         let voice = entries.filter {
             $0.manifest.modalities.contains(.speechToText) || $0.manifest.modalities.contains(.textToSpeech)
         }
-        if !voice.isEmpty { sections.append(ModelSection(title: "Voice", icon: "waveform", entries: sorted(voice))) }
+        if !voice.isEmpty { sections.append(ModelSection(title: String(localized: "Voice"), icon: "waveform", entries: sorted(voice))) }
 
         return sections
     }
@@ -916,7 +945,7 @@ struct ModelsView: View {
     private func reloadRemote() async {
         guard let peer = peers.first else { return }
         guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) }) else {
-            remoteError = "No saved credential for \(peer.name) - try pairing again."
+            remoteError = String(localized: "No saved credential for \(peer.name) - try pairing again.")
             return
         }
         let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: peerEndpoint(for: peer), token: token))
@@ -933,11 +962,11 @@ struct ModelsView: View {
                     remoteError = nil
                     return
                 } catch {
-                    remoteError = "Couldn't reach \(peer.name): \(error.localizedDescription)"
+                    remoteError = String(localized: "Couldn't reach \(peer.name): \(error.localizedDescription)")
                     return
                 }
             }
-            remoteError = "Couldn't reach \(peer.name): \(error.localizedDescription)"
+            remoteError = String(localized: "Couldn't reach \(peer.name): \(error.localizedDescription)")
         }
     }
 
@@ -946,9 +975,9 @@ struct ModelsView: View {
             name: entry.manifest.displayName,
             familyParamsQuant: "\(entry.manifest.family) · \(entry.manifest.quant)",
             fitKind: remoteFitKind(entry.fit.verdict),
-            fitReason: "Fits on Mac: \(entry.fit.reason)",
+            fitReason: String(localized: "Fits on Mac: \(entry.fit.reason)"),
             sizeOnDisk: entry.manifest.estRuntimeBytes != 0 ? formatBytes(entry.manifest.estRuntimeBytes) : nil,
-            speedText: entry.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
+            speedText: entry.fit.estTokensPerSec.map { String(localized: "\(Int($0)) tok/s") },
             speedIsMeasured: false,
             licenseLabel: ""
         )
@@ -961,12 +990,12 @@ struct ModelsView: View {
 
     private func remotePrimaryActionLabel(for entry: RemoteCatalogEntry) -> String {
         switch entry.state {
-        case .installed: return isRemoteModelSelected(entry) ? "Default" : "Use on phone"
-        case .downloading: return "Downloading…"
-        case .paused: return "Paused"
-        case .verifying: return "Checking files…"
-        case .failed: return "Retry"
-        case .available, .queued: return "Download on Mac"
+        case .installed: return isRemoteModelSelected(entry) ? String(localized: "Default") : String(localized: "Use on phone")
+        case .downloading: return String(localized: "Downloading…")
+        case .paused: return String(localized: "Paused")
+        case .verifying: return String(localized: "Checking files…")
+        case .failed: return String(localized: "Retry")
+        case .available, .queued: return String(localized: "Download on Mac")
         }
     }
 
@@ -980,7 +1009,7 @@ struct ModelsView: View {
         case .available, .queued, .failed:
             guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) })
             else {
-                actionError = "No saved credential for \(peer.name) — try pairing again."
+                actionError = String(localized: "No saved credential for \(peer.name) — try pairing again.")
                 return
             }
             let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: peerEndpoint(for: peer), token: token))
@@ -990,7 +1019,7 @@ struct ModelsView: View {
                 } catch {
                     // Without this the row came back unchanged and the tap on
                     // "Download on Mac" looked like nothing happened.
-                    actionError = "Couldn't start that download on \(peer.name): \(error.localizedDescription)"
+                    actionError = String(localized: "Couldn't start that download on \(peer.name): \(error.localizedDescription)")
                 }
                 await reloadRemote()
             }
@@ -1022,7 +1051,7 @@ struct ModelsView: View {
             hubResults = results
         } catch {
             hubResults = []
-            hubSearchError = "Search failed: \(error)"
+            hubSearchError = String(localized: "Search failed: \(error.localizedDescription)")
         }
     }
 
@@ -1033,7 +1062,7 @@ struct ModelsView: View {
             fitKind: fitKind(entry.fit.verdict),
             fitReason: entry.fit.reason,
             sizeOnDisk: diskBytes(entry) != 0 ? formatBytes(diskBytes(entry)) : nil,
-            speedText: (entry.fit.measuredTokensPerSec ?? entry.fit.estTokensPerSec).map { "\(Int($0)) tok/s" },
+            speedText: (entry.fit.measuredTokensPerSec ?? entry.fit.estTokensPerSec).map { String(localized: "\(Int($0)) tok/s") },
             speedIsMeasured: entry.fit.measuredTokensPerSec != nil,
             licenseLabel: entry.manifest.license.spdx
         )
@@ -1044,13 +1073,13 @@ struct ModelsView: View {
     /// Core does not currently expose, §6.2).
     private func primaryActionLabel(for entry: CatalogEntry) -> String {
         switch entry.state {
-        case .installed: return model.selectedModelId == entry.manifest.id ? "Default" : "Set as default"
-        case .downloading: return "Pause"
-        case .paused: return "Resume"
-        case .verifying: return "Checking files…"
-        case .queued: return "Queued"
-        case .failed: return "Retry"
-        case .available: return entry.fit.verdict == .willNotFit ? "Won't fit" : "Download"
+        case .installed: return model.selectedModelId == entry.manifest.id ? String(localized: "Default") : String(localized: "Set as default")
+        case .downloading: return String(localized: "Pause")
+        case .paused: return String(localized: "Resume")
+        case .verifying: return String(localized: "Checking files…")
+        case .queued: return String(localized: "Queued")
+        case .failed: return String(localized: "Retry")
+        case .available: return entry.fit.verdict == .willNotFit ? String(localized: "Won't fit") : String(localized: "Download")
         }
     }
 
@@ -1101,13 +1130,13 @@ struct ModelsView: View {
 
     private func modelStateAccessibilityValue(_ state: ModelState) -> String {
         switch state {
-        case .available: return "available"
-        case .downloading: return "downloading"
-        case .paused: return model.core.isOffline() ? "paused, offline mode on" : "paused"
-        case .installed: return "installed"
-        case .queued: return "queued"
-        case .verifying: return "checking files"
-        case .failed(let reason): return "failed: \(reason)"
+        case .available: return String(localized: "available")
+        case .downloading: return String(localized: "downloading")
+        case .paused: return model.core.isOffline() ? String(localized: "paused, offline mode on") : String(localized: "paused")
+        case .installed: return String(localized: "installed")
+        case .queued: return String(localized: "queued")
+        case .verifying: return String(localized: "checking files")
+        case .failed(let reason): return String(localized: "failed: \(reason)")
         }
     }
 }
@@ -1163,15 +1192,15 @@ private struct ModelDetailSheet: View {
 
                 Section("Specs") {
                     LabeledContent("Quantization", value: entry.manifest.quant)
-                    LabeledContent("Context Length", value: "\(entry.manifest.contextLength) tokens")
+                    LabeledContent("Context Length", value: String(localized: "\(entry.manifest.contextLength) tokens"))
                     if realDiskBytes != 0 {
                         LabeledContent("Download Size", value: formatBytes(realDiskBytes))
                     }
                     LabeledContent("Format", value: "\(entry.manifest.format)")
                     if let speed = entry.fit.measuredTokensPerSec {
-                        LabeledContent("Speed", value: "\(Int(speed)) tok/s (measured)")
+                        LabeledContent("Speed", value: String(localized: "\(Int(speed)) tok/s (measured)"))
                     } else if let speed = entry.fit.estTokensPerSec {
-                        LabeledContent("Speed", value: "~\(Int(speed)) tok/s (est.)")
+                        LabeledContent("Speed", value: String(localized: "~\(Int(speed)) tok/s (est.)"))
                     }
                 }
 
@@ -1261,8 +1290,8 @@ private struct ModelDetailSheet: View {
     @ViewBuilder
     private var benchmarkRows: some View {
         if let benchmark {
-            LabeledContent("Throughput", value: String(format: "%.1f tok/s", benchmark.tps))
-            LabeledContent("Time to First Token", value: "\(benchmark.ttftMs) ms")
+            LabeledContent("Throughput", value: String(format: String(localized: "%.1f tok/s"), benchmark.tps))
+            LabeledContent("Time to First Token", value: String(localized: "\(benchmark.ttftMs) ms"))
             if benchmark.peakBytes > 0 {
                 LabeledContent("Peak Memory", value: formatBytes(benchmark.peakBytes))
             }

@@ -45,9 +45,26 @@ struct ChatsListView: View {
     @ScaledMetric(relativeTo: .headline) private var rowGlyphSize: CGFloat = 36
     @ScaledMetric(relativeTo: .callout) private var suggestionIconWidth: CGFloat = 24
 
+    /// Hoisted out of the `.alert` modifier: nesting `String(localized:)` in a
+    /// `LocalizedStringKey` interpolation pushed `body` past the type-checker's
+    /// time limit.
+    private var deleteProjectTitle: String {
+        let name = pendingDeleteProject?.name ?? String(localized: "project")
+        return String(localized: "Delete \(name)?")
+    }
+
     private enum Segment: String, CaseIterable {
         case chats = "Chats"
         case projects = "Projects"
+
+        /// The raw value is the persisted segment id, so it can't carry the
+        /// label; rendering it directly left the control untranslatable.
+        var displayName: String {
+            switch self {
+            case .chats: String(localized: "Chats")
+            case .projects: String(localized: "Projects")
+            }
+        }
     }
 
     private struct ConversationGroup: Identifiable {
@@ -82,11 +99,11 @@ struct ChatsListView: View {
         }
 
         var groups: [ConversationGroup] = []
-        if !today.isEmpty { groups.append(ConversationGroup(title: "Today", conversations: today)) }
-        if !yesterday.isEmpty { groups.append(ConversationGroup(title: "Yesterday", conversations: yesterday)) }
-        if !last7Days.isEmpty { groups.append(ConversationGroup(title: "Previous 7 Days", conversations: last7Days)) }
-        if !last30Days.isEmpty { groups.append(ConversationGroup(title: "Previous 30 Days", conversations: last30Days)) }
-        if !earlier.isEmpty { groups.append(ConversationGroup(title: "Earlier", conversations: earlier)) }
+        if !today.isEmpty { groups.append(ConversationGroup(title: String(localized: "Today"), conversations: today)) }
+        if !yesterday.isEmpty { groups.append(ConversationGroup(title: String(localized: "Yesterday"), conversations: yesterday)) }
+        if !last7Days.isEmpty { groups.append(ConversationGroup(title: String(localized: "Previous 7 Days"), conversations: last7Days)) }
+        if !last30Days.isEmpty { groups.append(ConversationGroup(title: String(localized: "Previous 30 Days"), conversations: last30Days)) }
+        if !earlier.isEmpty { groups.append(ConversationGroup(title: String(localized: "Earlier"), conversations: earlier)) }
         return groups
     }
 
@@ -121,7 +138,7 @@ struct ChatsListView: View {
                 // replacing the redundant large-title + separate picker row.
                 ToolbarItem(placement: .principal) {
                     Picker("View", selection: $segment) {
-                        ForEach(Segment.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        ForEach(Segment.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     // Fills the title area on any width instead of sitting at
@@ -263,7 +280,7 @@ struct ChatsListView: View {
                 Text("This permanently deletes the conversation and its messages.")
             }
             .alert(
-                "Delete \(pendingDeleteProject?.name ?? "project")?",
+                deleteProjectTitle,
                 isPresented: Binding(get: { pendingDeleteProject != nil }, set: { if !$0 { pendingDeleteProject = nil } })
             ) {
                 Button("Delete", role: .destructive) {
@@ -343,7 +360,9 @@ struct ChatsListView: View {
                 editMode = .inactive
                 reload()
                 if failed > 0 {
-                    actionError = "\(failed) chat\(failed == 1 ? "" : "s") couldn't be deleted."
+                    actionError = failed == 1
+                        ? String(localized: "1 chat couldn't be deleted.")
+                        : String(localized: "\(failed) chats couldn't be deleted.")
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -387,7 +406,7 @@ struct ChatsListView: View {
                 .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: PocketSpacing.s4) {
-                    Text(conversation.title ?? "New chat")
+                    Text(conversation.title ?? String(localized: "New chat"))
                         .font(.pocket(.headline))
                         .foregroundStyle(PocketColor.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -452,9 +471,9 @@ struct ChatsListView: View {
             .padding(.horizontal, PocketSpacing.s24)
 
             VStack(spacing: PocketSpacing.s12) {
-                suggestionButton(icon: "doc.text", title: "Summarize a long email")
-                suggestionButton(icon: "lightbulb", title: "Explain a concept simply")
-                suggestionButton(icon: "bubble.left.and.text.bubble.right", title: "Draft a quick reply")
+                suggestionButton(icon: "doc.text", title: String(localized: "Summarize a long email"))
+                suggestionButton(icon: "lightbulb", title: String(localized: "Explain a concept simply"))
+                suggestionButton(icon: "bubble.left.and.text.bubble.right", title: String(localized: "Draft a quick reply"))
             }
             .padding(.horizontal, PocketSpacing.gutterIphone)
 
@@ -684,7 +703,7 @@ struct ChatsListView: View {
             pendingInitial = firstMessage.map { (conversation.id, $0) }
             path.append(.chat(conversation.id))
         } catch {
-            actionError = "Couldn't start a new chat: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't start a new chat: \(error.localizedDescription)")
         }
     }
 
@@ -694,7 +713,7 @@ struct ChatsListView: View {
             reload()
             path.append(.project(project.id))
         } catch {
-            actionError = "Couldn't create the project: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't create the project: \(error.localizedDescription)")
         }
     }
 
@@ -706,7 +725,7 @@ struct ChatsListView: View {
                 try model.core.renameProject(id: project.id, name: trimmed)
                 reload()
             } catch {
-                actionError = "Couldn't rename “\(project.name)”: \(error.localizedDescription)"
+                actionError = String(localized: "Couldn't rename “\(project.name)”: \(error.localizedDescription)")
             }
         }
         renamingProject = nil
@@ -716,7 +735,7 @@ struct ChatsListView: View {
         do {
             try model.core.deleteProject(id: project.id)
         } catch {
-            actionError = "Couldn't delete “\(project.name)”: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't delete “\(project.name)”: \(error.localizedDescription)")
         }
         reload()
     }
@@ -725,7 +744,7 @@ struct ChatsListView: View {
         do {
             try model.core.deleteConversation(id: conversation.id)
         } catch {
-            actionError = "Couldn't delete that chat: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't delete that chat: \(error.localizedDescription)")
         }
         reload()
     }
@@ -734,7 +753,7 @@ struct ChatsListView: View {
         do {
             try model.core.archiveConversation(id: conversation.id, archived: true)
         } catch {
-            actionError = "Couldn't archive that chat: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't archive that chat: \(error.localizedDescription)")
         }
         reload()
     }

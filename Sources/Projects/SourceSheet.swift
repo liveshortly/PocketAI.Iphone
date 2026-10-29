@@ -77,7 +77,7 @@ struct SourceSheet: View {
                                             Image(systemName: doc?.mime.contains("pdf") == true ? "doc.richtext" : "doc.text")
                                                 .foregroundStyle(PocketColor.accent)
 
-                                            Text(doc?.name ?? "Document")
+                                            Text(doc?.name ?? String(localized: "Document"))
                                                 .font(.pocket(.headline))
                                                 .foregroundStyle(PocketColor.textPrimary)
                                                 .lineLimit(1)
@@ -100,7 +100,7 @@ struct SourceSheet: View {
                                             .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: 8))
 
                                         if hit.score > 0 {
-                                            Text(String(format: "Relevance score: %.2f", hit.score))
+                                            Text(String(format: String(localized: "Relevance score: %.2f"), hit.score))
                                                 .font(.pocket(.caption))
                                                 .foregroundStyle(PocketColor.textTertiary)
                                         }
@@ -114,7 +114,7 @@ struct SourceSheet: View {
                                     .padding(.horizontal, PocketSpacing.gutterIphone)
                                     .id(citationNum)
                                     .accessibilityElement(children: .combine)
-                                    .accessibilityLabel("Citation \(citationNum) from \(doc?.name ?? "Document"), \(hit.page.map { "Page \($0)" } ?? ""): \(hit.text)")
+                                    .accessibilityLabel("Citation \(citationNum) from \(doc?.name ?? String(localized: "Document")), \(hit.page.map { String(localized: "Page \($0)") } ?? ""): \(hit.text)")
                                 }
                             }
                             .padding(.bottom, PocketSpacing.s24)

@@ -171,7 +171,7 @@ struct ChatView: View {
     /// the Mac they run on; local ones are just the model. Never a filesystem
     /// path, and "Choose a model" while the conversation is unbound.
     private var modelLocationLabel: String {
-        guard let id = currentModelId, !id.isEmpty else { return "Choose a model" }
+        guard let id = currentModelId, !id.isEmpty else { return String(localized: "Choose a model") }
         if id.hasPrefix("mac:") { return remoteModelChipLabel ?? "Mac" }
         if id == AppleFoundationModelsEngine.modelId { return "Apple Intelligence" }
         let catalogName = cachedCatalog.first { $0.manifest.id == id }?.manifest.displayName
@@ -187,7 +187,7 @@ struct ChatView: View {
         } catch {
             // Don't let the header name a model this conversation isn't
             // actually bound to — the next reply would come from the old one.
-            errorText = "Couldn't switch models: \(error.localizedDescription)"
+            errorText = String(localized: "Couldn't switch models: \(error.localizedDescription)")
         }
     }
 
@@ -207,11 +207,11 @@ struct ChatView: View {
     /// Real device thermal state — never a hardcoded "Nominal".
     private var thermalStateLabel: String {
         switch ProcessInfo.processInfo.thermalState {
-        case .nominal: return "Nominal"
-        case .fair: return "Fair"
-        case .serious: return "Serious"
-        case .critical: return "Critical"
-        @unknown default: return "Unknown"
+        case .nominal: return String(localized: "Nominal")
+        case .fair: return String(localized: "Fair")
+        case .serious: return String(localized: "Serious")
+        case .critical: return String(localized: "Critical")
+        @unknown default: return String(localized: "Unknown")
         }
     }
 
@@ -363,7 +363,7 @@ struct ChatView: View {
             }
         }
         .background(PocketColor.bgCanvas)
-        .navigationTitle(title ?? "New chat")
+        .navigationTitle(title ?? String(localized: "New chat"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(PocketColor.bgCanvas, for: .navigationBar)
@@ -382,7 +382,7 @@ struct ChatView: View {
                         if isGenerating { showSwitchWhileGeneratingAlert = true } else { showModelPicker = true }
                     } label: {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(title ?? "New chat")
+                            Text(title ?? String(localized: "New chat"))
                                 .font(.pocket(.headline))
                                 .lineLimit(1)
                                 .foregroundStyle(PocketColor.textPrimary)
@@ -461,7 +461,7 @@ struct ChatView: View {
                     try model.core.deleteConversation(id: conversationId)
                     dismiss()
                 } catch {
-                    errorText = "Couldn't delete this chat: \(error.localizedDescription)"
+                    errorText = String(localized: "Couldn't delete this chat: \(error.localizedDescription)")
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -481,7 +481,7 @@ struct ChatView: View {
                     try model.core.renameConversation(id: conversationId, title: trimmed)
                     title = trimmed
                 } catch {
-                    errorText = "Couldn't rename this chat: \(error.localizedDescription)"
+                    errorText = String(localized: "Couldn't rename this chat: \(error.localizedDescription)")
                 }
             }
             .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -541,9 +541,9 @@ struct ChatView: View {
         .sheet(isPresented: $showVoicePrimer) {
             PermissionPrimer(
                 icon: "mic.fill",
-                title: "Voice input",
-                message: "PocketAI uses the microphone and on-device speech recognition to turn your voice into text. Audio is transcribed on this iPhone and never leaves it.",
-                continueLabel: "Enable voice input",
+                title: String(localized: "Voice input"),
+                message: String(localized: "PocketAI uses the microphone and on-device speech recognition to turn your voice into text. Audio is transcribed on this iPhone and never leaves it."),
+                continueLabel: String(localized: "Enable voice input"),
                 onContinue: {
                     Task { await voiceDictation.start(handsFree: pendingHandsFree) }
                 }
@@ -734,7 +734,7 @@ struct ChatView: View {
                         text: text,
                         reasoning: message.reasoning,
                         isThinking: message.status == .streaming && message.stats == nil,
-                        statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
+                        statsText: message.stats.map { String(localized: "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s") },
                         onCopy: { UIPasteboard.general.string = text },
                         onRetry: { regenerateLastTurn() },
                         onSpeak: {
@@ -1131,12 +1131,12 @@ struct ChatView: View {
         if desc.contains("no model") || desc.contains("not installed") || desc.contains("not exist")
             || desc.contains("config.json") || desc.contains("no engine") || desc.contains("notfound") {
             // Append the raw cause so a masked load/engine failure is visible.
-            return "No model is ready yet. (\(error.localizedDescription))"
+            return String(localized: "No model is ready yet. (\(error.localizedDescription))")
         }
         if desc.contains("not entitled") || desc.contains("notentitled") {
-            return "This needs PocketAI Pro. Unlock it in Settings."
+            return String(localized: "This needs PocketAI Pro. Unlock it in Settings.")
         }
-        return "Something went wrong: \(error.localizedDescription)"
+        return String(localized: "Something went wrong: \(error.localizedDescription)")
     }
 
     /// Shows the in-flight reply growing in place rather than waiting for
@@ -1385,7 +1385,7 @@ struct ChatView: View {
         let fileURL = tempDir.appendingPathComponent("attach-\(UUID().uuidString).jpg")
         do {
             guard let data = image.jpegData(compressionQuality: 0.85) else {
-                errorText = "Couldn't read that image."
+                errorText = String(localized: "Couldn't read that image.")
                 return
             }
             try data.write(to: fileURL)
@@ -1393,7 +1393,7 @@ struct ChatView: View {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {
             // Never show a chip pointing at a file that doesn't exist.
-            errorText = "Couldn't attach the image: \(error.localizedDescription)"
+            errorText = String(localized: "Couldn't attach the image: \(error.localizedDescription)")
         }
     }
 
@@ -1417,9 +1417,9 @@ struct ChatView: View {
 
     /// Builds a Markdown transcript of the conversation for ShareLink export.
     private func markdownTranscript() -> String {
-        var out = "# \(title ?? "PocketAI chat")\n\n"
+        var out = "# \(title ?? String(localized: "PocketAI chat"))\n\n"
         for message in messages where message.id != "streaming-placeholder" {
-            let who = message.role == "user" ? "You" : "PocketAI"
+            let who = message.role == "user" ? String(localized: "You") : "PocketAI"
             let body = textForMessage(message).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !body.isEmpty else { continue }
             out += "**\(who):**\n\n\(body)\n\n"

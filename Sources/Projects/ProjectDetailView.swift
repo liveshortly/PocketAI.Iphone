@@ -60,7 +60,7 @@ struct ProjectDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(PocketColor.bgCanvas)
-        .navigationTitle(project?.name ?? "Project")
+        .navigationTitle(project?.name ?? String(localized: "Project"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -91,7 +91,7 @@ struct ProjectDetailView: View {
                 do {
                     try model.core.renameProject(id: projectId, name: trimmed)
                 } catch {
-                    errorMessage = "Couldn't rename this project: \(error.localizedDescription)"
+                    errorMessage = String(localized: "Couldn't rename this project: \(error.localizedDescription)")
                     showingErrorAlert = true
                 }
                 reload()
@@ -141,7 +141,7 @@ struct ProjectDetailView: View {
             handleFileImport(result)
         }
         .alert(
-            "Delete “\(pendingDocDelete?.name ?? "document")”?",
+            "Delete “\(pendingDocDelete?.name ?? String(localized: "document"))”?",
             isPresented: Binding(
                 get: { pendingDocDelete != nil },
                 set: { if !$0 { pendingDocDelete = nil } })
@@ -186,7 +186,7 @@ struct ProjectDetailView: View {
             // is what hyphenated "iOS Architec-ture" across three lines.
             headerLayout {
                 VStack(alignment: .leading, spacing: PocketSpacing.s4) {
-                    Text(project?.name ?? "Project")
+                    Text(project?.name ?? String(localized: "Project"))
                         .font(.pocket(.title))
                         .foregroundStyle(PocketColor.textPrimary)
                     if let createdAt = project?.createdAt {
@@ -338,7 +338,7 @@ struct ProjectDetailView: View {
                                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                                             .fill(PocketColor.accentSoft)
                                     )
-                                Text(c.title ?? "New chat")
+                                Text(c.title ?? String(localized: "New chat"))
                                     .font(.pocket(.body))
                                     .lineLimit(1)
                                 Spacer()
@@ -581,7 +581,7 @@ struct ProjectDetailView: View {
             activeConversationId = conversation.id
         } catch {
             // The screen's primary action: say why instead of ignoring the tap.
-            errorMessage = "Couldn't start a chat in this project: \(error.localizedDescription)"
+            errorMessage = String(localized: "Couldn't start a chat in this project: \(error.localizedDescription)")
             showingErrorAlert = true
         }
     }
@@ -590,7 +590,7 @@ struct ProjectDetailView: View {
         do {
             try model.core.deleteDocument(id: doc.id)
         } catch {
-            errorMessage = "Couldn't delete “\(doc.name)”: \(error.localizedDescription)"
+            errorMessage = String(localized: "Couldn't delete “\(doc.name)”: \(error.localizedDescription)")
             showingErrorAlert = true
         }
         reload()
@@ -601,7 +601,7 @@ struct ProjectDetailView: View {
         case .success(let urls):
             guard let url = urls.first else { return }
             guard url.startAccessingSecurityScopedResource() else {
-                errorMessage = "Could not access the selected file."
+                errorMessage = String(localized: "Could not access the selected file.")
                 showingErrorAlert = true
                 return
             }

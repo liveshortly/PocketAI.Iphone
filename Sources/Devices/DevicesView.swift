@@ -43,9 +43,9 @@ struct DevicesView: View {
             .sheet(isPresented: $showPairingPrimer) {
                 PermissionPrimer(
                     icon: "wifi",
-                    title: "Find your Mac",
-                    message: "PocketAI uses the camera to scan your Mac's pairing code and Local Network access to connect to it. Everything stays on your local network.",
-                    continueLabel: "Continue",
+                    title: String(localized: "Find your Mac"),
+                    message: String(localized: "PocketAI uses the camera to scan your Mac's pairing code and Local Network access to connect to it. Everything stays on your local network."),
+                    continueLabel: String(localized: "Continue"),
                     onContinue: {
                         primedPairing = true
                         LocalNetworkPrimer.request()
@@ -108,13 +108,13 @@ struct DevicesView: View {
                 VStack(spacing: PocketSpacing.s12) {
                     stepCard(
                         number: "1",
-                        title: "Open PocketAI on your Mac",
-                        subtitle: "Go to Devices → Pair iPhone to show your QR code."
+                        title: String(localized: "Open PocketAI on your Mac"),
+                        subtitle: String(localized: "Go to Devices → Pair iPhone to show your QR code.")
                     )
                     stepCard(
                         number: "2",
-                        title: "Scan the pairing code",
-                        subtitle: "Point this iPhone camera at your Mac screen."
+                        title: String(localized: "Scan the pairing code"),
+                        subtitle: String(localized: "Point this iPhone camera at your Mac screen.")
                     )
                 }
                 .padding(.horizontal, PocketSpacing.gutterIphone)
@@ -327,7 +327,7 @@ struct DevicesView: View {
                         Circle()
                             .fill(probe == nil ? PocketColor.statusBad : PocketColor.statusOk)
                             .frame(width: 8, height: 8)
-                        Text(probe.map { "Responded in \(Int($0 * 1000)) ms" } ?? "No answer from this Mac")
+                        Text(probe.map { String(localized: "Responded in \(Int($0 * 1000)) ms") } ?? String(localized: "No answer from this Mac"))
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -386,7 +386,7 @@ struct DevicesView: View {
                 NavigationLink {
                     ModelsView(startOnMac: true, embedded: true)
                 } label: {
-                    SettingsRow(icon: "cpu", title: "Browse models on this Mac…", accessory: .none)
+                    SettingsRow(icon: "cpu", title: String(localized: "Browse models on this Mac…"), accessory: .none)
                 }
             }
 
@@ -435,7 +435,7 @@ struct DevicesView: View {
         )
         manualAddressError = ok
             ? nil
-            : "Enter a hostname or IP, optionally with :port — e.g. mac.tailnet.ts.net:\(peer.port)."
+            : String(localized: "Enter a hostname or IP, optionally with :port — e.g. mac.tailnet.ts.net:\(peer.port).")
         if ok {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             reload()
@@ -479,7 +479,7 @@ struct DevicesView: View {
                 model.selectedModelId = nil
             }
         } catch {
-            revokeError = "Couldn't disconnect \(peer.name): \(error.localizedDescription)"
+            revokeError = String(localized: "Couldn't disconnect \(peer.name): \(error.localizedDescription)")
         }
         reload()
     }
@@ -545,7 +545,7 @@ private struct PairingFlowView: View {
                 case .connecting:
                     VStack(spacing: PocketSpacing.s20) {
                         PocketMarkView(state: .loading, size: 72)
-                        Text("Connecting to \(offer?.hostName ?? "your Mac")…")
+                        Text("Connecting to \(offer?.hostName ?? String(localized: "your Mac"))…")
                             .font(.pocket(.headline))
                             .foregroundStyle(PocketColor.textPrimary)
                             .multilineTextAlignment(.center)
@@ -658,7 +658,7 @@ private struct PairingFlowView: View {
     private func handle(code: String) {
         step = .connecting
         guard let offer = try? model.core.parsePairingQr(code) else {
-            step = .error("Mac not reachable. Make sure both are on the same Wi-Fi, or enter the address.")
+            step = .error(String(localized: "Mac not reachable. Make sure both are on the same Wi-Fi, or enter the address."))
             return
         }
         self.offer = offer
@@ -677,7 +677,7 @@ private struct PairingFlowView: View {
                 step = .success
                 onPaired()
             } else {
-                step = .error("Pairing isn't available right now — the on-device engine didn't start. Restart the app and try again.")
+                step = .error(String(localized: "Pairing isn't available right now — the on-device engine didn't start. Restart the app and try again."))
             }
             return
         }
@@ -696,10 +696,10 @@ private struct PairingFlowView: View {
                     onPaired()
                     return
                 case .denied:
-                    step = .error("Pairing was denied on your Mac.")
+                    step = .error(String(localized: "Pairing was denied on your Mac."))
                     return
                 case .failed(let message):
-                    step = .error("Mac not reachable. Make sure both are on the same Wi-Fi, or enter the address. (\(message))")
+                    step = .error(String(localized: "Mac not reachable. Make sure both are on the same Wi-Fi, or enter the address. (\(message))"))
                     return
                 case .idle, .connecting:
                     break
@@ -707,7 +707,7 @@ private struct PairingFlowView: View {
                 try? await Task.sleep(nanoseconds: 200_000_000)
             }
             pairTask?.cancel()
-            step = .error("Pairing timed out. Make sure your Mac is awake and on the same Wi-Fi, then try again.")
+            step = .error(String(localized: "Pairing timed out. Make sure your Mac is awake and on the same Wi-Fi, then try again."))
         }
     }
 }

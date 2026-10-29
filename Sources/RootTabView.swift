@@ -1,28 +1,21 @@
 import SwiftUI
 import PocketUI
 
-/// Tab shell per 02-design-system.md §6.1. Screens are placeholders until
-/// UI-04/UI-07+ land; this proves the shell, PocketUI tokens, and the
-/// PocketMark chip render against a real `CoreClient` (Live or Preview).
+/// Tab shell per handoff §3: Home · Chats · Models · Mac · Settings, each a
+/// real screen driven by a live `CoreClient` and its own NavigationStack.
+/// Home is the initial destination post-onboarding. Tab selection lives in
+/// `AppModel.nav` (an `AppNavigator`) so Home / App-Intent deep links can
+/// switch tabs (F26). The tab bar stays expanded — the global on-scroll
+/// minimization is removed (F02).
+/// Surfaces a core-open failure banner instead of crashing.
 struct RootTabView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var isShowingSharedInboxSheet = false
 
-    private enum AppTab: Hashable {
-        case chats, models, devices, settings
-    }
-
-    @State private var selectedTab: AppTab = {
-        let args = ProcessInfo.processInfo.arguments
-        if args.contains("-PocketTabModels") { return .models }
-        if args.contains("-PocketTabDevices") { return .devices }
-        if args.contains("-PocketTabSettings") { return .settings }
-        return .chats
-    }()
-
     var body: some View {
-        Group {
+        @Bindable var nav = model.nav
+        return Group {
             if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-PocketComponentGallery") }) {
                 ComponentGallery()
             } else if ProcessInfo.processInfo.arguments.contains("-PocketScreenChat") {
@@ -39,7 +32,12 @@ struct RootTabView: View {
                     checkSharedInbox()
                 }
             } else {
-                tabs
+                tabView(selection: $nav.selectedTab)
+            }
+        }
+        .overlay(alignment: .top) {
+            if let err = model.coreOpenError {
+                CoreErrorBanner(message: err)
             }
         }
         .sheet(isPresented: $isShowingSharedInboxSheet) {
@@ -64,59 +62,94 @@ struct RootTabView: View {
         }
     }
 
-    private var tabs: some View {
-        TabView(selection: $selectedTab) {
+    private func tabView(selection: Binding<AppNavigator.Tab>) -> some View {
+        let selected = selection.wrappedValue
+        return TabView(selection: selection) {
+            HomeView()
+                .tabItem {
+                    Label(
+                        "Home",
+                        systemImage: selected == .home ? "house.fill" : "house"
+                    )
+                }
+                .tag(AppNavigator.Tab.home)
+                .accessibilityIdentifier("tab_home")
+
             ChatsListView()
                 .tabItem {
                     Label(
                         "Chats",
-                        systemImage: selectedTab == .chats ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right"
+                        systemImage: selected == .chats ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right"
                     )
                 }
-                .tag(AppTab.chats)
+                .tag(AppNavigator.Tab.chats)
                 .accessibilityIdentifier("tab_chats")
 
             ModelsView()
                 .tabItem {
                     Label(
                         "Models",
-                        systemImage: selectedTab == .models ? "cpu.fill" : "cpu"
+                        systemImage: selected == .models ? "cpu.fill" : "cpu"
                     )
                 }
-                .tag(AppTab.models)
+                .tag(AppNavigator.Tab.models)
                 .accessibilityIdentifier("tab_models")
 
             DevicesView()
                 .tabItem {
                     Label(
                         "Mac",
-                        systemImage: selectedTab == .devices ? "laptopcomputer.and.iphone" : "laptopcomputer"
+                        systemImage: selected == .devices ? "laptopcomputer.and.iphone" : "laptopcomputer"
                     )
                 }
-                .tag(AppTab.devices)
+                .tag(AppNavigator.Tab.devices)
                 .accessibilityIdentifier("tab_devices")
 
             SettingsView()
                 .tabItem {
                     Label(
                         "Settings",
-                        systemImage: selectedTab == .settings ? "gearshape.fill" : "gearshape"
+                        systemImage: selected == .settings ? "gearshape.fill" : "gearshape"
                     )
                 }
-                .tag(AppTab.settings)
+                .tag(AppNavigator.Tab.settings)
                 .accessibilityIdentifier("tab_settings")
         }
         .tint(PocketColor.accent)
-        .modifier(TabBarMinimizeModifier())
+        // F02: no `.tabBarMinimizeBehavior(.onScrollDown)` — the tab bar stays
+        // expanded on scrolling screens (the reported "appearing Settings gear").
     }
 }
 
-private struct TabBarMinimizeModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.tabBarMinimizeBehavior(.onScrollDown)
-        } else {
-            content
+/// Non-crashing surface for a core-open failure (replaces the old fatalError).
+private struct CoreErrorBanner: View {
+    let message: String
+    @State private var dismissed = false
+    var body: some View {
+        if !dismissed {
+            HStack(alignment: .top, spacing: PocketSpacing.s8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(PocketColor.statusBad)
+                Text(message)
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: PocketSpacing.s8)
+                Button { dismissed = true } label: {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(PocketColor.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss error")
+            }
+            .padding(PocketSpacing.s12)
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
+            .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.statusBad.opacity(0.4)))
+            .padding(.horizontal, PocketSpacing.gutterIphone)
+            .padding(.top, PocketSpacing.s8)
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         }
     }
 }

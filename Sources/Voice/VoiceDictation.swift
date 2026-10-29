@@ -86,7 +86,7 @@ public final class VoiceDictation {
         let speechStatus = SFSpeechRecognizer.authorizationStatus()
         switch speechStatus {
         case .denied, .restricted:
-            state = .denied("Speech recognition permission has been denied. Please enable it in Settings to transcribe voice input.")
+            state = .denied(String(localized: "Speech recognition permission has been denied. Please enable it in Settings to transcribe voice input."))
             return false
         case .notDetermined:
             let granted = await withCheckedContinuation { continuation in
@@ -95,7 +95,7 @@ public final class VoiceDictation {
                 }
             }
             if !granted {
-                state = .denied("Speech recognition permission is required for voice input.")
+                state = .denied(String(localized: "Speech recognition permission is required for voice input."))
                 return false
             }
         case .authorized:
@@ -110,7 +110,7 @@ public final class VoiceDictation {
             let status = AVAudioApplication.shared.recordPermission
             switch status {
             case .denied:
-                state = .denied("Microphone permission has been denied. Please enable it in Settings to record audio.")
+                state = .denied(String(localized: "Microphone permission has been denied. Please enable it in Settings to record audio."))
                 return false
             case .undetermined:
                 micGranted = await AVAudioApplication.requestRecordPermission()
@@ -123,7 +123,7 @@ public final class VoiceDictation {
             let session = AVAudioSession.sharedInstance()
             switch session.recordPermission {
             case .denied:
-                state = .denied("Microphone permission has been denied. Please enable it in Settings to record audio.")
+                state = .denied(String(localized: "Microphone permission has been denied. Please enable it in Settings to record audio."))
                 return false
             case .undetermined:
                 micGranted = await withCheckedContinuation { continuation in
@@ -139,7 +139,7 @@ public final class VoiceDictation {
         }
 
         if !micGranted {
-            state = .denied("Microphone permission is required for voice input.")
+            state = .denied(String(localized: "Microphone permission is required for voice input."))
             return false
         }
 
@@ -173,7 +173,7 @@ public final class VoiceDictation {
             let recorder = try AVAudioRecorder(url: fileURL, settings: settings)
             recorder.isMeteringEnabled = true
             guard recorder.record() else {
-                state = .error("Failed to start recording audio.")
+                state = .error(String(localized: "Failed to start recording audio."))
                 return
             }
 
@@ -183,9 +183,9 @@ public final class VoiceDictation {
             self.audioLevel = 0.0
 
             startMetering()
-            AccessibilityNotification.Announcement(handsFree ? "Hands-free voice recording started" : "Voice recording started").post()
+            AccessibilityNotification.Announcement(handsFree ? String(localized: "Hands-free voice recording started") : String(localized: "Voice recording started")).post()
         } catch {
-            state = .error("Failed to initialize recording: \(error.localizedDescription)")
+            state = .error(String(localized: "Failed to initialize recording: \(error.localizedDescription)"))
         }
     }
 
@@ -198,7 +198,7 @@ public final class VoiceDictation {
         deactivateAudioSession()
 
         state = .transcribing
-        AccessibilityNotification.Announcement("Transcribing voice input").post()
+        AccessibilityNotification.Announcement(String(localized: "Transcribing voice input")).post()
 
         guard let tempAudioURL else {
             state = .idle
@@ -223,7 +223,7 @@ public final class VoiceDictation {
             }.value
 
             state = .idle
-            AccessibilityNotification.Announcement(handsFree ? "Voice message ready to send" : "Voice transcribed").post()
+            AccessibilityNotification.Announcement(handsFree ? String(localized: "Voice message ready to send") : String(localized: "Voice transcribed")).post()
             return text
         } catch {
             let errorMessage: String
@@ -232,8 +232,8 @@ public final class VoiceDictation {
             } else {
                 errorMessage = error.localizedDescription
             }
-            state = .error("Transcription failed: \(errorMessage)")
-            AccessibilityNotification.Announcement("Transcription failed").post()
+            state = .error(String(localized: "Transcription failed: \(errorMessage)"))
+            AccessibilityNotification.Announcement(String(localized: "Transcription failed")).post()
             return nil
         }
     }
@@ -251,7 +251,7 @@ public final class VoiceDictation {
         audioLevels = Array(repeating: 0.1, count: 12)
         audioLevel = 0.0
         state = .idle
-        AccessibilityNotification.Announcement("Recording cancelled").post()
+        AccessibilityNotification.Announcement(String(localized: "Recording cancelled")).post()
     }
 
     /// Dismiss denied or error state.

@@ -5,6 +5,17 @@ public enum SharedInboxItemKind: String, Codable, Sendable {
     case url
     case pdf
     case image
+
+    /// The raw value is persisted in the inbox JSON, so the badge needs its
+    /// own label; rendering the raw value left it untranslatable.
+    public var displayName: String {
+        switch self {
+        case .text: String(localized: "TEXT")
+        case .url: String(localized: "URL")
+        case .pdf: String(localized: "PDF")
+        case .image: String(localized: "IMAGE")
+        }
+    }
 }
 
 public struct SharedInboxItem: Codable, Identifiable, Sendable {
@@ -161,9 +172,9 @@ public enum SharedInboxError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .appGroupUnavailable:
-            return "Shared app group container is not available."
+            return String(localized: "Shared app group container is not available.")
         case .payloadNotFound:
-            return "Shared item payload file not found."
+            return String(localized: "Shared item payload file not found.")
         }
     }
 }

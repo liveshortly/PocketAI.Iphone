@@ -46,11 +46,11 @@ final class SharedInboxViewModel {
             var warnings: [String] = []
 
             for (index, item) in currentItems.enumerated() {
-                ingestingStatus = "Adding \(index + 1) of \(currentItems.count): \(item.originalName)..."
+                ingestingStatus = String(localized: "Adding \(index + 1) of \(currentItems.count): \(item.originalName)...")
 
                 guard let fileURL = SharedInbox.payloadURL(for: item),
                       FileManager.default.fileExists(atPath: fileURL.path) else {
-                    warnings.append("Could not locate payload for '\(item.originalName)'")
+                    warnings.append(String(localized: "Could not locate payload for '\(item.originalName)'"))
                     SharedInbox.deleteItem(item)
                     continue
                 }
@@ -65,7 +65,7 @@ final class SharedInboxViewModel {
                     )
                     SharedInbox.deleteItem(item)
                 } catch {
-                    warnings.append("Skipped '\(item.originalName)': \(error.localizedDescription)")
+                    warnings.append(String(localized: "Skipped '\(item.originalName)': \(error.localizedDescription)"))
                     SharedInbox.deleteItem(item)
                 }
             }
@@ -207,7 +207,7 @@ public struct SharedInboxIngestSheet: View {
                         // Reuses the warnings card: a failed create just closed
                         // the New Project sheet with nothing imported and
                         // nothing said.
-                        viewModel.skippedWarnings = ["Couldn't create “\(name)”: \(error.localizedDescription)"]
+                        viewModel.skippedWarnings = [String(localized: "Couldn't create “\(name)”: \(error.localizedDescription)")]
                     }
                 }
             }
@@ -294,7 +294,7 @@ public struct SharedInboxIngestSheet: View {
                     .lineLimit(1)
 
                 HStack(spacing: PocketSpacing.s8) {
-                    Text(item.kind.rawValue.uppercased())
+                    Text(item.kind.displayName)
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.accent)
                     if let note = item.note, !note.isEmpty {

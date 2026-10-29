@@ -142,18 +142,18 @@ private struct OnboardingWelcomeView: View {
                 VStack(spacing: PocketSpacing.s12) {
                     benefitCard(
                         icon: "iphone.gen3",
-                        title: "Runs on this iPhone, even offline",
-                        subtitle: "Inference executes locally via Metal and MLX."
+                        title: String(localized: "Runs on this iPhone, even offline"),
+                        subtitle: String(localized: "Inference executes locally via Metal and MLX.")
                     )
                     benefitCard(
                         icon: "lock.shield.fill",
-                        title: "Nothing leaves your device",
-                        subtitle: "See every network connection in the egress log."
+                        title: String(localized: "Nothing leaves your device"),
+                        subtitle: String(localized: "See every network connection in the egress log.")
                     )
                     benefitCard(
                         icon: "laptopcomputer",
-                        title: "Use your Mac's bigger models",
-                        subtitle: "Pair over local Wi-Fi to tap into your Mac's unified memory."
+                        title: String(localized: "Use your Mac's bigger models"),
+                        subtitle: String(localized: "Pair over local Wi-Fi to tap into your Mac's unified memory.")
                     )
                 }
                 .padding(.horizontal, PocketSpacing.gutterIphone)
@@ -217,11 +217,11 @@ private struct OnboardingDeviceCheckView: View {
 
     private var rows: [String] {
         var r = [
-            "\(profile.chip) · \(formatBytes(profile.totalRamBytes)) memory · up to \(formatBytes(profile.appMemoryLimitBytes)) for models",
-            "\(formatBytes(profile.freeDiskBytes)) free storage",
+            String(localized: "\(profile.chip) · \(formatBytes(profile.totalRamBytes)) memory · up to \(formatBytes(profile.appMemoryLimitBytes)) for models"),
+            String(localized: "\(formatBytes(profile.freeDiskBytes)) free storage"),
         ]
         if AppleFoundationModelsEngine.isAvailable {
-            r.append("Apple Intelligence available")
+            r.append(String(localized: "Apple Intelligence available"))
         }
         return r
     }
@@ -348,11 +348,11 @@ private struct OnboardingPickModelView: View {
                                 fitKind: fitKind(recommended.fit.verdict),
                                 fitReason: recommended.fit.reason,
                                 sizeOnDisk: formatBytes(recommended.fit.diskBytes != 0 ? recommended.fit.diskBytes : recommended.manifest.estRuntimeBytes),
-                                speedText: recommended.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
+                                speedText: recommended.fit.estTokensPerSec.map { String(localized: "\(Int($0)) tok/s") },
                                 speedIsMeasured: false,
                                 licenseLabel: recommended.manifest.license.spdx
                             ),
-                            primaryActionLabel: "Download \(formatBytes(recommended.fit.diskBytes != 0 ? recommended.fit.diskBytes : recommended.manifest.estRuntimeBytes))",
+                            primaryActionLabel: String(localized: "Download \(formatBytes(recommended.fit.diskBytes != 0 ? recommended.fit.diskBytes : recommended.manifest.estRuntimeBytes))"),
                             onPrimaryAction: {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 onPick(recommended.manifest.id)
@@ -386,11 +386,11 @@ private struct OnboardingPickModelView: View {
                                     fitKind: fitKind(entry.fit.verdict),
                                     fitReason: entry.fit.reason,
                                     sizeOnDisk: formatBytes(entry.manifest.estRuntimeBytes),
-                                    speedText: entry.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
+                                    speedText: entry.fit.estTokensPerSec.map { String(localized: "\(Int($0)) tok/s") },
                                     speedIsMeasured: false,
                                     licenseLabel: entry.manifest.license.spdx
                                 ),
-                                primaryActionLabel: "Choose",
+                                primaryActionLabel: String(localized: "Choose"),
                                 onPrimaryAction: {
                                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                     onPick(entry.manifest.id)
@@ -487,9 +487,9 @@ private struct OnboardingDownloadingView: View {
     }
 
     private static let tips = [
-        "Models stay completely on this device — nothing is uploaded.",
-        "You can switch or download other models anytime in the Models tab.",
-        "Pair your Mac anytime to run its larger models from your phone.",
+        String(localized: "Models stay completely on this device — nothing is uploaded."),
+        String(localized: "You can switch or download other models anytime in the Models tab."),
+        String(localized: "Pair your Mac anytime to run its larger models from your phone."),
     ]
 
     var body: some View {
@@ -518,7 +518,7 @@ private struct OnboardingDownloadingView: View {
             PocketMarkView(state: .loading, size: 72)
 
             VStack(spacing: PocketSpacing.s8) {
-                Text("Downloading \(entry?.manifest.displayName ?? "model")…")
+                Text("Downloading \(entry?.manifest.displayName ?? String(localized: "model"))…")
                     .font(.pocket(.display))
                     .foregroundStyle(PocketColor.textPrimary)
                     .multilineTextAlignment(.center)
@@ -623,9 +623,9 @@ private struct OnboardingReadyView: View {
     let onStart: (String?) -> Void
 
     private static let suggestions = [
-        ("Summarize a long email", "doc.text"),
-        ("Explain a concept simply", "lightbulb"),
-        ("Draft a quick reply", "bubble.left.and.text.bubble.right"),
+        (String(localized: "Summarize a long email"), "doc.text"),
+        (String(localized: "Explain a concept simply"), "lightbulb"),
+        (String(localized: "Draft a quick reply"), "bubble.left.and.text.bubble.right"),
     ]
 
     var body: some View {

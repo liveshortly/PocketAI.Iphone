@@ -40,7 +40,7 @@ struct HomeView: View {
             )
             model.nav.openConversation(id: convo.id)
         } catch {
-            actionError = "Couldn't start a new chat: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't start a new chat: \(error.localizedDescription)")
         }
     }
 
@@ -184,10 +184,10 @@ struct HomeView: View {
     }
 
     @ViewBuilder private var tiles: some View {
-        StatTile(label: "Chats on this iPhone", value: "\(data.chatCount)")
+        StatTile(label: String(localized: "Chats on this iPhone"), value: "\(data.chatCount)")
         StatTile(
-            label: "Most used model",
-            value: data.mostUsed ?? "No replies yet",
+            label: String(localized: "Most used model"),
+            value: data.mostUsed ?? String(localized: "No replies yet"),
             hint: data.mostUsed == nil ? nil : data.mostUsedLocation
         )
     }
@@ -197,7 +197,7 @@ struct HomeView: View {
     private var installedSection: some View {
         let visible = showAllInstalled ? data.installed : Array(data.installed.prefix(3))
         return VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-            sectionHeader("Downloaded models", actionTitle: "Manage") {
+            sectionHeader(String(localized: "Downloaded models"), actionTitle: String(localized: "Manage")) {
                 model.nav.select(tab: .models)
             }
             VStack(spacing: 0) {
@@ -205,7 +205,7 @@ struct HomeView: View {
                     if index > 0 { Divider().overlay(PocketColor.lineHairline) }
                     ModelRow(
                         data: item.row,
-                        primaryActionLabel: item.isChatCapable ? "Chat" : "Manage"
+                        primaryActionLabel: item.isChatCapable ? String(localized: "Chat") : String(localized: "Manage")
                     ) {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         if item.isChatCapable {
@@ -235,7 +235,7 @@ struct HomeView: View {
 
     private var downloadsSection: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-            sectionHeader("Active downloads", actionTitle: nil, action: nil)
+            sectionHeader(String(localized: "Active downloads"), actionTitle: nil, action: nil)
             VStack(spacing: PocketSpacing.s12) {
                 ForEach(data.activeDownloads) { d in
                     HomeDownloadRow(
@@ -248,7 +248,7 @@ struct HomeView: View {
                                 case .queued, .verifying: break
                                 }
                             } catch {
-                                actionError = "Couldn't change that download: \(error.localizedDescription)"
+                                actionError = String(localized: "Couldn't change that download: \(error.localizedDescription)")
                             }
                             Task { await reload() }
                         },
@@ -256,7 +256,7 @@ struct HomeView: View {
                             do {
                                 try model.core.cancelDownload(modelId: d.id)
                             } catch {
-                                actionError = "Couldn't cancel that download: \(error.localizedDescription)"
+                                actionError = String(localized: "Couldn't cancel that download: \(error.localizedDescription)")
                             }
                             Task { await reload() }
                         }
@@ -272,7 +272,7 @@ struct HomeView: View {
 
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-            sectionHeader("Recent chats", actionTitle: "See all") {
+            sectionHeader(String(localized: "Recent chats"), actionTitle: String(localized: "See all")) {
                 model.nav.select(tab: .chats)
             }
             VStack(spacing: 0) {
@@ -444,10 +444,10 @@ private struct HomeDownloadRow: View {
 
     private var caption: String {
         switch download.phase {
-        case .queued: return "Queued"
-        case .verifying: return "Checking files…"
-        case .paused: return "Paused · \(HomeData.byteString(download.bytesDone)) of \(HomeData.byteString(download.bytesTotal))"
-        case .downloading: return "\(HomeData.byteString(download.bytesDone)) of \(HomeData.byteString(download.bytesTotal))"
+        case .queued: return String(localized: "Queued")
+        case .verifying: return String(localized: "Checking files…")
+        case .paused: return String(localized: "Paused · \(HomeData.byteString(download.bytesDone)) of \(HomeData.byteString(download.bytesTotal))")
+        case .downloading: return String(localized: "\(HomeData.byteString(download.bytesDone)) of \(HomeData.byteString(download.bytesTotal))")
         }
     }
 
@@ -513,8 +513,8 @@ struct HomeData: Sendable {
         }
         var title: String {
             switch self {
-            case .ready: return "Ready to chat"
-            case .noModel: return "No model selected"
+            case .ready: return String(localized: "Ready to chat")
+            case .noModel: return String(localized: "No model selected")
             }
         }
         var subtitle: String {
@@ -525,8 +525,8 @@ struct HomeData: Sendable {
         }
         var actionLabel: String {
             switch self {
-            case .ready: return "New chat"
-            case .noModel: return "Choose model"
+            case .ready: return String(localized: "New chat")
+            case .noModel: return String(localized: "Choose model")
             }
         }
     }
@@ -554,7 +554,7 @@ struct HomeData: Sendable {
         let timestamp: Int64
     }
 
-    var ready: Ready = .noModel(reason: "Choose a model to start chatting.")
+    var ready: Ready = .noModel(reason: String(localized: "Choose a model to start chatting."))
     var chatCount: Int = 0
     var mostUsed: String?
     var mostUsedLocation: String?
@@ -662,11 +662,11 @@ struct HomeData: Sendable {
                 let (name, location) = displayName(for: mid, peers: peers, appleAvailable: appleAvailable, nameIndex: nameIndex)
                 subtitle = location.isEmpty ? name : "\(name) · \(location)"
             } else {
-                subtitle = "Choose a model"
+                subtitle = String(localized: "Choose a model")
             }
             return RecentChat(
                 id: s.id,
-                title: s.title ?? "New chat",
+                title: s.title ?? String(localized: "New chat"),
                 preview: preview,
                 subtitle: subtitle,
                 timestamp: s.updatedAt
@@ -686,31 +686,31 @@ struct HomeData: Sendable {
         nameIndex: [String: String]
     ) -> Ready {
         guard let id = selectedModelId else {
-            return .noModel(reason: "Choose a model to start chatting.")
+            return .noModel(reason: String(localized: "Choose a model to start chatting."))
         }
         if id == AppleFoundationModelsEngine.modelId {
             return appleAvailable
-                ? .ready(name: "Apple Intelligence", location: "On this iPhone")
-                : .noModel(reason: "Apple Intelligence isn't ready on this device.")
+                ? .ready(name: "Apple Intelligence", location: String(localized: "On this iPhone"))
+                : .noModel(reason: String(localized: "Apple Intelligence isn't ready on this device."))
         }
         if id.hasPrefix("mac:") {
             let (name, location) = displayName(for: id, peers: peers, appleAvailable: appleAvailable, nameIndex: nameIndex)
             let peerId = peerId(from: id)
             return peers.contains(where: { $0.id == peerId })
                 ? .ready(name: name, location: location)
-                : .noModel(reason: "That Mac isn't available right now.")
+                : .noModel(reason: String(localized: "That Mac isn't available right now."))
         }
         if installedEntries.contains(where: { $0.manifest.id == id }) {
             let name = nameIndex[id] ?? ModelNaming.short(id)
-            return .ready(name: name, location: "On this iPhone")
+            return .ready(name: name, location: String(localized: "On this iPhone"))
         }
-        return .noModel(reason: "The selected model isn't installed. Choose another.")
+        return .noModel(reason: String(localized: "The selected model isn't installed. Choose another."))
     }
 
     /// Resolves a model id to a readable name + execution location.
     static func displayName(for id: String, peers: [Peer], appleAvailable: Bool, nameIndex: [String: String]) -> (name: String, location: String) {
         if id == AppleFoundationModelsEngine.modelId {
-            return ("Apple Intelligence", "On this iPhone")
+            return ("Apple Intelligence", String(localized: "On this iPhone"))
         }
         if id.hasPrefix("mac:") {
             let pid = peerId(from: id)
@@ -721,7 +721,7 @@ struct HomeData: Sendable {
             let name = nameIndex[inner] ?? ModelNaming.short(inner)
             return (name, peerName)
         }
-        return (nameIndex[id] ?? ModelNaming.short(id), "On this iPhone")
+        return (nameIndex[id] ?? ModelNaming.short(id), String(localized: "On this iPhone"))
     }
 
     private static func peerId(from id: String) -> String {
@@ -744,18 +744,18 @@ struct HomeData: Sendable {
 
     private static func capabilityLine(_ manifest: ModelManifest) -> String {
         var caps: [String] = []
-        if manifest.modalities.contains(.text) { caps.append("Text") }
-        if manifest.modalities.contains(.vision) { caps.append("Vision") }
-        if manifest.modalities.contains(.speechToText) { caps.append("Speech") }
-        if manifest.modalities.contains(.textToSpeech) { caps.append("Voice") }
-        if manifest.modalities.contains(.image) { caps.append("Images") }
+        if manifest.modalities.contains(.text) { caps.append(String(localized: "Text")) }
+        if manifest.modalities.contains(.vision) { caps.append(String(localized: "Vision")) }
+        if manifest.modalities.contains(.speechToText) { caps.append(String(localized: "Speech")) }
+        if manifest.modalities.contains(.textToSpeech) { caps.append(String(localized: "Voice")) }
+        if manifest.modalities.contains(.image) { caps.append(String(localized: "Images")) }
         return caps.isEmpty ? manifest.family : caps.joined(separator: " + ")
     }
 
     private static func rowData(_ entry: CatalogEntry) -> ModelRowData {
         let m = entry.manifest
         // Honest tok/s: only a genuinely measured rate (installed & run).
-        let speedText = entry.fit.measuredTokensPerSec.map { "\(Int($0)) tok/s" }
+        let speedText = entry.fit.measuredTokensPerSec.map { String(localized: "\(Int($0)) tok/s") }
         return ModelRowData(
             name: m.displayName,
             familyParamsQuant: "\(capabilityLine(m)) · \(m.family) · \(trimParams(m.paramsB))B",

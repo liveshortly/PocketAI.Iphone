@@ -81,7 +81,7 @@ final class ImageGenSheetViewModel {
 
             // ponytail: needs an installed-image-model-path accessor on CoreClient
             guard let installed = self.resolveInstalledModelDirectory() else {
-                self.state = .error("No image model installed — install one in Models")
+                self.state = .error(String(localized: "No image model installed — install one in Models"))
                 return
             }
 
@@ -92,7 +92,7 @@ final class ImageGenSheetViewModel {
                 try await gen.load(modelDirectory: installed.url, modelId: installed.modelId)
             } catch {
                 if Task.isCancelled { return }
-                self.state = .error("No image model installed — install one in Models")
+                self.state = .error(String(localized: "No image model installed — install one in Models"))
                 return
             }
 
@@ -134,7 +134,7 @@ final class ImageGenSheetViewModel {
                         self.state = .idle
                         return
                     case .modelNotFound, .notLoaded:
-                        self.state = .error("No image model installed — install one in Models")
+                        self.state = .error(String(localized: "No image model installed — install one in Models"))
                         return
                     default:
                         break
@@ -170,7 +170,7 @@ final class ImageGenSheetViewModel {
                     self.isSavedToPhotos = true
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 } catch {
-                    self.photoSaveErrorMessage = "Failed to save: \(error.localizedDescription)"
+                    self.photoSaveErrorMessage = String(localized: "Failed to save: \(error.localizedDescription)")
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                 }
             case .denied, .restricted:

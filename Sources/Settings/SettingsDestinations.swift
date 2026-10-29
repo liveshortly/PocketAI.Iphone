@@ -79,7 +79,7 @@ struct StorageUsedView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { reload() }
         .confirmationDialog(
-            "Delete \(pendingDelete?.manifest.displayName ?? "model")?",
+            "Delete \(pendingDelete?.manifest.displayName ?? String(localized: "model"))?",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
             titleVisibility: .visible
         ) {
@@ -89,7 +89,7 @@ struct StorageUsedView: View {
                         try model.core.deleteModel(modelId: entry.manifest.id)
                         if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
                     } catch {
-                        deleteError = "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)"
+                        deleteError = String(localized: "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)")
                     }
                     reload()
                 }
@@ -127,22 +127,22 @@ struct EnginesView: View {
                     icon: "bolt.fill",
                     tint: PocketColor.statusWarn,
                     name: "MLX",
-                    detail: "Runs MLX models on Apple silicon. The default on-device engine.",
-                    status: "Bundled"
+                    detail: String(localized: "Runs MLX models on Apple silicon. The default on-device engine."),
+                    status: String(localized: "Bundled")
                 )
                 engineRow(
                     icon: "cpu",
                     tint: PocketColor.textSecondary,
                     name: "llama.cpp",
-                    detail: "Runs GGUF models on-device via Metal. Built into the core.",
-                    status: "Bundled"
+                    detail: String(localized: "Runs GGUF models on-device via Metal. Built into the core."),
+                    status: String(localized: "Bundled")
                 )
                 engineRow(
                     icon: "apple.logo",
                     tint: PocketColor.textPrimary,
                     name: "Apple Intelligence",
-                    detail: "Apple's on-device foundation model (iOS 26+ on supported devices).",
-                    status: AppleFoundationModelsEngine.isAvailable ? "Available" : "Unavailable"
+                    detail: String(localized: "Apple's on-device foundation model (iOS 26+ on supported devices)."),
+                    status: AppleFoundationModelsEngine.isAvailable ? String(localized: "Available") : String(localized: "Unavailable")
                 )
             } footer: {
                 Text("PocketAI picks the right engine for each model automatically.")
@@ -199,8 +199,8 @@ struct SpeechToTextView: View {
         return List {
             Section("Apple Speech Recognition") {
                 LabeledContent("Language", value: Locale.current.localizedString(forIdentifier: langId) ?? langId)
-                LabeledContent("Available", value: (rec?.isAvailable ?? false) ? "Yes" : "No")
-                LabeledContent("On-device", value: (rec?.supportsOnDeviceRecognition ?? false) ? "Supported" : "Server-based")
+                LabeledContent("Available", value: (rec?.isAvailable ?? false) ? String(localized: "Yes") : String(localized: "No"))
+                LabeledContent("On-device", value: (rec?.supportsOnDeviceRecognition ?? false) ? String(localized: "Supported") : String(localized: "Server-based"))
                 LabeledContent("Permission", value: authLabel)
             }
 
@@ -228,11 +228,11 @@ struct SpeechToTextView: View {
 
     private var authLabel: String {
         switch authStatus {
-        case .authorized: return "Allowed"
-        case .denied: return "Denied"
-        case .restricted: return "Restricted"
-        case .notDetermined: return "Not requested"
-        @unknown default: return "Unknown"
+        case .authorized: return String(localized: "Allowed")
+        case .denied: return String(localized: "Denied")
+        case .restricted: return String(localized: "Restricted")
+        case .notDetermined: return String(localized: "Not requested")
+        @unknown default: return String(localized: "Unknown")
         }
     }
 }
@@ -323,7 +323,7 @@ struct TextToSpeechVoiceView: View {
 
     private func speak(_ voice: AVSpeechSynthesisVoice) {
         preview.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: "The quick brown fox jumps over the lazy dog.")
+        let utterance = AVSpeechUtterance(string: String(localized: "The quick brown fox jumps over the lazy dog."))
         utterance.voice = voice
         preview.speak(utterance)
     }
@@ -340,8 +340,8 @@ struct PairMacView: View {
         List {
             if peers.isEmpty {
                 Section {
-                    stepCard(number: "1", title: "Open PocketAI on your Mac", subtitle: "Go to Devices → Pair iPhone to show your QR code.")
-                    stepCard(number: "2", title: "Open the Mac tab here", subtitle: "Tap Mac in the tab bar, then Scan pairing code to point this iPhone at your Mac.")
+                    stepCard(number: "1", title: String(localized: "Open PocketAI on your Mac"), subtitle: String(localized: "Go to Devices → Pair iPhone to show your QR code."))
+                    stepCard(number: "2", title: String(localized: "Open the Mac tab here"), subtitle: String(localized: "Tap Mac in the tab bar, then Scan pairing code to point this iPhone at your Mac."))
                 } header: {
                     Text("Pair over local Wi-Fi")
                 } footer: {
@@ -356,7 +356,7 @@ struct PairMacView: View {
                             icon: "laptopcomputer",
                             tint: PocketColor.statusOk,
                             title: peer.name,
-                            accessory: .value(peer.addrs.first ?? "Connected")
+                            accessory: .value(peer.addrs.first ?? String(localized: "Connected"))
                         )
                     }
                 } header: {

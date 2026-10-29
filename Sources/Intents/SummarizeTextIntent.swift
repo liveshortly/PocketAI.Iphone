@@ -18,8 +18,10 @@ struct SummarizeTextIntent: AppIntent {
                 NewConversation(title: "Siri", projectId: nil, modelId: AppModel.shared.selectedModelId)
             )
         } catch {
-            throw PocketAIIntentError("PocketAI couldn't generate a response.")
+            throw PocketAIIntentError(String(localized: "PocketAI couldn't generate a response: \(error.localizedDescription)"))
         }
+        // Keep Siri one-shots out of the visible Chats list.
+        try? core.archiveConversation(id: conversation.id, archived: true)
 
         let prompt = "Summarize the following text concisely:\n\n\(text)"
         let input = UserInput(parts: [.text(text: prompt)])
@@ -34,7 +36,7 @@ struct SummarizeTextIntent: AppIntent {
                 }
             }
         } catch {
-            throw PocketAIIntentError("PocketAI couldn't generate a response.")
+            throw PocketAIIntentError(String(localized: "PocketAI couldn't generate a response: \(error.localizedDescription)"))
         }
 
         return .result(value: summary, dialog: IntentDialog(stringLiteral: summary))
