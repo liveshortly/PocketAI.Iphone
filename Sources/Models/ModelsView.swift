@@ -14,6 +14,9 @@ struct ModelsView: View {
 
     /// Opens directly on the "On your Mac" segment (Devices → Mac capabilities).
     var startOnMac = false
+    /// True when pushed into a caller's NavigationStack, so this screen must
+    /// not create one of its own.
+    var embedded = false
 
     private enum Segment: String, CaseIterable {
         case onDevice = "On this iPhone"
@@ -46,6 +49,9 @@ struct ModelsView: View {
     @State private var peers: [Peer] = []
     @State private var remoteCatalog: [RemoteCatalogEntry] = []
     @State private var remoteError: String?
+    /// Surfaces a failed delete / remote download start — both used to fail
+    /// silently and leave the row exactly as it was.
+    @State private var actionError: String?
     /// Honest instruments: measured download throughput per model id, derived
     /// from real bytesDone deltas between polls — never a fabricated constant.
     @State private var downloadRates: [String: Int64] = [:]
@@ -66,7 +72,9 @@ struct ModelsView: View {
     }
 
     private var hasInProgressDownloads: Bool {
-        catalog.contains { $0.state == .downloading || $0.state == .paused }
+        // Includes merged installs: a non-curated download isn't in `catalog`,
+        // so the offline banner never appeared for one.
+        (catalog + installedEntries).contains { $0.state == .downloading || $0.state == .paused }
     }
 
     /// Paused but not by the user == interrupted (app killed / network drop):
@@ -101,8 +109,18 @@ struct ModelsView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
+        // Pushed into an existing stack (Mac ▸ Mac capabilities, picker ▸ Manage
+        // models), a second NavigationStack stacks two navigation bars and
+        // strands the title and search field under the back button.
+        if embedded {
+            catalogScreen
+        } else {
+            NavigationStack { catalogScreen }
+        }
+    }
+
+    private var catalogScreen: some View {
+        VStack(spacing: 0) {
                 Picker("Catalog", selection: $segment) {
                     ForEach(availableSegments, id: \.self) { Text($0.rawValue).tag($0) }
                 }
@@ -150,6 +168,9 @@ struct ModelsView: View {
             }
             .refreshable {
                 reload()
+                // A Mac paired after this tab first appeared never showed up:
+                // peers were read once in .task and the pull did not re-read.
+                peers = model.core.peers()
                 if segment == .onMac { await reloadRemote() }
             }
             .sheet(isPresented: Binding(get: { detailId != nil }, set: { if !$0 { detailId = nil } })) {
@@ -175,8 +196,12 @@ struct ModelsView: View {
             ) {
                 Button("Delete", role: .destructive) {
                     if let entry = pendingDelete {
-                        try? model.core.deleteModel(modelId: entry.manifest.id)
-                        if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
+                        do {
+                            try model.core.deleteModel(modelId: entry.manifest.id)
+                            if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
+                        } catch {
+                            actionError = "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)"
+                        }
                         reload()
                     }
                     pendingDelete = nil
@@ -187,7 +212,14 @@ struct ModelsView: View {
                     Text("Frees \(formatBytes(diskBytes(entry))).")
                 }
             }
-        }
+            .alert(
+                "Something went wrong",
+                isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })
+            ) {
+                Button("OK", role: .cancel) { actionError = nil }
+            } message: {
+                Text(actionError ?? "")
+            }
     }
 
     // MARK: - Filter row & sort
@@ -393,9 +425,13 @@ struct ModelsView: View {
                             .foregroundStyle(PocketColor.accentOnAccent)
                             .padding(.horizontal, PocketSpacing.s12)
                             .padding(.vertical, 6)
-                            .background(PocketColor.accent, in: Capsule())
+                            .background(
+                                isPrimaryActionDisabled(hero) ? PocketColor.textTertiary : PocketColor.accent,
+                                in: Capsule()
+                            )
                     }
                     .buttonStyle(.plain)
+                    .disabled(isPrimaryActionDisabled(hero))
                     .accessibilityIdentifier("model_action_button_\(hero.manifest.id)")
                 }
 
@@ -844,8 +880,10 @@ struct ModelsView: View {
                 if !downloadSamples.isEmpty { downloadSamples.removeAll() }
                 if !downloadRates.isEmpty { downloadRates.removeAll() }
             } else {
-                catalog = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: true, installedOnly: false))
-                installedEntries = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: true))
+                // Same read as reload(): the poller used to re-query with
+                // installedOnly, which dropped a non-curated (Hugging Face)
+                // download out of "On this iPhone" a tick after it started.
+                reload()
                 let now = Date()
                 for entry in catalog where entry.state == .downloading {
                     let id = entry.manifest.id
@@ -941,10 +979,19 @@ struct ModelsView: View {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         case .available, .queued, .failed:
             guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) })
-            else { return }
+            else {
+                actionError = "No saved credential for \(peer.name) — try pairing again."
+                return
+            }
             let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: peerEndpoint(for: peer), token: token))
             Task {
-                try? await client.startDownload(modelId: entry.manifest.id)
+                do {
+                    try await client.startDownload(modelId: entry.manifest.id)
+                } catch {
+                    // Without this the row came back unchanged and the tap on
+                    // "Download on Mac" looked like nothing happened.
+                    actionError = "Couldn't start that download on \(peer.name): \(error.localizedDescription)"
+                }
                 await reloadRemote()
             }
         case .downloading, .paused, .verifying:
@@ -1021,15 +1068,26 @@ struct ModelsView: View {
             guard entry.fit.verdict != .willNotFit else { break }
             try? model.core.startDownload(modelId: id)
             setUserPaused(id, false)
-        case .queued:
-            try? model.core.cancelDownload(modelId: id)
         case .installed:
             model.selectedModelId = id
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        case .verifying:
+        case .queued, .verifying:
+            // Both labels are status, not actions ("Queued", "Checking files…").
+            // Queued used to cancel the download from a button that only said
+            // "Queued"; the row's own Cancel is the way to stop it.
             break
         }
         reload()
+    }
+
+    /// A primary button whose label is a status rather than an action can't be
+    /// tapped — it reads as disabled because it is (§6.2).
+    private func isPrimaryActionDisabled(_ entry: CatalogEntry) -> Bool {
+        switch entry.state {
+        case .queued, .verifying: return true
+        case .available: return entry.fit.verdict == .willNotFit
+        default: return false
+        }
     }
 
     private func fitKind(_ verdict: FitVerdict) -> FitBadgeKind {
@@ -1176,7 +1234,16 @@ private struct ModelDetailSheet: View {
         case .verifying:
             Label("Checking files…", systemImage: "checkmark.shield").font(.pocket(.footnote))
         case .queued:
-            Label("Queued", systemImage: "clock").font(.pocket(.footnote))
+            HStack {
+                Label("Queued", systemImage: "clock").font(.pocket(.footnote))
+                Spacer()
+                // The only way to stop a queued transfer from here; the primary
+                // button below says "Queued", which is a status, not an action.
+                Button("Cancel", action: onCancel)
+                    .font(.pocket(.footnote))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(PocketColor.accent)
+            }
         case .failed(let reason):
             Text(reason == "network" ? "Download failed — check your connection." : "Download failed (\(reason)).")
                 .font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
@@ -1202,10 +1269,14 @@ private struct ModelDetailSheet: View {
         }
     }
 
-    /// Verifying can't honor a user control (§6.2): disable the primary button.
+    /// A status label is not an action (§6.2): "Checking files…" and "Queued"
+    /// can't be tapped. Cancelling a queued transfer is the Status row's job.
     private var disablePrimary: Bool {
-        if case .verifying = entry.state { return true }
-        return false
+        switch entry.state {
+        case .verifying, .queued: return true
+        case .available: return entry.fit.verdict == .willNotFit
+        default: return false
+        }
     }
 
     private var fitKind: FitBadgeKind {
