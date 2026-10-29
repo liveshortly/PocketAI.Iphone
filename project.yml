@@ -1,6 +1,11 @@
 name: PocketAI
 options:
   bundleIdPrefix: com.getpocketai
+  developmentLanguage: en
+  # Locales the app ships. Translations live in
+  # Resources/Localizable.xcstrings; shared components come localized from
+  # PocketUI's own catalog.
+  knownRegions: [en, hi, es, fr, de, ja, zh-Hans, pt-BR, Base]
 packages:
   PocketCore:
     path: ../PocketAI.Core
@@ -9,15 +14,11 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
-    sources: [Sources]
-    scheme:
-      testTargets:
-        - PocketAIUITests
-    resources:
+    sources:
+      - Sources
       - path: Resources/PrivacyInfo.xcprivacy
+      - path: Resources/Localizable.xcstrings
     dependencies:
-      - target: ShareExtension
-        embed: true
       - package: PocketCore
         product: PocketKit
       - package: PocketCore
@@ -26,16 +27,34 @@ targets:
         product: PocketImageGen
       - package: PocketCore
         product: PocketMLX
+      # Imported by AppModel, SettingsView, HomeView, ProjectDetailView and
+      # ChatsListView. It was missing here and the build only survived on a
+      # stale .xcodeproj that still carried it; regenerating dropped it.
+      - package: PocketCore
+        product: PocketLiveShortly
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGN_ENTITLEMENTS: Entitlements/PocketAI.entitlements
+        CODE_SIGNING_ALLOWED: YES
+        DEVELOPMENT_TEAM: 4RK6YA795V
+        CODE_SIGN_ENTITLEMENTS: Entitlements/PocketAI-dev.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_EMIT_LOC_STRINGS: YES
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES
     info:
       path: Sources/Info.plist
       properties:
         UILaunchScreen: {}
+        CFBundleLocalizations: [en, hi, es, fr, de, ja, zh-Hans, pt-BR]
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "8"
+        # Standard/exempt crypto only (TLS, Ed25519, tokens) — auto-clears the
+        # TestFlight Export Compliance prompt (incl. France) so no manual step.
+        ITSAppUsesNonExemptEncryption: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
         NSLocalNetworkUsageDescription: "PocketAI finds and connects to your Mac on this network."
         NSBonjourServices:
           - _pocketai._tcp
@@ -48,46 +67,3 @@ targets:
           - CFBundleURLName: app.getpocketai.pocketai
             CFBundleURLSchemes:
               - pocketai
-
-  ShareExtension:
-    type: app-extension
-    platform: iOS
-    deploymentTarget: "18.0"
-    sources:
-      - path: ShareExtension
-      - path: Sources/SharedInbox/SharedInbox.swift
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app.ShareExtension
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGN_ENTITLEMENTS: Entitlements/ShareExtension.entitlements
-    info:
-      path: ShareExtension/Info.plist
-      properties:
-        CFBundleDisplayName: Add to PocketAI
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.share-services
-          NSExtensionPrincipalClass: ShareViewController
-          NSExtensionAttributes:
-            NSExtensionActivationRule:
-              NSExtensionActivationSupportsText: true
-              NSExtensionActivationSupportsWebURLWithMaxCount: 1
-              NSExtensionActivationSupportsImageWithMaxCount: 1
-              NSExtensionActivationSupportsFileWithMaxCount: 1
-
-  PocketAIUITests:
-    type: bundle.ui-testing
-    platform: iOS
-    deploymentTarget: "18.0"
-    sources: [UITests]
-    dependencies:
-      - target: PocketAI
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app.uitests
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGNING_ALLOWED: NO
-        TEST_TARGET_NAME: PocketAI
-
-
