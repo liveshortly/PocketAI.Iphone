@@ -15,6 +15,8 @@ struct DevicesView: View {
     /// VPN / mesh network (Tailscale MagicDNS), where Bonjour never answers.
     @State private var manualAddress = ""
     @State private var manualAddressError: String?
+    /// A failed revoke left the Mac on screen with nothing said about it.
+    @State private var revokeError: String?
     /// Result of the last reachability probe: nil before one has run, and
     /// `.some(nil)` once one has run and failed.
     @State private var lastRTT: TimeInterval??
@@ -65,6 +67,14 @@ struct DevicesView: View {
                 Button("Cancel", role: .cancel) { peerToRevoke = nil }
             } message: {
                 Text("You can pair again anytime by scanning the code on your Mac.")
+            }
+            .alert(
+                "Something went wrong",
+                isPresented: Binding(get: { revokeError != nil }, set: { if !$0 { revokeError = nil } })
+            ) {
+                Button("OK", role: .cancel) { revokeError = nil }
+            } message: {
+                Text(revokeError ?? "")
             }
         }
     }
@@ -374,7 +384,7 @@ struct DevicesView: View {
 
             Section("Mac Capabilities") {
                 NavigationLink {
-                    ModelsView(startOnMac: true)
+                    ModelsView(startOnMac: true, embedded: true)
                 } label: {
                     SettingsRow(icon: "cpu", title: "Browse models on this Mac…", accessory: .none)
                 }
@@ -460,7 +470,17 @@ struct DevicesView: View {
     }
 
     private func revoke(_ peer: Peer) {
-        try? model.core.revokePeer(id: peer.id)
+        do {
+            try model.core.revokePeer(id: peer.id)
+            // A default model that lived on this Mac is gone with it; leaving
+            // the id selected made Home report "that Mac isn't available" and
+            // sent every new chat at a route that can no longer work.
+            if RemoteEngine.peerId(from: model.selectedModelId ?? "") == peer.id {
+                model.selectedModelId = nil
+            }
+        } catch {
+            revokeError = "Couldn't disconnect \(peer.name): \(error.localizedDescription)"
+        }
         reload()
     }
 }
@@ -585,7 +605,10 @@ private struct PairingFlowView: View {
                         .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.chip))
                         .padding(.horizontal, PocketSpacing.gutterIphone)
 
-                        Button("Choose a Mac model") {
+                        // Named for what it does: it closes the sheet. It never
+                        // opened a model picker, and the paired screen behind it
+                        // carries "Browse models on this Mac…".
+                        Button("Done") {
                             dismiss()
                         }
                         .buttonStyle(.borderedProminent)

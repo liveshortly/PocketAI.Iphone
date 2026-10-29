@@ -95,7 +95,7 @@ struct ModelPickerView: View {
             }
 
             Section {
-                NavigationLink("Manage models") { ModelsView() }
+                NavigationLink("Manage models") { ModelsView(embedded: true) }
             } footer: {
                 Text(scope.footer)
                     .font(.pocket(.caption))
