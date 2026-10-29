@@ -1122,6 +1122,12 @@ private struct ModelDetailSheet: View {
     var downloadBytesPerSecond: Int64 = 0
     var isOffline = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
+    /// The model's last benchmark (read from the store when the sheet opens,
+    /// replaced by a fresh run), whether one is running, and why one failed.
+    @State private var benchmark: Benchmark?
+    @State private var benchmarking = false
+    @State private var benchmarkError: String?
 
     private var realDiskBytes: UInt64 {
         entry.fit.diskBytes != 0 ? entry.fit.diskBytes : entry.manifest.estRuntimeBytes
@@ -1166,6 +1172,12 @@ private struct ModelDetailSheet: View {
                         LabeledContent("Speed", value: "\(Int(speed)) tok/s (measured)")
                     } else if let speed = entry.fit.estTokensPerSec {
                         LabeledContent("Speed", value: "~\(Int(speed)) tok/s (est.)")
+                    }
+                }
+
+                if entry.state == .installed {
+                    Section("Performance") {
+                        benchmarkRows
                     }
                 }
 
@@ -1224,8 +1236,68 @@ private struct ModelDetailSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .task(id: entry.manifest.id) {
+                // A local read, not a run: shows a previous result rather than
+                // making the user re-measure to see a number they already have.
+                if entry.state == .installed, benchmark == nil {
+                    benchmark = model.core.storedBenchmark(id: entry.manifest.id)
+                }
+            }
+            .alert(
+                "Benchmark failed",
+                isPresented: Binding(get: { benchmarkError != nil }, set: { if !$0 { benchmarkError = nil } })
+            ) {
+                Button("OK", role: .cancel) { benchmarkError = nil }
+            } message: {
+                Text(benchmarkError ?? "")
+            }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    /// What this model actually did on this iPhone, plus the control to measure
+    /// it. A run generates real tokens for a few seconds, so the row says so
+    /// while it happens instead of sitting there looking tappable.
+    @ViewBuilder
+    private var benchmarkRows: some View {
+        if let benchmark {
+            LabeledContent("Throughput", value: String(format: "%.1f tok/s", benchmark.tps))
+            LabeledContent("Time to First Token", value: "\(benchmark.ttftMs) ms")
+            if benchmark.peakBytes > 0 {
+                LabeledContent("Peak Memory", value: formatBytes(benchmark.peakBytes))
+            }
+        }
+        if benchmarking {
+            HStack(spacing: PocketSpacing.s8) {
+                ProgressView()
+                Text("Benchmarking… generating tokens on this iPhone")
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textSecondary)
+            }
+        } else {
+            Button(benchmark == nil ? "Benchmark This Model" : "Run Again") { runBenchmark() }
+                .tint(PocketColor.accent)
+        }
+    }
+
+    /// Measures the model for real: seconds of inference behind a blocking FFI
+    /// call (D21), so it runs off the main actor rather than freezing the sheet.
+    private func runBenchmark() {
+        guard !benchmarking else { return }
+        benchmarking = true
+        benchmarkError = nil
+        let core = model.core
+        let id = entry.manifest.id
+        Task {
+            let outcome = await Task.detached { () -> Result<Benchmark, Error> in
+                do { return .success(try core.benchmarkModel(id: id)) } catch { return .failure(error) }
+            }.value
+            switch outcome {
+            case .success(let measured): benchmark = measured
+            case .failure(let error): benchmarkError = error.localizedDescription
+            }
+            benchmarking = false
+        }
     }
 
     @ViewBuilder
