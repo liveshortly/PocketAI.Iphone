@@ -139,21 +139,27 @@ struct SourceSheet: View {
             }
             .background(PocketColor.bgCanvas)
             .task {
-                loadSources()
+                await loadSources()
             }
         }
     }
 
-    private func loadSources() {
+    /// Off the main actor like every other search in the app: run on main, the
+    /// embedding search froze the sheet with its own spinner on screen.
+    private func loadSources() async {
         isLoading = true
-        let docs = core.listDocuments(projectId: projectId)
-        var map: [String: Document] = [:]
-        for doc in docs {
-            map[doc.id] = doc
-        }
-        documentsById = map
-
-        hits = core.searchProject(projectId: projectId, query: query, k: 5)
+        let core = self.core
+        let projectId = self.projectId
+        let query = self.query
+        let loaded = await Task.detached(priority: .userInitiated) { () -> ([String: Document], [ChunkHit]) in
+            var map: [String: Document] = [:]
+            for doc in core.listDocuments(projectId: projectId) {
+                map[doc.id] = doc
+            }
+            return (map, core.searchProject(projectId: projectId, query: query, k: 5))
+        }.value
+        documentsById = loaded.0
+        hits = loaded.1
         isLoading = false
     }
 }
