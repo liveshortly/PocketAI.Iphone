@@ -37,6 +37,9 @@ struct ChatsListView: View {
     @State private var editMode: EditMode = .inactive
     @State private var selectedIds = Set<String>()
     @State private var showBulkDeleteConfirm = false
+    /// Surfaces a failed create/rename/delete — a store write that throws used
+    /// to leave the tap looking ignored.
+    @State private var actionError: String?
     // Row glyphs grow with the labels beside them; a fixed 36pt disc next to
     // accessibility-sized text reads as a bug.
     @ScaledMetric(relativeTo: .headline) private var rowGlyphSize: CGFloat = 36
@@ -211,8 +214,6 @@ struct ChatsListView: View {
             }
             .task {
                 reload()
-                installedModels = model.core.catalog(
-                    filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: true))
                 // Open a conversation requested from Home / an App Intent (F26).
                 if let id = model.nav.consumePendingConversation() { path.append(.chat(id)) }
                 // Start a new chat with a suggested first message (onboarding).
@@ -279,7 +280,17 @@ struct ChatsListView: View {
             )) {
                 TextField("Project name", text: $renameProjectName)
                 Button("Cancel", role: .cancel) { renamingProject = nil }
+                // Save used to accept an empty name and then do nothing.
                 Button("Save") { renameCurrentProject() }
+                    .disabled(renameProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .alert(
+                "Something went wrong",
+                isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })
+            ) {
+                Button("OK", role: .cancel) { actionError = nil }
+            } message: {
+                Text(actionError ?? "")
             }
         }
     }
@@ -324,10 +335,16 @@ struct ChatsListView: View {
             isPresented: $showBulkDeleteConfirm
         ) {
             Button("Delete", role: .destructive) {
-                for id in selectedIds { try? model.core.deleteConversation(id: id) }
+                var failed = 0
+                for id in selectedIds {
+                    do { try model.core.deleteConversation(id: id) } catch { failed += 1 }
+                }
                 selectedIds = []
                 editMode = .inactive
                 reload()
+                if failed > 0 {
+                    actionError = "\(failed) chat\(failed == 1 ? "" : "s") couldn't be deleted."
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -618,6 +635,10 @@ struct ChatsListView: View {
     // MARK: - Actions & Data Loading
 
     private func reload() {
+        // Re-read here, not once in .task: a model downloaded while this tab
+        // stayed alive was missing from the "Local model" menu until relaunch.
+        installedModels = model.core.catalog(
+            filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: true))
         // ponytail: flat limit 1000, add real pagination if anyone ever has more chats
         conversations = model.core.conversations(
             query: ConversationQuery(search: searchText.isEmpty ? nil : searchText, archived: false, limit: 1000, offset: 0)
@@ -654,40 +675,67 @@ struct ChatsListView: View {
     }
 
     private func newChat(firstMessage: String?, modelId: String? = nil) {
-        guard let conversation = try? model.core.createConversation(NewConversation(title: nil, projectId: nil, modelId: modelId ?? model.selectedModelId)) else { return }
-        reload()
-        pendingInitial = firstMessage.map { (conversation.id, $0) }
-        path.append(.chat(conversation.id))
+        // New chat is the primary action on this screen: a failure has to say
+        // so, never leave the tap looking ignored.
+        do {
+            let conversation = try model.core.createConversation(
+                NewConversation(title: nil, projectId: nil, modelId: modelId ?? model.selectedModelId))
+            reload()
+            pendingInitial = firstMessage.map { (conversation.id, $0) }
+            path.append(.chat(conversation.id))
+        } catch {
+            actionError = "Couldn't start a new chat: \(error.localizedDescription)"
+        }
     }
 
     private func createProject(name: String, instructions: String?) {
-        guard let project = try? model.core.createProject(name: name, instructions: instructions) else { return }
-        reload()
-        path.append(.project(project.id))
+        do {
+            let project = try model.core.createProject(name: name, instructions: instructions)
+            reload()
+            path.append(.project(project.id))
+        } catch {
+            actionError = "Couldn't create the project: \(error.localizedDescription)"
+        }
     }
 
     private func renameCurrentProject() {
         guard let project = renamingProject else { return }
         let trimmed = renameProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
-            try? model.core.renameProject(id: project.id, name: trimmed)
-            reload()
+            do {
+                try model.core.renameProject(id: project.id, name: trimmed)
+                reload()
+            } catch {
+                actionError = "Couldn't rename “\(project.name)”: \(error.localizedDescription)"
+            }
         }
         renamingProject = nil
     }
 
     private func deleteProject(_ project: Project) {
-        try? model.core.deleteProject(id: project.id)
+        do {
+            try model.core.deleteProject(id: project.id)
+        } catch {
+            actionError = "Couldn't delete “\(project.name)”: \(error.localizedDescription)"
+        }
         reload()
     }
 
     private func delete(_ conversation: ConversationSummary) {
-        try? model.core.deleteConversation(id: conversation.id)
+        do {
+            try model.core.deleteConversation(id: conversation.id)
+        } catch {
+            actionError = "Couldn't delete that chat: \(error.localizedDescription)"
+        }
         reload()
     }
 
     private func archive(_ conversation: ConversationSummary) {
-        try? model.core.archiveConversation(id: conversation.id, archived: true)
+        do {
+            try model.core.archiveConversation(id: conversation.id, archived: true)
+        } catch {
+            actionError = "Couldn't archive that chat: \(error.localizedDescription)"
+        }
         reload()
     }
 

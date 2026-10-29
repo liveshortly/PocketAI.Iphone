@@ -83,11 +83,16 @@ struct ProjectDetailView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") {
                 let trimmed = newProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    try? model.core.renameProject(id: projectId, name: trimmed)
-                    reload()
+                guard !trimmed.isEmpty else { return }
+                do {
+                    try model.core.renameProject(id: projectId, name: trimmed)
+                } catch {
+                    errorMessage = "Couldn't rename this project: \(error.localizedDescription)"
+                    showingErrorAlert = true
                 }
+                reload()
             }
+            .disabled(newProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .sheet(isPresented: $editingInstructions) {
             NavigationStack {
@@ -124,7 +129,7 @@ struct ProjectDetailView: View {
         ) { result in
             handleFileImport(result)
         }
-        .alert("Document Import Error", isPresented: $showingErrorAlert) {
+        .alert("Something went wrong", isPresented: $showingErrorAlert) {
             Button("OK", role: .cancel) {}
         } message: {
             if let errorMessage {
@@ -544,14 +549,25 @@ struct ProjectDetailView: View {
     }
 
     private func newChatInProject() {
-        guard let conversation = try? model.core.createConversation(
-            NewConversation(title: nil, projectId: projectId, modelId: model.selectedModelId)
-        ) else { return }
-        activeConversationId = conversation.id
+        do {
+            let conversation = try model.core.createConversation(
+                NewConversation(title: nil, projectId: projectId, modelId: model.selectedModelId)
+            )
+            activeConversationId = conversation.id
+        } catch {
+            // The screen's primary action: say why instead of ignoring the tap.
+            errorMessage = "Couldn't start a chat in this project: \(error.localizedDescription)"
+            showingErrorAlert = true
+        }
     }
 
     private func deleteDocument(_ doc: Document) {
-        try? model.core.deleteDocument(id: doc.id)
+        do {
+            try model.core.deleteDocument(id: doc.id)
+        } catch {
+            errorMessage = "Couldn't delete “\(doc.name)”: \(error.localizedDescription)"
+            showingErrorAlert = true
+        }
         reload()
     }
 

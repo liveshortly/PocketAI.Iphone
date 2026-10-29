@@ -465,6 +465,9 @@ private struct OnboardingDownloadingView: View {
     let onReady: () -> Void
 
     @State private var entry: CatalogEntry?
+    /// A Retry that can't start (no disk, offline mode) has to say so — the
+    /// state stays `.failed`, so the button otherwise looks dead.
+    @State private var retryError: String?
 
     private var isPaused: Bool {
         if case .paused = entry?.state { return true }
@@ -538,12 +541,26 @@ private struct OnboardingDownloadingView: View {
                         .foregroundStyle(PocketColor.statusBad)
                         .multilineTextAlignment(.center)
                     HStack(spacing: PocketSpacing.s16) {
-                        Button("Retry") { try? core.startDownload(modelId: modelId) }
-                            .buttonStyle(.borderedProminent)
-                            .tint(PocketColor.accent)
+                        Button("Retry") {
+                            retryError = nil
+                            do {
+                                try core.startDownload(modelId: modelId)
+                            } catch {
+                                retryError = error.localizedDescription
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(PocketColor.accent)
                         Button("Choose another model") { onBack() }
                             .buttonStyle(.bordered)
                             .tint(PocketColor.accent)
+                    }
+                    if let retryError {
+                        Text(retryError)
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(.horizontal, PocketSpacing.gutterIphone)

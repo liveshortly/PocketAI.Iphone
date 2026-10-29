@@ -23,6 +23,9 @@ struct HomeView: View {
     @State private var showingPicker = false
     @State private var lsNewSession = false
     @State private var showAllInstalled = false
+    /// Surfaces a failed create/pause/cancel — these used to leave the tap
+    /// looking ignored.
+    @State private var actionError: String?
 
     private var refreshKey: String {
         "\(model.nav.selectedTab)|\(model.selectedModelId ?? "none")"
@@ -31,10 +34,14 @@ struct HomeView: View {
     /// Creates a conversation bound to `modelId` (default: the global default)
     /// and routes the Chats tab to open the exact new conversation (F26).
     private func startChat(modelId: String?) {
-        guard let convo = try? model.core.createConversation(
-            NewConversation(title: nil, projectId: nil, modelId: modelId ?? model.selectedModelId)
-        ) else { return }
-        model.nav.openConversation(id: convo.id)
+        do {
+            let convo = try model.core.createConversation(
+                NewConversation(title: nil, projectId: nil, modelId: modelId ?? model.selectedModelId)
+            )
+            model.nav.openConversation(id: convo.id)
+        } catch {
+            actionError = "Couldn't start a new chat: \(error.localizedDescription)"
+        }
     }
 
     var body: some View {
@@ -64,6 +71,14 @@ struct HomeView: View {
                     }
                     .environment(model)
                 }
+            }
+            .alert(
+                "Something went wrong",
+                isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })
+            ) {
+                Button("OK", role: .cancel) { actionError = nil }
+            } message: {
+                Text(actionError ?? "")
             }
         }
     }
@@ -226,15 +241,23 @@ struct HomeView: View {
                     HomeDownloadRow(
                         download: d,
                         onPauseResume: {
-                            switch d.phase {
-                            case .downloading: try? model.core.pauseDownload(modelId: d.id)
-                            case .paused: try? model.core.resumeDownload(modelId: d.id)
-                            case .queued, .verifying: break
+                            do {
+                                switch d.phase {
+                                case .downloading: try model.core.pauseDownload(modelId: d.id)
+                                case .paused: try model.core.resumeDownload(modelId: d.id)
+                                case .queued, .verifying: break
+                                }
+                            } catch {
+                                actionError = "Couldn't change that download: \(error.localizedDescription)"
                             }
                             Task { await reload() }
                         },
                         onCancel: {
-                            try? model.core.cancelDownload(modelId: d.id)
+                            do {
+                                try model.core.cancelDownload(modelId: d.id)
+                            } catch {
+                                actionError = "Couldn't cancel that download: \(error.localizedDescription)"
+                            }
                             Task { await reload() }
                         }
                     )

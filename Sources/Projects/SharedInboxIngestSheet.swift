@@ -197,11 +197,17 @@ public struct SharedInboxIngestSheet: View {
             }
             .sheet(isPresented: $viewModel.showingNewProjectSheet) {
                 NewProjectSheet { name, instructions in
-                    if let newProj = try? viewModel.core.createProject(name: name, instructions: instructions) {
+                    do {
+                        let newProj = try viewModel.core.createProject(name: name, instructions: instructions)
                         viewModel.reload()
                         viewModel.ingestIntoProject(id: newProj.id, projectName: newProj.name) {
                             onDismiss()
                         }
+                    } catch {
+                        // Reuses the warnings card: a failed create just closed
+                        // the New Project sheet with nothing imported and
+                        // nothing said.
+                        viewModel.skippedWarnings = ["Couldn't create “\(name)”: \(error.localizedDescription)"]
                     }
                 }
             }
