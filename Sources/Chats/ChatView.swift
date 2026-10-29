@@ -181,8 +181,14 @@ struct ChatView: View {
     /// Commits a per-chat model choice (U8): persist to the conversation and
     /// refresh header/composer. Never changes the global default.
     private func bindModel(_ id: String) {
-        try? model.core.setConversationModel(id: conversationId, modelId: id)
-        conversationModelId = id
+        do {
+            try model.core.setConversationModel(id: conversationId, modelId: id)
+            conversationModelId = id
+        } catch {
+            // Don't let the header name a model this conversation isn't
+            // actually bound to — the next reply would come from the old one.
+            errorText = "Couldn't switch models: \(error.localizedDescription)"
+        }
     }
 
     /// Resolves the *specific* paired Mac encoded in a `mac:<peer>/<model>` id
@@ -242,7 +248,10 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 VStack(spacing: 0) {
                     ScrollView {
-                        if messages.isEmpty {
+                        // The error card lives in the message list, so an empty
+                        // chat has to fall through to it — otherwise a failed
+                        // rename/attach/delete reports to nobody.
+                        if messages.isEmpty && errorText == nil {
                             emptyChatView
                         } else {
                             messageList
@@ -462,10 +471,20 @@ struct ChatView: View {
         .alert("Rename chat", isPresented: $renamingTitle) {
             TextField("Title", text: $newTitle)
             Button("Cancel", role: .cancel) {}
+            // Saving reports like every other transition in this file: an empty
+            // title can't be committed, and a failure says so instead of
+            // showing a new name the store never took.
             Button("Save") {
-                try? model.core.renameConversation(id: conversationId, title: newTitle)
-                title = newTitle
+                let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                do {
+                    try model.core.renameConversation(id: conversationId, title: trimmed)
+                    title = trimmed
+                } catch {
+                    errorText = "Couldn't rename this chat: \(error.localizedDescription)"
+                }
             }
+            .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .alert("Voice Input Permission Required", isPresented: Binding(
             get: {
@@ -1149,7 +1168,29 @@ struct ChatView: View {
         streamTask = nil
         activeStreamId = UUID() // orphan the old stream's cleanup
         isGenerating = false
+        // The orphaned stream never cleans up, so the placeholder has to be
+        // settled here: left `.streaming`, MessageView keeps a "Thinking…"
+        // spinner running forever on a reply that was stopped.
+        settleStreamingPlaceholder()
         speechPlayback.stop()
+    }
+
+    /// Marks the in-flight placeholder finished (or drops it when nothing was
+    /// generated), so no bubble claims to still be working after a Stop.
+    private func settleStreamingPlaceholder() {
+        guard let index = messages.firstIndex(where: { $0.id == "streaming-placeholder" }) else { return }
+        let partial = textForMessage(messages[index])
+        let reasoning = messages[index].reasoning
+        if partial.isEmpty && (reasoning ?? "").isEmpty {
+            messages.remove(at: index)
+        } else {
+            messages[index] = Message(
+                id: "streaming-placeholder", conversationId: conversationId, role: "assistant",
+                parts: [.text(text: partial)], reasoning: reasoning,
+                stats: nil, modelId: nil,
+                createdAt: messages[index].createdAt, status: .done
+            )
+        }
     }
 
     private var speakingAffordance: some View {
