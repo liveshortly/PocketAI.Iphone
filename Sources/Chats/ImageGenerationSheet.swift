@@ -66,7 +66,7 @@ final class ImageGenSheetViewModel {
             guard let self else { return }
 
             // ponytail: needs an installed-image-model-path accessor on CoreClient
-            guard let modelDir = self.resolveInstalledModelDirectory() else {
+            guard let installed = self.resolveInstalledModelDirectory() else {
                 self.state = .error("No image model installed — install one in Models")
                 return
             }
@@ -75,7 +75,7 @@ final class ImageGenSheetViewModel {
             self.generator = gen
 
             do {
-                try await gen.load(modelDirectory: modelDir)
+                try await gen.load(modelDirectory: installed.url, modelId: installed.modelId)
             } catch {
                 if Task.isCancelled { return }
                 self.state = .error("No image model installed — install one in Models")
@@ -170,7 +170,10 @@ final class ImageGenSheetViewModel {
         }
     }
 
-    private func resolveInstalledModelDirectory() -> URL? {
+    /// Returns the directory *and* the id that chose it. The loader needs the
+    /// id to pick the right Stable Diffusion preset, and resolving both here
+    /// keeps them from disagreeing.
+    private func resolveInstalledModelDirectory() -> (url: URL, modelId: String)? {
         // ponytail: needs an installed-image-model-path accessor on CoreClient
         let catalog = core.catalog(filter: CatalogFilter(modality: .image, curatedOnly: false, installedOnly: true))
         guard let entry = catalog.first(where: { $0.state == .installed }) else {
@@ -180,7 +183,7 @@ final class ImageGenSheetViewModel {
            let plan = try? liveCore.rawCore.planDownload(id: entry.manifest.id) {
             let candidate = URL(fileURLWithPath: plan.destDir)
             if FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
+                return (candidate, entry.manifest.id)
             }
         }
         return nil

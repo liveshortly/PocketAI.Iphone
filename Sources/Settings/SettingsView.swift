@@ -13,10 +13,20 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
     @AppStorage("app.getpocketai.diagnosticsEnabled") private var diagnosticsEnabled = false
-    @State private var offline = false
     @State private var egressCount = 0
     @State private var defaultModelName = "Choose"
     @State private var storageTotal: UInt64 = 0
+
+    /// Reads and writes the one shared flag. Settings and Network Proof both
+    /// offer this switch; when each kept its own copy they disagreed.
+    private var offlineBinding: Binding<Bool> {
+        Binding(get: { model.offlineMode.isOn }, set: { on in
+            model.offlineMode.set(on)
+            // Logged here rather than in one screen's onChange, so a change
+            // made from Network Proof is recorded too.
+            DiagnosticsLog.shared.append("Offline mode set to \(on)")
+        })
+    }
 
     /// Session scope is honest: Core's egress log is in-memory and resets each
     /// launch, so we label it "this session", never a false "today" zero (F19).
@@ -79,12 +89,12 @@ struct SettingsView: View {
                     SettingsRow(
                         icon: "airplane",
                         title: "Offline mode",
-                        accessory: .toggle($offline)
+                        accessory: .toggle(offlineBinding)
                     )
                     .accessibilityIdentifier("settings_offline_row")
 
                     NavigationLink {
-                        NetworkProofView(offline: $offline)
+                        NetworkProofView(offline: offlineBinding)
                     } label: {
                         SettingsRow(icon: "checkmark.shield.fill", title: "Network Proof", accessory: .value("\(egressCount) this session"))
                     }
@@ -148,15 +158,10 @@ struct SettingsView: View {
             // can be deleted) or Network Proof left these rows showing the
             // numbers from the first visit.
             .onAppear {
-                offline = model.core.isOffline()
                 egressCount = model.core.egressLog(limit: Self.egressScopeLimit).count
                 refreshModelsInfo()
             }
             .onChange(of: model.selectedModelId) { refreshModelsInfo() }
-            .onChange(of: offline) { _, newValue in
-                model.core.setOfflineMode(on: newValue)
-                DiagnosticsLog.shared.append("Settings: offline mode set to \(newValue)")
-            }
             .onChange(of: diagnosticsEnabled) { _, newValue in
                 DiagnosticsLog.shared.append("Settings: diagnostics sharing set to \(newValue)")
             }
