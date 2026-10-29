@@ -16,6 +16,8 @@ struct StorageUsedView: View {
     @Environment(AppModel.self) private var model
     @State private var installed: [CatalogEntry] = []
     @State private var pendingDelete: CatalogEntry?
+    /// A delete that throws used to leave the row in place with no explanation.
+    @State private var deleteError: String?
 
     private func diskBytes(_ entry: CatalogEntry) -> UInt64 {
         entry.fit.diskBytes != 0 ? entry.fit.diskBytes : entry.manifest.estRuntimeBytes
@@ -83,8 +85,12 @@ struct StorageUsedView: View {
         ) {
             Button("Delete", role: .destructive) {
                 if let entry = pendingDelete {
-                    try? model.core.deleteModel(modelId: entry.manifest.id)
-                    if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
+                    do {
+                        try model.core.deleteModel(modelId: entry.manifest.id)
+                        if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
+                    } catch {
+                        deleteError = "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)"
+                    }
                     reload()
                 }
                 pendingDelete = nil
@@ -94,6 +100,14 @@ struct StorageUsedView: View {
             if let entry = pendingDelete {
                 Text("Frees \(formatBytes(diskBytes(entry))).")
             }
+        }
+        .alert(
+            "Something went wrong",
+            isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })
+        ) {
+            Button("OK", role: .cancel) { deleteError = nil }
+        } message: {
+            Text(deleteError ?? "")
         }
     }
 
@@ -302,6 +316,9 @@ struct TextToSpeechVoiceView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Text-to-speech voice")
         .navigationBarTitleDisplayMode(.inline)
+        // The sample kept talking after you left the screen, and the only
+        // control that could stop it was back here.
+        .onDisappear { preview.stopSpeaking(at: .immediate) }
     }
 
     private func speak(_ voice: AVSpeechSynthesisVoice) {

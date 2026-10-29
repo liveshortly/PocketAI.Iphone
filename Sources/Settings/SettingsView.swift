@@ -144,7 +144,10 @@ struct SettingsView: View {
             .background(PocketColor.bgCanvas)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
-            .task {
+            // onAppear, not task: coming back from Storage used (where a model
+            // can be deleted) or Network Proof left these rows showing the
+            // numbers from the first visit.
+            .onAppear {
                 offline = model.core.isOffline()
                 egressCount = model.core.egressLog(limit: Self.egressScopeLimit).count
                 refreshModelsInfo()
