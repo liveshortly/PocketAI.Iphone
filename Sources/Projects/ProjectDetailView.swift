@@ -111,12 +111,19 @@ struct ProjectDetailView: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") {
-                            // Note: FFI currently exposes renameProject; instructions update is staged in view state.
-                            if var p = project {
-                                p.instructions = editableInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : editableInstructions
-                                project = p
+                            guard let id = project?.id else { return }
+                            do {
+                                try model.core.setProjectInstructions(id: id, instructions: editableInstructions)
+                                reload()
+                                editingInstructions = false
+                            } catch {
+                                // Staying open with the text intact beats
+                                // closing on a save that did not happen —
+                                // this used to only ever update the copy on
+                                // screen, so the model never saw the
+                                // instructions it was meant to follow.
+                                errorMessage = error.localizedDescription
                             }
-                            editingInstructions = false
                         }
                     }
                 }
