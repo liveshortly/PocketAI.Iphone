@@ -19,7 +19,10 @@ final class ImageGenSheetViewModel {
 
     var prompt: String
     var size: Int = 512
+    /// Seeded from the installed model's own preset. A constant here is wrong
+    /// the moment the model is not SDXL-Turbo: a full-schedule model wants 50.
     var steps: Int = 2
+    var maxSteps: Int = 4
     var state: State = .idle
     var previewImage: UIImage?
     var finalImage: UIImage?
@@ -43,6 +46,17 @@ final class ImageGenSheetViewModel {
             return true
         case .idle, .completed, .error:
             return false
+        }
+    }
+
+    /// Reads the installed model's tuned schedule. Silent on failure — the
+    /// Turbo defaults stay, and the generate path reports a missing model.
+    func adoptInstalledModelDefaults() {
+        guard let installed = resolveInstalledModelDirectory() else { return }
+        if let preset = try? PocketImageGenerator.defaultSteps(forModelId: installed.modelId),
+           let ceiling = try? PocketImageGenerator.maxSteps(forModelId: installed.modelId) {
+            steps = preset
+            maxSteps = ceiling
         }
     }
 
@@ -244,6 +258,7 @@ struct ImageGenerationSheet: View {
                 .padding(.vertical, PocketSpacing.s16)
             }
             .background(PocketColor.bgCanvas)
+            .task { viewModel.adoptInstalledModelDefaults() }
             .navigationTitle("Generate Image")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -337,7 +352,7 @@ struct ImageGenerationSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Stepper(value: $viewModel.steps, in: 1...4) {
+                Stepper(value: $viewModel.steps, in: 1...viewModel.maxSteps) {
                     Text("\(viewModel.steps)")
                         .font(.pocket(.body))
                         .foregroundStyle(PocketColor.textPrimary)
