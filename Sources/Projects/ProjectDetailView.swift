@@ -32,6 +32,10 @@ struct ProjectDetailView: View {
     @State private var isIndexing = false
     @State private var indexingFilename = ""
     @State private var justAddedDocName: String?
+    /// Set by both delete affordances; cleared by the confirmation alert. A
+    /// document costs a text-extraction and embedding pass to rebuild, so the
+    /// hairline trash icon does not get to spend it on one stray tap.
+    @State private var pendingDocDelete: Document?
     @State private var errorMessage: String?
     @State private var showingErrorAlert = false
 
@@ -135,6 +139,20 @@ struct ProjectDetailView: View {
             allowsMultipleSelection: false
         ) { result in
             handleFileImport(result)
+        }
+        .alert(
+            "Delete “\(pendingDocDelete?.name ?? "document")”?",
+            isPresented: Binding(
+                get: { pendingDocDelete != nil },
+                set: { if !$0 { pendingDocDelete = nil } })
+        ) {
+            Button("Delete", role: .destructive) {
+                if let doc = pendingDocDelete { deleteDocument(doc) }
+                pendingDocDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDocDelete = nil }
+        } message: {
+            Text("This removes it from the project. Adding it back re-extracts and re-indexes it.")
         }
         .alert("Something went wrong", isPresented: $showingErrorAlert) {
             Button("OK", role: .cancel) {}
@@ -491,7 +509,7 @@ struct ProjectDetailView: View {
                 .background(PocketColor.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
 
             Button(role: .destructive) {
-                deleteDocument(doc)
+                pendingDocDelete = doc
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 14))
@@ -506,7 +524,7 @@ struct ProjectDetailView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(PocketColor.lineHairline))
         .contextMenu {
             Button("Delete", role: .destructive) {
-                deleteDocument(doc)
+                pendingDocDelete = doc
             }
         }
         .accessibilityElement(children: .combine)
