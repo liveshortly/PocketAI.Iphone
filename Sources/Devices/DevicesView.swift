@@ -15,6 +15,10 @@ struct DevicesView: View {
     /// VPN / mesh network (Tailscale MagicDNS), where Bonjour never answers.
     @State private var manualAddress = ""
     @State private var manualAddressError: String?
+    /// Result of the last reachability probe: nil before one has run, and
+    /// `.some(nil)` once one has run and failed.
+    @State private var lastRTT: TimeInterval??
+    @State private var isProbing = false
     /// Whether we've already explained + triggered the Local Network prompt once.
     @AppStorage("perm.primedPairing") private var primedPairing = false
 
@@ -283,6 +287,62 @@ struct DevicesView: View {
             }
 
             Section {
+                let route = PeerAddressBook.shared.route(forHostId: peer.name)
+                HStack(alignment: .top) {
+                    Text("Route")
+                        .font(.pocket(.footnote))
+                        .foregroundStyle(PocketColor.textSecondary)
+                    Spacer(minLength: PocketSpacing.s8)
+                    VStack(alignment: .trailing, spacing: PocketSpacing.s4) {
+                        Text(route.title)
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textPrimary)
+                        if let addr = route.address {
+                            Text("\(addr.host):\(String(addr.port))")
+                                .font(.pocket(.mono))
+                                .foregroundStyle(PocketColor.textTertiary)
+                        }
+                    }
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Text(route.detail)
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let probe = lastRTT {
+                    HStack {
+                        Circle()
+                            .fill(probe == nil ? PocketColor.statusBad : PocketColor.statusOk)
+                            .frame(width: 8, height: 8)
+                        Text(probe.map { "Responded in \(Int($0 * 1000)) ms" } ?? "No answer from this Mac")
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                // Recovers a wedged link without un-pairing: the old
+                // "Disconnect" was a revoke, so a hung connection could only
+                // be escaped by scanning a QR code again.
+                Button {
+                    reconnect(peer)
+                } label: {
+                    HStack(spacing: PocketSpacing.s8) {
+                        if isProbing { ProgressView().controlSize(.small) }
+                        Text(isProbing ? "Reconnecting…" : "Reconnect")
+                    }
+                }
+                .disabled(isProbing)
+            } header: {
+                Text("Connection")
+            } footer: {
+                Text("Reconnect drops this session's discovered address and tests the Mac again. It does not un-pair, so nothing has to be scanned again.")
+            }
+
+            Section {
                 TextField("mac.tailnet.ts.net or 100.64.0.3:\(peer.port)", text: $manualAddress)
                     .font(.pocket(.mono))
                     .autocorrectionDisabled()
@@ -316,7 +376,7 @@ struct DevicesView: View {
                 NavigationLink {
                     ModelsView(startOnMac: true)
                 } label: {
-                    SettingsRow(icon: "cpu", title: "Browse models on this Mac…", accessory: .navigation)
+                    SettingsRow(icon: "cpu", title: "Browse models on this Mac…", accessory: .none)
                 }
             }
 
@@ -324,9 +384,14 @@ struct DevicesView: View {
                 Button(role: .destructive) {
                     peerToRevoke = peer
                 } label: {
-                    Text("Disconnect Mac")
+                    Text("Forget this Mac")
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
+            } footer: {
+                // Named for what it does. It revokes the pairing, so getting
+                // back means scanning the Mac's QR code again — not the thing
+                // to reach for when a connection is merely stuck.
+                Text("Removes the pairing and this Mac's models. You'll need to scan its code again to reconnect.")
             }
         }
         .listStyle(.insetGrouped)
@@ -364,6 +429,33 @@ struct DevicesView: View {
         if ok {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             reload()
+        }
+    }
+
+    /// Drops this run's rediscovered address and re-tests the Mac. A manual
+    /// address survives, since the user set it deliberately and off-LAN it is
+    /// the only route that works.
+    private func reconnect(_ peer: Peer) {
+        isProbing = true
+        lastRTT = nil
+        PeerAddressBook.shared.clearDiscovered(forHostId: peer.name)
+        let token = model.hooks.keychainGet(key: peer.tokenRef)
+            .flatMap { String(data: $0, encoding: .utf8) }
+        Task {
+            var rtt: TimeInterval?
+            if let token {
+                let override = PeerAddressBook.shared.override(forHostId: peer.name)
+                let endpoint = PeerEndpoint(
+                    host: override?.host ?? peer.addrs.first ?? "",
+                    port: override?.port ?? peer.port,
+                    fingerprint: peer.certSha256
+                )
+                rtt = await PeerClient(endpoint: endpoint, token: token).measureRTT()
+            }
+            await MainActor.run {
+                lastRTT = .some(rtt)
+                isProbing = false
+            }
         }
     }
 
@@ -468,6 +560,30 @@ private struct PairingFlowView: View {
                             .foregroundStyle(PocketColor.textSecondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, PocketSpacing.gutterIphone)
+
+                        // Named at the moment of pairing, because this is the
+                        // only time the user is thinking about how the two
+                        // machines reach each other. Finding out later, when
+                        // it stops working away from home, is too late.
+                        VStack(spacing: PocketSpacing.s8) {
+                            HStack(spacing: PocketSpacing.s8) {
+                                Image(systemName: "wifi")
+                                    .foregroundStyle(PocketColor.accent)
+                                Text("Connected over your local network")
+                                    .font(.pocket(.callout))
+                                    .foregroundStyle(PocketColor.textPrimary)
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+
+                            Text("This works while both are on this Wi-Fi. To reach this Mac from anywhere, add its VPN or mesh hostname — Tailscale, Tailnet, WireGuard — under Mac ▸ Custom Address.")
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(PocketSpacing.s12)
+                        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.chip))
+                        .padding(.horizontal, PocketSpacing.gutterIphone)
 
                         Button("Choose a Mac model") {
                             dismiss()

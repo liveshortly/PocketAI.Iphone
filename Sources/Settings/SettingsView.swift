@@ -34,21 +34,21 @@ struct SettingsView: View {
                             onPicked: { model.selectedModelId = $0 }
                         )
                     } label: {
-                        SettingsRow(icon: "cpu", tint: PocketColor.statusInfo, title: "Default chat model", accessory: .value(defaultModelName))
+                        SettingsRow(icon: "cpu", title: "Default chat model", accessory: .value(defaultModelName))
                     }
                     .accessibilityIdentifier("settings_default_model_row")
 
                     NavigationLink {
                         StorageUsedView()
                     } label: {
-                        SettingsRow(icon: "internaldrive", tint: PocketColor.textSecondary, title: "Storage used", accessory: .value(storageTotal == 0 ? "None" : formatBytes(storageTotal)))
+                        SettingsRow(icon: "internaldrive", title: "Storage used", accessory: .value(storageTotal == 0 ? "None" : formatBytes(storageTotal)))
                     }
                     .accessibilityIdentifier("settings_storage_row")
 
                     NavigationLink {
                         EnginesView()
                     } label: {
-                        SettingsRow(icon: "bolt.fill", tint: PocketColor.statusWarn, title: "Engine availability", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Apple + MLX + llama.cpp" : "MLX + llama.cpp"))
+                        SettingsRow(icon: "bolt.fill", title: "Engine availability", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Apple + MLX + llama.cpp" : "MLX + llama.cpp"))
                     }
                     .accessibilityIdentifier("settings_engines_row")
                 }
@@ -57,20 +57,19 @@ struct SettingsView: View {
                 Section("Voice") {
                     SettingsRow(
                         icon: "speaker.wave.2.fill",
-                        tint: PocketColor.accent,
                         title: "Speak replies",
                         accessory: .toggle($autoSpeakReplies)
                     )
                     NavigationLink {
                         SpeechToTextView()
                     } label: {
-                        SettingsRow(icon: "mic.fill", tint: PocketColor.statusInfo, title: "Speech-to-text", accessory: .navigation)
+                        SettingsRow(icon: "mic.fill", title: "Speech-to-text", accessory: .none)
                     }
                     .accessibilityIdentifier("settings_speech_to_text_row")
                     NavigationLink {
                         TextToSpeechVoiceView()
                     } label: {
-                        SettingsRow(icon: "waveform", tint: PocketColor.statusOk, title: "Text-to-speech voice", accessory: .navigation)
+                        SettingsRow(icon: "waveform", title: "Text-to-speech voice", accessory: .none)
                     }
                     .accessibilityIdentifier("settings_tts_voice_row")
                 }
@@ -79,7 +78,6 @@ struct SettingsView: View {
                 Section("Privacy") {
                     SettingsRow(
                         icon: "airplane",
-                        tint: PocketColor.statusWarn,
                         title: "Offline mode",
                         accessory: .toggle($offline)
                     )
@@ -88,13 +86,12 @@ struct SettingsView: View {
                     NavigationLink {
                         NetworkProofView(offline: $offline)
                     } label: {
-                        SettingsRow(icon: "checkmark.shield.fill", tint: PocketColor.statusOk, title: "Network Proof", accessory: .value("\(egressCount) this session"))
+                        SettingsRow(icon: "checkmark.shield.fill", title: "Network Proof", accessory: .value("\(egressCount) this session"))
                     }
                     .accessibilityIdentifier("settings_network_proof_row")
 
                     SettingsRow(
                         icon: "heart.text.square",
-                        tint: PocketColor.accent,
                         title: "Share diagnostic reports",
                         accessory: .toggle($diagnosticsEnabled)
                     )
@@ -107,7 +104,7 @@ struct SettingsView: View {
                         NavigationLink {
                             DiagnosticsPreviewView()
                         } label: {
-                            SettingsRow(icon: "envelope", tint: PocketColor.statusInfo, title: "Send diagnostic report…", accessory: .navigation)
+                            SettingsRow(icon: "envelope", title: "Send diagnostic report…", accessory: .none)
                         }
                         .accessibilityLabel("Send diagnostic report")
                         .accessibilityHint("Opens a preview of the diagnostic report before sending")
@@ -121,7 +118,6 @@ struct SettingsView: View {
                     } label: {
                         SettingsRow(
                             icon: "dot.radiowaves.left.and.right",
-                            tint: PocketColor.statusOk,
                             title: "LiveShortly",
                             accessory: .value(liveShortlyStatus))
                     }
@@ -133,14 +129,14 @@ struct SettingsView: View {
                     NavigationLink {
                         PairMacView()
                     } label: {
-                        SettingsRow(icon: "laptopcomputer", tint: PocketColor.statusInfo, title: "Pair a Mac", accessory: .navigation)
+                        SettingsRow(icon: "laptopcomputer", title: "Pair a Mac", accessory: .none)
                     }
                     .accessibilityIdentifier("settings_pair_mac_row")
                 }
 
                 // MARK: About
                 Section("About") {
-                    SettingsRow(icon: "info.circle.fill", tint: PocketColor.textSecondary, title: "Version", accessory: .value(appVersionString))
+                    SettingsRow(icon: "info.circle.fill", title: "Version", accessory: .value(appVersionString))
                 }
             }
             .listStyle(.insetGrouped)
