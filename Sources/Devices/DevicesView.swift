@@ -669,7 +669,8 @@ private struct PairingFlowView: View {
             if ProcessInfo.processInfo.arguments.contains("-PocketPreviewCore") {
                 step = .waitingForApproval
                 let approved = ApprovedPairing(
-                    hostId: offer.hostId, certFingerprint: offer.certFingerprint,
+                    hostId: offer.hostId, hostName: offer.hostName,
+                    certFingerprint: offer.certFingerprint,
                     addr: offer.addrs.first ?? "", port: offer.port,
                     deviceId: UUID().uuidString, tokenKeychainRef: "peer-\(offer.hostId)"
                 )

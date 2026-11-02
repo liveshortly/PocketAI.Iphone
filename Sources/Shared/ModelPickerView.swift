@@ -122,6 +122,8 @@ struct ModelPickerView: View {
                     Text(name).font(.pocket(.body)).foregroundStyle(PocketColor.textPrimary)
                     Text(detail).font(.pocket(.caption)).foregroundStyle(PocketColor.textSecondary)
                 }
+                // UI-26: thinking models are marked everywhere a model is named.
+                if ReasoningSupport.supportsReasoning(modelID: id) { ThinkingBadge() }
                 Spacer()
                 if selectedId == id {
                     Image(systemName: "checkmark")

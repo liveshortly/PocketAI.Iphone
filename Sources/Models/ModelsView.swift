@@ -268,13 +268,33 @@ struct ModelsView: View {
         .accessibilityIdentifier("models_filter_\(label)")
     }
 
+    /// UI-26: the fits filter never cuts silently — while on, the chip itself
+    /// says how many models it is hiding ("Fits this iPhone · 23 hidden").
+    private var fitsChipLabel: String {
+        let hidden = fitsHiddenCount
+        return fitsOnly && hidden > 0 ? "Fits this iPhone · \(hidden) hidden" : "Fits this iPhone"
+    }
+
+    /// Browse entries (after search/capability filters) that the fits filter
+    /// removes: everything not runsWell/runsSlow.
+    private var fitsHiddenCount: Int {
+        var entries = catalog
+        if !searchText.isEmpty {
+            entries = entries.filter { $0.manifest.displayName.localizedCaseInsensitiveContains(searchText) }
+        }
+        if capabilityFilter != .all {
+            entries = entries.filter { matchesCapability($0.manifest) }
+        }
+        return entries.filter { $0.fit.verdict != .runsWell && $0.fit.verdict != .runsSlow }.count
+    }
+
     private var fitsChip: some View {
         Button {
             fitsOnly.toggle()
         } label: {
             HStack(spacing: PocketSpacing.s4) {
                 if fitsOnly { Image(systemName: "checkmark").font(.caption2.weight(.bold)) }
-                Text("Fits only").font(.pocket(.footnote)).fontWeight(fitsOnly ? .semibold : .regular)
+                Text(fitsChipLabel).font(.pocket(.footnote)).fontWeight(fitsOnly ? .semibold : .regular)
             }
             .foregroundStyle(fitsOnly ? PocketColor.accentOnAccent : PocketColor.textSecondary)
             .padding(.horizontal, PocketSpacing.s12)
@@ -400,7 +420,8 @@ struct ModelsView: View {
         .listStyle(.insetGrouped)
         .listSectionSpacing(.compact)
         .scrollContentBackground(.hidden)
-        .searchable(text: $searchText, prompt: "Search models")
+        // UI-26: Browse reaches the whole HF hub, and the placeholder says so.
+        .searchable(text: $searchText, prompt: segment == .browse ? "Search all of Hugging Face" : "Search models")
     }
 
     // MARK: - Hero Card
@@ -421,7 +442,10 @@ struct ModelsView: View {
                             .foregroundStyle(PocketColor.accent)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    FitBadge(kind: fitKind(hero.fit.verdict), reason: hero.fit.reason)
+                    HStack(spacing: PocketSpacing.s4) {
+                        FitBadge(kind: fitKind(hero.fit.verdict), reason: hero.fit.reason)
+                        if ReasoningSupport.supportsReasoning(modelID: hero.manifest.id) { ThinkingBadge() }
+                    }
                 }
 
                 heroActionLayout {
@@ -562,7 +586,7 @@ struct ModelsView: View {
     private var activeFilterDescription: String {
         var parts: [String] = []
         if capabilityFilter != .all { parts.append("“\(capabilityFilter.rawValue)”") }
-        if segment == .browse, fitsOnly { parts.append("Fits only") }
+        if segment == .browse, fitsOnly { parts.append("Fits this iPhone") }
         if !searchText.isEmpty { parts.append("“\(searchText)”") }
         return parts.isEmpty ? "these filters" : parts.joined(separator: " · ")
     }
@@ -985,7 +1009,8 @@ struct ModelsView: View {
             sizeOnDisk: entry.manifest.estRuntimeBytes != 0 ? formatBytes(entry.manifest.estRuntimeBytes) : nil,
             speedText: entry.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
             speedIsMeasured: false,
-            licenseLabel: ""
+            licenseLabel: "",
+            supportsReasoning: ReasoningSupport.supportsReasoning(modelID: entry.manifest.id)
         )
     }
 
@@ -1070,7 +1095,8 @@ struct ModelsView: View {
             sizeOnDisk: diskBytes(entry) != 0 ? formatBytes(diskBytes(entry)) : nil,
             speedText: (entry.fit.measuredTokensPerSec ?? entry.fit.estTokensPerSec).map { "\(Int($0)) tok/s" },
             speedIsMeasured: entry.fit.measuredTokensPerSec != nil,
-            licenseLabel: entry.manifest.license.spdx
+            licenseLabel: entry.manifest.license.spdx,
+            supportsReasoning: ReasoningSupport.supportsReasoning(modelID: entry.manifest.id)
         )
     }
 

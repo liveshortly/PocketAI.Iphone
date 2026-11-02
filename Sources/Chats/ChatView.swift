@@ -49,6 +49,9 @@ struct ChatView: View {
     @State private var showVisionRequiredAlert = false
     /// This conversation's bound model (F03/§9.1), loaded by ID in reload().
     @State private var conversationModelId: String?
+    /// Per-chat thinking toggle (UI-27); default on. Persisted in
+    /// UserDefaults keyed by conversation id — only "off" is stored.
+    @State private var thinkingEnabled = true
     /// Catalog snapshot refreshed in reload() — header/composer lookups must
     /// never call core.catalog() per render (it re-parses the bundled JSON).
     @State private var cachedCatalog: [CatalogEntry] = []
@@ -91,6 +94,30 @@ struct ChatView: View {
     private var currentModelId: String? {
         if let bound = conversationModelId, !bound.isEmpty { return bound }
         return model.selectedModelId
+    }
+
+    /// UI-27: the thinking toggle only exists for reasoning-capable models —
+    /// never a dead toggle on models that ignore it.
+    private var currentModelSupportsReasoning: Bool {
+        currentModelId.map { ReasoningSupport.supportsReasoning(modelID: $0) } ?? false
+    }
+
+    // ponytail: per-chat UserDefaults key; orphaned on chat delete — move into
+    // the conversation record when the FFI grows a reasoning field.
+    private var thinkingOffKey: String { "app.getpocketai.thinkingOff.\(conversationId)" }
+
+    private var thinkingBinding: Binding<Bool> {
+        Binding(
+            get: { thinkingEnabled },
+            set: { on in
+                thinkingEnabled = on
+                if on {
+                    UserDefaults.standard.removeObject(forKey: thinkingOffKey)
+                } else {
+                    UserDefaults.standard.set(true, forKey: thinkingOffKey)
+                }
+            }
+        )
     }
 
     /// Is this model actually runnable right now (installed locally, or a remote
@@ -433,6 +460,9 @@ struct ChatView: View {
                     Menu {
                         Button("Change model", systemImage: "cpu") {
                             if isGenerating { showSwitchWhileGeneratingAlert = true } else { showModelPicker = true }
+                        }
+                        if currentModelSupportsReasoning {
+                            Toggle("Thinking", isOn: thinkingBinding)
                         }
                         Toggle("Speak replies", isOn: $autoSpeakReplies)
                         Divider()
@@ -944,6 +974,7 @@ struct ChatView: View {
             title = convo.title
             conversationModelId = convo.modelId
         }
+        thinkingEnabled = !UserDefaults.standard.bool(forKey: thinkingOffKey)
     }
 
     private func send(handsFree: Bool = false) {
@@ -1019,8 +1050,13 @@ struct ChatView: View {
         upsertStreamingPlaceholder(text: "")
 
         let input = UserInput(parts: parts)
+        // UI-27: explicit on/off only for reasoning-capable models; everything
+        // else keeps the model's default via .auto.
+        let reasoning: ReasoningMode = currentModelSupportsReasoning
+            ? (thinkingEnabled ? .on : .off)
+            : .auto
         streamTask = Task {
-            await consumeStream(model.core.sendMessage(conversationId: conversationId, input: input), shouldAutoSpeak: shouldAutoSpeak, streamId: streamId)
+            await consumeStream(model.core.sendMessage(conversationId: conversationId, input: input, reasoning: reasoning), shouldAutoSpeak: shouldAutoSpeak, streamId: streamId)
         }
     }
 
