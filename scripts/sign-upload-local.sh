@@ -59,5 +59,15 @@ IPA="$OUT/PocketAI-$BUILD.ipa"
 (cd "$OUT" && zip -qry "$(basename "$IPA")" Payload SwiftSupport)
 
 echo "==> upload build $BUILD"
-xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$KEY_ID" --apiIssuer "$ISSUER" 2>&1 |
-  grep -E "UPLOAD|Delivery UUID|ITMS-|error:" | grep -v "GET APP SETTINGS\|Download task\|KPI"
+# altool exits 0 on some failures and App Store Connect times out now and
+# then, so read the verdict and retry a few times.
+for attempt in 1 2 3; do
+  LOG="$(xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$KEY_ID" --apiIssuer "$ISSUER" 2>&1 || true)"
+  if grep -q "UPLOAD SUCCEEDED" <<<"$LOG"; then
+    grep -E "UPLOAD SUCCEEDED|Delivery UUID" <<<"$LOG"; exit 0
+  fi
+  grep -E "UPLOAD FAILED|ITMS-" <<<"$LOG" || true
+  grep -q "ITMS-" <<<"$LOG" && break   # Apple rejected the build; retrying won't help
+  echo "upload attempt $attempt failed; retrying" >&2; sleep 20
+done
+echo "error: upload of build $BUILD failed" >&2; exit 1
