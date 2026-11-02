@@ -18,7 +18,8 @@ struct SourceSheet: View {
             Group {
                 if isLoading {
                     VStack(spacing: PocketSpacing.s16) {
-                        ProgressView()
+                        PocketMarkView(state: .loading, size: 40)
+                            .accessibilityHidden(true) // the adjacent text carries the status
                         Text("Searching project documents…")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textSecondary)

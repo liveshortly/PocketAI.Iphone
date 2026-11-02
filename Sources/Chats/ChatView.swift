@@ -69,6 +69,9 @@ struct ChatView: View {
     /// True only after a real user drag; programmatic scrolls never unpin.
     @State private var userScrolledUp = false
     @State private var didReconnectRetry = false
+    /// UI-31: the notice the last Mac re-check posted, so a later good check
+    /// clears only that and never an unrelated error.
+    @State private var lastRemoteCheckError: String?
     @State private var cursorBlink = false
     // Honest instruments: a live decode rate derived from the real stream,
     // not a hardcoded constant. Updated as deltas arrive; the final
@@ -284,6 +287,11 @@ struct ChatView: View {
                 }
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.immediately)
+                // UI-31: pull at the top of history resyncs this chat. System
+                // spinner: UIRefreshControl can't host PocketMark. If "load
+                // older" pagination lands, it takes the top pull and this
+                // moves to the ⋯ menu.
+                .refreshable { await refresh() }
                 .onScrollGeometryChange(for: Bool.self) { geo in
                     // Within ~32pt of the bottom counts as "pinned".
                     geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 32
@@ -347,6 +355,14 @@ struct ChatView: View {
         } else {
             pendingAttachmentChip
 
+            // UI-30: thinking state visible without opening a menu; sits
+            // directly above the composer's `+`. Hidden for non-reasoning models.
+            if currentModelSupportsReasoning {
+                ThinkingToggleChip(isOn: thinkingBinding)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, PocketSpacing.gutterIphone + PocketSpacing.s8)
+            }
+
             Composer(
                 text: $composerText,
                 modelChipLabel: remoteModelChipLabel,
@@ -383,12 +399,28 @@ struct ChatView: View {
         }
     }
 
-    // Split into two computed views so SwiftUI's type-checker handles each
-    // modifier chain in reasonable time (the combined chain times out).
-    private var chatScaffold: some View {
-        VStack(spacing: 0) {
-            messageScroller
+    /// UI-30: a Toggle inside a Menu shows nothing when off, so it reads as an
+    /// action. Spell the state out instead; the header speaker icon and the
+    /// composer Think chip show the same state.
+    @ViewBuilder
+    private var stateMenuItems: some View {
+        if currentModelSupportsReasoning {
+            Button {
+                thinkingBinding.wrappedValue = !thinkingEnabled
+            } label: {
+                Label(thinkingEnabled ? "Thinking: On" : "Thinking: Off", systemImage: "brain")
+            }
+        }
+        Button {
+            autoSpeakReplies.toggle()
+        } label: {
+            Label(autoSpeakReplies ? "Speak replies: On" : "Speak replies: Off",
+                  systemImage: autoSpeakReplies ? "speaker.wave.2.fill" : "speaker.slash")
+        }
+    }
 
+    private var bottomChrome: some View {
+        VStack(spacing: 0) {
             // §5.1: the live state now lives in the header mark, not a full-width
             // bottom strip. Pulse details open from the header mark.
             #if DEBUG
@@ -399,6 +431,16 @@ struct ChatView: View {
 
             composerArea
         }
+    }
+
+    // Split into two computed views so SwiftUI's type-checker handles each
+    // modifier chain in reasonable time (the combined chain times out).
+    private var chatScaffold: some View {
+        messageScroller
+        // UI-29: the composer is a bottom safe-area inset, not a VStack
+        // sibling, so the scroll content is inset by the composer's real
+        // height on every device size, text size, keyboard and bar state.
+        .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
         .background(PocketColor.bgCanvas)
         .navigationTitle(title ?? "New chat")
         .navigationBarTitleDisplayMode(.inline)
@@ -470,10 +512,7 @@ struct ChatView: View {
                         Button("Change model", systemImage: "cpu") {
                             if isGenerating { showSwitchWhileGeneratingAlert = true } else { showModelPicker = true }
                         }
-                        if currentModelSupportsReasoning {
-                            Toggle("Thinking", isOn: thinkingBinding)
-                        }
-                        Toggle("Speak replies", isOn: $autoSpeakReplies)
+                        stateMenuItems
                         Divider()
                         Button("Generate image", systemImage: "sparkles") {
                             imageGenPrompt = ""
@@ -729,10 +768,19 @@ struct ChatView: View {
                 errorCard(errorText)
                     .padding(.top, PocketSpacing.s16)
             }
+            // UI-29: content never touches chrome — ≥ s16 between the last
+            // line and the composer. A scroll target rather than padding, so
+            // scrollToLatest keeps the gap (scrolling to the last message's
+            // bottom would push the padding back under the composer).
+            Color.clear
+                .frame(height: PocketSpacing.s16)
+                .id(Self.tailId)
         }
         .padding(.horizontal, PocketSpacing.gutterIphone)
         .padding(.top, PocketSpacing.s16)
     }
+
+    private static let tailId = "chat-tail"
 
     @ViewBuilder
     private func messageRow(_ message: Message, showHeader: Bool) -> some View {
@@ -941,17 +989,17 @@ struct ChatView: View {
     }
 
     private func scrollToLatest(proxy: ScrollViewProxy, animated: Bool = true) {
-        guard let last = messages.last else { return }
+        guard !messages.isEmpty else { return }
         #if DEBUG
         if PerfDiagnostics.isEnabled {
-            proxy.scrollTo(last.id, anchor: .bottom)
+            proxy.scrollTo(Self.tailId, anchor: .bottom)
             return
         }
         #endif
         if animated {
-            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+            withAnimation { proxy.scrollTo(Self.tailId, anchor: .bottom) }
         } else {
-            proxy.scrollTo(last.id, anchor: .bottom)
+            proxy.scrollTo(Self.tailId, anchor: .bottom)
         }
     }
 
@@ -984,6 +1032,51 @@ struct ChatView: View {
             conversationModelId = convo.modelId
         }
         thinkingEnabled = !UserDefaults.standard.bool(forKey: thinkingOffKey)
+    }
+
+    /// UI-31 pull-to-refresh: reload from the store and, for a Mac-routed
+    /// chat, re-check that the Mac answers and still has the model.
+    private func refresh() async {
+        // Never touch an in-flight stream: reload() would drop its local echo
+        // and streaming placeholder.
+        guard !isGenerating else { return }
+        reload()
+        await recheckRemoteModel()
+    }
+
+    private func recheckRemoteModel() async {
+        guard let id = currentModelId, let pid = RemoteEngine.peerId(from: id) else { return }
+        // A manual pull earns the next send one more automatic reconnect.
+        didReconnectRetry = false
+        let problem = await remoteModelProblem(id: id, peerId: pid)
+        guard !isGenerating else { return }
+        if let problem {
+            errorText = problem
+        } else if errorText == lastRemoteCheckError {
+            errorText = nil   // the Mac is back; clear our own stale notice only
+        }
+        lastRemoteCheckError = problem
+    }
+
+    /// nil when the Mac answers and has the model installed; otherwise what to
+    /// tell the user. Same endpoint resolution as ModelPickerView.reloadRemote.
+    private func remoteModelProblem(id: String, peerId: String) async -> String? {
+        guard let peer = model.core.peers().first(where: { $0.id == peerId }) else {
+            return "This chat's Mac is no longer paired. Choose another model."
+        }
+        let unreachable = "Your Mac isn't reachable. Make sure it's awake and on the same network, or switch to an on-device model."
+        guard let token = model.hooks.keychainGet(key: peer.tokenRef)
+            .flatMap({ String(data: $0, encoding: .utf8) }) else { return unreachable }
+        let override = PeerAddressBook.shared.override(forHostId: peer.name)
+        guard let host = override?.host ?? peer.addrs.first else { return unreachable }
+        let endpoint = PeerEndpoint(host: host, port: override?.port ?? peer.port, fingerprint: peer.certSha256)
+        let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
+        guard let entries = try? await client.catalog() else { return unreachable }
+        let localId = RemoteEngine.localModelId(from: id)
+        guard entries.contains(where: { $0.manifest.id == localId && $0.state == .installed }) else {
+            return "\(modelLocationLabel) is no longer on your Mac. Choose another model."
+        }
+        return nil
     }
 
     private func send(handsFree: Bool = false) {

@@ -405,8 +405,8 @@ struct ProjectDetailView: View {
             // Brief indexing state indicator
             if isIndexing {
                 HStack(spacing: PocketSpacing.s12) {
-                    ProgressView()
-                        .controlSize(.small)
+                    PocketMarkView(state: .loading, size: 16)
+                        .accessibilityHidden(true) // the adjacent text carries the status
                     Text("Indexing \(indexingFilename)…")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)

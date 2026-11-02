@@ -239,8 +239,8 @@ public struct SharedInboxIngestSheet: View {
 
     private var ingestingCard: some View {
         VStack(spacing: PocketSpacing.s12) {
-            ProgressView()
-                .controlSize(.large)
+            PocketMarkView(state: .loading, size: 40)
+                .accessibilityHidden(true) // the adjacent text carries the status
             Text(viewModel.ingestingStatus)
                 .font(.pocket(.footnote))
                 .foregroundStyle(PocketColor.textSecondary)

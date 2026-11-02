@@ -341,7 +341,10 @@ struct DevicesView: View {
                     reconnect(peer)
                 } label: {
                     HStack(spacing: PocketSpacing.s8) {
-                        if isProbing { ProgressView().controlSize(.small) }
+                        if isProbing {
+                            PocketMarkView(state: .loading, size: 16)
+                                .accessibilityHidden(true) // the adjacent text carries the status
+                        }
                         Text(isProbing ? "Reconnecting…" : "Reconnect")
                     }
                 }

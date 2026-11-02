@@ -390,7 +390,8 @@ struct ModelsView: View {
                             .foregroundStyle(PocketColor.textSecondary)
                     } else if isSearchingHub {
                         HStack(spacing: PocketSpacing.s8) {
-                            ProgressView()
+                            PocketMarkView(state: .loading, size: 16)
+                                .accessibilityHidden(true) // the adjacent text carries the status
                             Text("Searching Hugging Face…")
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
@@ -1330,7 +1331,8 @@ private struct ModelDetailSheet: View {
         }
         if benchmarking {
             HStack(spacing: PocketSpacing.s8) {
-                ProgressView()
+                PocketMarkView(state: .loading, size: 16)
+                    .accessibilityHidden(true) // the adjacent text carries the status
                 Text("Benchmarking… generating tokens on this iPhone")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
