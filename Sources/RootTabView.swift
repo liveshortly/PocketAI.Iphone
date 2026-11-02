@@ -10,6 +10,11 @@ struct RootTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var isShowingSharedInboxSheet = false
 
+    private struct HeartbeatKey: Equatable { var active: Bool; var online: Bool }
+    private var heartbeatKey: HeartbeatKey {
+        HeartbeatKey(active: scenePhase == .active, online: NetworkMonitor.shared.isOnline)
+    }
+
     private enum AppTab: Hashable {
         case chats, models, devices, settings
     }
@@ -57,7 +62,17 @@ struct RootTabView: View {
             // point, and ModelsView's poll stops when it goes away.
             await watchDownloads()
         }
+        .task(id: heartbeatKey) {
+            // NET-18: lease renewal only while foreground and online; a
+            // network change or coming back restarts it with fresh counters.
+            NetworkMonitor.shared.start()
+            guard heartbeatKey.active, heartbeatKey.online, model.hasOnboarded else { return }
+            await MacLink.shared.runHeartbeats(core: model.core, hooks: model.hooks)
+        }
         .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background {
+                MacLink.shared.sayGoodbye(core: model.core, hooks: model.hooks)
+            }
             if newPhase == .active {
                 checkSharedInbox()
                 // "Arrives when you open PocketAI" — honest, and the only

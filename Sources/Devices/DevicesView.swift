@@ -54,11 +54,11 @@ struct DevicesView: View {
                 )
             }
             .confirmationDialog(
-                "Disconnect \(peerToRevoke?.name ?? "Mac")?",
+                "Forget \(peerToRevoke?.name ?? "Mac")?",
                 isPresented: Binding(get: { peerToRevoke != nil }, set: { if !$0 { peerToRevoke = nil } }),
                 titleVisibility: .visible
             ) {
-                Button("Disconnect", role: .destructive) {
+                Button("Forget", role: .destructive) {
                     if let peer = peerToRevoke {
                         revoke(peer)
                     }
@@ -66,7 +66,7 @@ struct DevicesView: View {
                 }
                 Button("Cancel", role: .cancel) { peerToRevoke = nil }
             } message: {
-                Text("You can pair again anytime by scanning the code on your Mac.")
+                Text("This removes the pairing. To pause without unpairing, use Disconnect instead. You can pair again anytime by scanning the code on your Mac.")
             }
             .alert(
                 "Something went wrong",
@@ -286,7 +286,7 @@ struct DevicesView: View {
                             .foregroundStyle(PocketColor.textSecondary)
                         Spacer(minLength: PocketSpacing.s8)
                         // Wraps instead of truncating at large type.
-                        Text("Paired — its models appear in the model picker")
+                        Text(statusText(peer))
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textPrimary)
                             .multilineTextAlignment(.trailing)
@@ -385,6 +385,8 @@ struct DevicesView: View {
                 Text("Optional. Use your Mac's hostname (and port, if it isn't \(String(peer.port))) to reach it over a VPN or mesh network like Tailscale, where local discovery doesn't work. This address is preferred over the discovered one. The connection is still verified against your Mac's paired certificate.")
             }
 
+            MacLinkSection(peer: peer)
+
             Section("Mac Capabilities") {
                 NavigationLink {
                     ModelsView(startOnMac: true, embedded: true)
@@ -404,11 +406,21 @@ struct DevicesView: View {
                 // Named for what it does. It revokes the pairing, so getting
                 // back means scanning the Mac's QR code again — not the thing
                 // to reach for when a connection is merely stuck.
-                Text("Removes the pairing and this Mac's models. You'll need to scan its code again to reconnect.")
+                Text("Removes the pairing and this Mac's models. You'll need to scan its code again to reconnect. To just stop using this Mac for now, tap Disconnect above.")
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+    }
+
+    private func statusText(_ peer: Peer) -> String {
+        switch MacLink.shared.state(for: peer) {
+        case .connected: return "Connected — its models appear in the model picker"
+        case .unreachable: return "Not answering. Open PocketAI on your Mac."
+        case .disconnected: return "Disconnected — pairing kept"
+        case .disconnectedByHost: return "Your Mac disconnected this iPhone"
+        case nil: return "Paired — its models appear in the model picker"
+        }
     }
 
     private func startPairing() {
@@ -482,7 +494,7 @@ struct DevicesView: View {
                 model.selectedModelId = nil
             }
         } catch {
-            revokeError = "Couldn't disconnect \(peer.name): \(error.localizedDescription)"
+            revokeError = "Couldn't forget \(peer.name): \(error.localizedDescription)"
         }
         reload()
     }
@@ -712,6 +724,52 @@ private struct PairingFlowView: View {
             }
             pairTask?.cancel()
             step = .error("Pairing timed out. Make sure your Mac is awake and on the same Wi-Fi, then try again.")
+        }
+    }
+}
+
+/// NET-17: Disconnect / Connect without unpairing. Disconnect stops all
+/// traffic to the Mac (and tells it); Connect resumes, and also lifts a
+/// Disconnect the Mac made.
+private struct MacLinkSection: View {
+    let peer: Peer
+    @Environment(AppModel.self) private var model
+    @State private var isConnecting = false
+    @State private var connectFailed = false
+
+    private var state: MacLink.State? { MacLink.shared.state(for: peer) }
+    private var isOff: Bool { state == .disconnected || state == .disconnectedByHost }
+
+    var body: some View {
+        Section {
+            if state == .disconnectedByHost {
+                Text("Your Mac disconnected this iPhone.")
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.statusWarn)
+            }
+            if connectFailed {
+                Text("No answer. Open PocketAI on your Mac.")
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.statusBad)
+            }
+            Button(isOff ? (isConnecting ? "Connecting…" : "Connect") : "Disconnect") {
+                isOff ? connect() : MacLink.shared.disconnect(peer, hooks: model.hooks)
+            }
+            .disabled(isConnecting)
+        } footer: {
+            Text(isOff
+                ? "Connect to use this Mac's models again. Nothing has to be scanned."
+                : "Disconnect stops this iPhone from using the Mac until you connect again. The pairing is kept.")
+        }
+    }
+
+    private func connect() {
+        isConnecting = true
+        connectFailed = false
+        Task {
+            let ok = await MacLink.shared.connect(peer, hooks: model.hooks)
+            connectFailed = !ok
+            isConnecting = false
         }
     }
 }

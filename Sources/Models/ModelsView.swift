@@ -984,6 +984,12 @@ struct ModelsView: View {
             remoteCatalog = try await client.catalog()
             remoteError = nil
         } catch {
+            // NET-17: disconnected on purpose - say so, don't go looking for it.
+            if let peerError = error as? PeerClientError,
+               peerError == .disconnected || peerError == .disconnectedByHost {
+                remoteError = peerError.description
+                return
+            }
             if let resolved = await Browser.rediscover(hostId: peer.name) {
                 PeerAddressBook.shared.setOverride(resolved, forHostId: peer.name)
                 let endpoint = PeerEndpoint(host: resolved.host, port: resolved.port, fingerprint: peer.certSha256)
@@ -993,11 +999,11 @@ struct ModelsView: View {
                     remoteError = nil
                     return
                 } catch {
-                    remoteError = "Couldn't reach \(peer.name): \(error.localizedDescription)"
+                    remoteError = "Couldn't reach \(peer.name). Open PocketAI on your Mac."
                     return
                 }
             }
-            remoteError = "Couldn't reach \(peer.name): \(error.localizedDescription)"
+            remoteError = "Couldn't reach \(peer.name). Open PocketAI on your Mac."
         }
     }
 

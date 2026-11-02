@@ -1064,14 +1064,21 @@ struct ChatView: View {
         guard let peer = model.core.peers().first(where: { $0.id == peerId }) else {
             return "This chat's Mac is no longer paired. Choose another model."
         }
-        let unreachable = "Your Mac isn't reachable. Make sure it's awake and on the same network, or switch to an on-device model."
+        let unreachable = "Your Mac isn't reachable. Open PocketAI on your Mac and make sure it's awake and on the same network, or switch to an on-device model."
         guard let token = model.hooks.keychainGet(key: peer.tokenRef)
             .flatMap({ String(data: $0, encoding: .utf8) }) else { return unreachable }
         let override = PeerAddressBook.shared.override(forHostId: peer.name)
         guard let host = override?.host ?? peer.addrs.first else { return unreachable }
         let endpoint = PeerEndpoint(host: host, port: override?.port ?? peer.port, fingerprint: peer.certSha256)
         let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
-        guard let entries = try? await client.catalog() else { return unreachable }
+        let entries: [RemoteCatalogEntry]
+        do {
+            entries = try await client.catalog()
+        } catch let error as PeerClientError where error == .disconnected || error == .disconnectedByHost {
+            return error.description // NET-17: "Mac disconnected · Connect…"
+        } catch {
+            return unreachable
+        }
         let localId = RemoteEngine.localModelId(from: id)
         guard entries.contains(where: { $0.manifest.id == localId && $0.state == .installed }) else {
             return "\(modelLocationLabel) is no longer on your Mac. Choose another model."
@@ -1273,6 +1280,7 @@ struct ChatView: View {
         // Reconnect the *specific* paired Mac for this chat (F16), not peers().first.
         guard let pid = RemoteEngine.peerId(from: currentModelId ?? ""),
               let peer = model.core.peers().first(where: { $0.id == pid }),
+              !PeerAddressBook.shared.isUserDisconnected(fingerprint: peer.certSha256),
               let resolved = await Browser.rediscover(hostId: peer.name) else { return false }
         PeerAddressBook.shared.setOverride(resolved, forHostId: peer.name)
         guard messages.contains(where: { $0.role == "user" }) else { return false }
