@@ -277,8 +277,8 @@ struct ProjectDetailView: View {
                 lsNewSession = true
             } label: {
                 HStack(spacing: PocketSpacing.s8) {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.system(size: 15, weight: .semibold))
+                    Image.lsLogo
+                        .accessibilityHidden(true)
                     Text("New LiveShortly session")
                         .font(.pocket(.headline))
                     Spacer()

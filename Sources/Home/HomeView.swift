@@ -141,7 +141,7 @@ struct HomeView: View {
                             Button {
                                 lsNewSession = true
                             } label: {
-                                Label("LiveShortly session…", systemImage: "dot.radiowaves.left.and.right")
+                                Label { Text("LiveShortly session…") } icon: { Image.lsLogo }
                             }
                         }
                     } label: {
