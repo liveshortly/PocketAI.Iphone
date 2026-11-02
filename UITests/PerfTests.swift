@@ -25,6 +25,7 @@ final class PerfTests: XCTestCase {
         app.launchArguments = [
             "-PocketPreviewCore",
             "-PocketSkipOnboarding",
+            "-PocketTabChats",
             "-PocketPerfDiagnostics"
         ]
         app.launch()

@@ -73,7 +73,7 @@ final class AccessibilityAuditTests: XCTestCase {
     /// 2. Chats List Screen Accessibility Audit
     func testChatsListAccessibilityAudit() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-PocketPreviewCore", "-PocketSkipOnboarding"]
+        app.launchArguments = ["-PocketPreviewCore", "-PocketSkipOnboarding", "-PocketTabChats"]
         app.launch()
 
         XCTAssertTrue(app.tabBars.buttons["Chats"].waitForExistence(timeout: 5))
@@ -83,7 +83,7 @@ final class AccessibilityAuditTests: XCTestCase {
     /// 3. Chat Screen Accessibility Audit
     func testChatAccessibilityAudit() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-PocketPreviewCore", "-PocketSkipOnboarding"]
+        app.launchArguments = ["-PocketPreviewCore", "-PocketSkipOnboarding", "-PocketTabChats"]
         app.launch()
 
         let newChatButton = app.buttons["new_chat_button"]

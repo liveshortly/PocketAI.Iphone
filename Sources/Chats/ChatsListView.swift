@@ -178,10 +178,12 @@ struct ChatsListView: View {
             if let id = model.nav.consumePendingConversation() { path.append(.chat(id)) }
             // Start a new chat with a suggested first message (onboarding).
             if let first = model.nav.consumePendingFirstMessage() { newChat(firstMessage: first) }
+            showProjectsIfPending()
         }
         .onChange(of: model.nav.pendingOpenConversationId) { _, newId in
             if let id = newId { path.append(.chat(id)); model.nav.consumePendingConversation() }
         }
+        .onChange(of: model.nav.pendingShowProjects) { showProjectsIfPending() }
         .onChange(of: searchText) { reload() }
         .onChange(of: segment) {
             reload()
@@ -640,6 +642,14 @@ struct ChatsListView: View {
     }
 
     // MARK: - Actions & Data Loading
+
+    /// Home's Projects card: show the Projects list, popping any open chat.
+    private func showProjectsIfPending() {
+        guard model.nav.pendingShowProjects else { return }
+        model.nav.pendingShowProjects = false
+        path = []
+        segment = .projects
+    }
 
     private func reload() {
         // Re-read here, not once in .task: a model downloaded while this tab

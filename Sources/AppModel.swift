@@ -141,6 +141,8 @@ public final class AppNavigator {
     /// One-shot first message for a brand-new chat (e.g. an onboarding
     /// suggestion); Chats consumes it and creates the chat with it.
     public var pendingFirstMessage: String?
+    /// One-shot: Chats should show its Projects segment (Home's Projects card).
+    public var pendingShowProjects = false
 
     public init(initialTab: Tab = .home) {
         selectedTab = initialTab
@@ -176,6 +178,12 @@ public final class AppNavigator {
     /// Routes to Chats with a first message for a new chat (one-shot).
     public func startNewChat(firstMessage: String?) {
         pendingFirstMessage = firstMessage
+        selectedTab = .chats
+    }
+
+    /// Routes to Chats with the Projects segment selected (one-shot).
+    public func openProjects() {
+        pendingShowProjects = true
         selectedTab = .chats
     }
 

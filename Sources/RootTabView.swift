@@ -2,9 +2,8 @@ import SwiftUI
 import PocketKit
 import PocketUI
 
-/// Tab shell per 02-design-system.md §6.1. Screens are placeholders until
-/// UI-04/UI-07+ land; this proves the shell, PocketUI tokens, and the
-/// PocketMark chip render against a real `CoreClient` (Live or Preview).
+/// Tab shell per 02-design-system.md §6.1: Home (UI-25, owner 2026-11-02:
+/// "a basic summary of everything"), Chats, Models, Mac, Settings.
 struct RootTabView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -15,17 +14,14 @@ struct RootTabView: View {
         HeartbeatKey(active: scenePhase == .active, online: NetworkMonitor.shared.isOnline)
     }
 
-    private enum AppTab: Hashable {
-        case chats, models, devices, settings
-    }
+    private typealias AppTab = AppNavigator.Tab
 
-    @State private var selectedTab: AppTab = {
-        let args = ProcessInfo.processInfo.arguments
-        if args.contains("-PocketTabModels") { return .models }
-        if args.contains("-PocketTabDevices") { return .devices }
-        if args.contains("-PocketTabSettings") { return .settings }
-        return .chats
-    }()
+    /// The tab bar reads and writes `model.nav`, so Home's cards, deep links
+    /// and App Intents switch tabs the same way a tap does. Launch-argument
+    /// overrides live in `AppNavigator.initialTab()`.
+    private var selectedTab: Binding<AppTab> {
+        Binding(get: { model.nav.selectedTab }, set: { model.nav.select(tab: $0) })
+    }
 
     var body: some View {
         Group {
@@ -127,13 +123,22 @@ struct RootTabView: View {
         }
     }
 
+    private func isSelected(_ tab: AppTab) -> Bool { model.nav.selectedTab == tab }
+
     private var tabs: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: selectedTab) {
+            HomeView()
+                .tabItem {
+                    Label("Home", systemImage: isSelected(.home) ? "house.fill" : "house")
+                }
+                .tag(AppTab.home)
+                .accessibilityIdentifier("tab_home")
+
             ChatsListView()
                 .tabItem {
                     Label(
                         "Chats",
-                        systemImage: selectedTab == .chats ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right"
+                        systemImage: isSelected(.chats) ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right"
                     )
                 }
                 .tag(AppTab.chats)
@@ -143,7 +148,7 @@ struct RootTabView: View {
                 .tabItem {
                     Label(
                         "Models",
-                        systemImage: selectedTab == .models ? "cpu.fill" : "cpu"
+                        systemImage: isSelected(.models) ? "cpu.fill" : "cpu"
                     )
                 }
                 .tag(AppTab.models)
@@ -153,7 +158,7 @@ struct RootTabView: View {
                 .tabItem {
                     Label(
                         "Mac",
-                        systemImage: selectedTab == .devices ? "laptopcomputer.and.iphone" : "laptopcomputer"
+                        systemImage: isSelected(.devices) ? "laptopcomputer.and.iphone" : "laptopcomputer"
                     )
                 }
                 .tag(AppTab.devices)
@@ -163,7 +168,7 @@ struct RootTabView: View {
                 .tabItem {
                     Label(
                         "Settings",
-                        systemImage: selectedTab == .settings ? "gearshape.fill" : "gearshape"
+                        systemImage: isSelected(.settings) ? "gearshape.fill" : "gearshape"
                     )
                 }
                 .tag(AppTab.settings)
