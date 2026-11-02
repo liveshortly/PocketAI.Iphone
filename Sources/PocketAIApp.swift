@@ -100,7 +100,8 @@ final class RemoteChatSelfTestRunner: @unchecked Sendable {
                 minRamBytes: 0,
                 estRuntimeBytes: 0,
                 tags: [],
-                curated: true
+                curated: true,
+                reasoning: false
             )
 
             do {

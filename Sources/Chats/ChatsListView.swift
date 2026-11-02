@@ -102,146 +102,7 @@ struct ChatsListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Group {
-                if segment == .projects {
-                    projectsContent
-                } else {
-                    chatsContent
-                }
-            }
-            .background(PocketColor.bgCanvas)
-            .navigationBarTitleDisplayMode(.inline)
-            // Without an opaque bar, scrolled content shows through the
-            // segmented control and search field — unreadable at large text
-            // sizes where the content is tall.
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(PocketColor.bgCanvas, for: .navigationBar)
-            .toolbar {
-                // Single navigation model: the segmented control IS the title,
-                // replacing the redundant large-title + separate picker row.
-                ToolbarItem(placement: .principal) {
-                    Picker("View", selection: $segment) {
-                        ForEach(Segment.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    // Fills the title area on any width instead of sitting at
-                    // a constant 240pt that only suited one phone.
-                    .frame(maxWidth: .infinity)
-                    .accessibilityIdentifier("chats_segment")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    if segment == .projects {
-                        Button {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            isShowingCreateProject = true
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(PocketColor.accent)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .accessibilityLabel("Create project")
-                        .accessibilityHint("Opens sheet to create a new project")
-                    } else if editMode == .active {
-                        Button("Done") {
-                            withAnimation { editMode = .inactive }
-                            selectedIds = []
-                        }
-                        .fontWeight(.semibold)
-                        .foregroundStyle(PocketColor.accent)
-                    } else {
-                        // One menu, every way to start: local chat (current
-                        // model), Apple on-device, any installed local model,
-                        // or a LiveShortly agent session.
-                        Menu {
-                            Button {
-                                newChat(firstMessage: nil)
-                            } label: {
-                                Label("New chat", systemImage: "square.and.pencil")
-                            }
-                            if AppleFoundationModelsEngine.isAvailable {
-                                Button {
-                                    newChat(firstMessage: nil, modelId: AppleFoundationModelsEngine.modelId)
-                                } label: {
-                                    Label("Apple Intelligence", systemImage: "apple.logo")
-                                }
-                            }
-                            if !installedModels.isEmpty {
-                                Menu {
-                                    ForEach(installedModels, id: \.manifest.id) { entry in
-                                        Button(entry.manifest.displayName) {
-                                            newChat(firstMessage: nil, modelId: entry.manifest.id)
-                                        }
-                                    }
-                                } label: {
-                                    Label("Local model", systemImage: "cpu")
-                                }
-                            }
-                            if model.liveShortly.isConnected {
-                                Button {
-                                    lsNewSession = true
-                                } label: {
-                                    Label("LiveShortly session…", systemImage: "dot.radiowaves.left.and.right")
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(PocketColor.accent)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .accessibilityLabel("New chat")
-                        .accessibilityIdentifier("new_chat_button")
-                    }
-                }
-                if segment == .chats, editMode == .active {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        Button(role: .destructive) {
-                            showBulkDeleteConfirm = true
-                        } label: {
-                            Text("Delete (\(selectedIds.count))")
-                                .fontWeight(.semibold)
-                        }
-                        .disabled(selectedIds.isEmpty)
-                        Spacer()
-                        Button("Select All") {
-                            selectedIds = Set(conversations.map(\.id))
-                        }
-                    }
-                }
-            }
-            .task {
-                reload()
-                // Open a conversation requested from Home / an App Intent (F26).
-                if let id = model.nav.consumePendingConversation() { path.append(.chat(id)) }
-                // Start a new chat with a suggested first message (onboarding).
-                if let first = model.nav.consumePendingFirstMessage() { newChat(firstMessage: first) }
-            }
-            .onChange(of: model.nav.pendingOpenConversationId) { _, newId in
-                if let id = newId { path.append(.chat(id)); model.nav.consumePendingConversation() }
-            }
-            .onChange(of: searchText) { reload() }
-            .onChange(of: segment) {
-                reload()
-                editMode = .inactive
-                selectedIds = []
-            }
-            .navigationDestination(for: Route.self) { route in
-                switch route {
-                case .chat(let id):
-                    ChatView(conversationId: id, initialMessage: pendingInitial?.id == id ? pendingInitial?.text : nil)
-                case .project(let id):
-                    ProjectDetailView(projectId: id)
-                }
-            }
-            .onChange(of: path) { _, newValue in
-                if newValue.isEmpty {
-                    pendingInitial = nil
-                    reload() // titles/previews updated while a chat was open
-                }
-            }
+            listContent
             .sheet(isPresented: $isShowingCreateProject) {
                 NewProjectSheet { name, instructions in
                     createProject(name: name, instructions: instructions)
@@ -295,7 +156,153 @@ struct ChatsListView: View {
         }
     }
 
+    private var listContent: some View {
+        Group {
+            if segment == .projects {
+                projectsContent
+            } else {
+                chatsContent
+            }
+        }
+        .background(PocketColor.bgCanvas)
+        .navigationBarTitleDisplayMode(.inline)
+        // Without an opaque bar, scrolled content shows through the
+        // segmented control and search field — unreadable at large text
+        // sizes where the content is tall.
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(PocketColor.bgCanvas, for: .navigationBar)
+        .toolbar { listToolbar }
+        .task {
+            reload()
+            // Open a conversation requested from Home / an App Intent (F26).
+            if let id = model.nav.consumePendingConversation() { path.append(.chat(id)) }
+            // Start a new chat with a suggested first message (onboarding).
+            if let first = model.nav.consumePendingFirstMessage() { newChat(firstMessage: first) }
+        }
+        .onChange(of: model.nav.pendingOpenConversationId) { _, newId in
+            if let id = newId { path.append(.chat(id)); model.nav.consumePendingConversation() }
+        }
+        .onChange(of: searchText) { reload() }
+        .onChange(of: segment) {
+            reload()
+            editMode = .inactive
+            selectedIds = []
+        }
+        .navigationDestination(for: Route.self) { route in
+            switch route {
+            case .chat(let id):
+                ChatView(conversationId: id, initialMessage: pendingInitial?.id == id ? pendingInitial?.text : nil)
+            case .project(let id):
+                ProjectDetailView(projectId: id)
+            }
+        }
+        .onChange(of: path) { _, newValue in
+            if newValue.isEmpty {
+                pendingInitial = nil
+                reload() // titles/previews updated while a chat was open
+            }
+        }
+    }
+
     // MARK: - Chats Content
+
+    @ToolbarContentBuilder
+    private var listToolbar: some ToolbarContent {
+        // Single navigation model: the segmented control IS the title,
+        // replacing the redundant large-title + separate picker row.
+        ToolbarItem(placement: .principal) {
+            Picker("View", selection: $segment) {
+                ForEach(Segment.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            // Fills the title area on any width instead of sitting at
+            // a constant 240pt that only suited one phone.
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("chats_segment")
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            if segment == .projects {
+                Button {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    isShowingCreateProject = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(PocketColor.accent)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Create project")
+                .accessibilityHint("Opens sheet to create a new project")
+            } else if editMode == .active {
+                Button("Done") {
+                    withAnimation { editMode = .inactive }
+                    selectedIds = []
+                }
+                .fontWeight(.semibold)
+                .foregroundStyle(PocketColor.accent)
+            } else {
+                // One menu, every way to start: local chat (current
+                // model), Apple on-device, any installed local model,
+                // or a LiveShortly agent session.
+                Menu {
+                    Button {
+                        newChat(firstMessage: nil)
+                    } label: {
+                        Label("New chat", systemImage: "square.and.pencil")
+                    }
+                    if AppleFoundationModelsEngine.isAvailable {
+                        Button {
+                            newChat(firstMessage: nil, modelId: AppleFoundationModelsEngine.modelId)
+                        } label: {
+                            Label("Apple Intelligence", systemImage: "apple.logo")
+                        }
+                    }
+                    if !installedModels.isEmpty {
+                        Menu {
+                            ForEach(installedModels, id: \.manifest.id) { entry in
+                                Button(entry.manifest.displayName) {
+                                    newChat(firstMessage: nil, modelId: entry.manifest.id)
+                                }
+                            }
+                        } label: {
+                            Label("Local model", systemImage: "cpu")
+                        }
+                    }
+                    if model.liveShortly.isConnected {
+                        Button {
+                            lsNewSession = true
+                        } label: {
+                            Label("LiveShortly session…", systemImage: "dot.radiowaves.left.and.right")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(PocketColor.accent)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("New chat")
+                .accessibilityIdentifier("new_chat_button")
+            }
+        }
+        if segment == .chats, editMode == .active {
+            ToolbarItemGroup(placement: .bottomBar) {
+                Button(role: .destructive) {
+                    showBulkDeleteConfirm = true
+                } label: {
+                    Text("Delete (\(selectedIds.count))")
+                        .fontWeight(.semibold)
+                }
+                .disabled(selectedIds.isEmpty)
+                Spacer()
+                Button("Select All") {
+                    selectedIds = Set(conversations.map(\.id))
+                }
+            }
+        }
+    }
 
     @ViewBuilder
     private var chatsContent: some View {

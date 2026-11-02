@@ -10,7 +10,7 @@ struct SourceSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var hits: [ChunkHit] = []
-    @State private var documentsById: [String: Document] = [:]
+    @State private var documentsById: [String: PocketKit.Document] = [:]
     @State private var isLoading = true
 
     var body: some View {
@@ -151,8 +151,8 @@ struct SourceSheet: View {
         let core = self.core
         let projectId = self.projectId
         let query = self.query
-        let loaded = await Task.detached(priority: .userInitiated) { () -> ([String: Document], [ChunkHit]) in
-            var map: [String: Document] = [:]
+        let loaded = await Task.detached(priority: .userInitiated) { () -> ([String: PocketKit.Document], [ChunkHit]) in
+            var map: [String: PocketKit.Document] = [:]
             for doc in core.listDocuments(projectId: projectId) {
                 map[doc.id] = doc
             }

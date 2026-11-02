@@ -420,9 +420,7 @@ struct ImageGenerationSheet: View {
 
         case .loadingModel:
             VStack(spacing: PocketSpacing.s12) {
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(PocketColor.accent)
+                PocketMarkView(state: .loading, size: 48)
                 Text("Loading SDXL-Turbo model…")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
@@ -448,9 +446,7 @@ struct ImageGenerationSheet: View {
                 } else {
                     // Fills the card's width whatever the device, and the
                     // reserved height follows the text size.
-                    ProgressView()
-                        .controlSize(.large)
-                        .tint(PocketColor.accent)
+                    PocketMarkView(state: .loading, size: 48)
                         .frame(maxWidth: .infinity, minHeight: previewPlaceholderHeight)
                 }
 

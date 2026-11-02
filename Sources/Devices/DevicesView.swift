@@ -138,9 +138,9 @@ struct DevicesView: View {
                 .padding(.horizontal, PocketSpacing.gutterIphone)
                 .padding(.top, PocketSpacing.s8)
 
-                Link(destination: URL(string: "https://getpocketai.app")!) {
+                Link(destination: URL(string: "https://pocket.liveshortly.com")!) {
                     HStack(spacing: 4) {
-                        Text("Don't have PocketAI on Mac? getpocketai.app")
+                        Text("Don't have PocketAI on Mac? pocket.liveshortly.com")
                         Image(systemName: "arrow.up.right")
                             .font(.caption)
                     }

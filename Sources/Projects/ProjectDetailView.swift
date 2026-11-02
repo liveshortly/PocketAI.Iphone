@@ -15,7 +15,7 @@ struct ProjectDetailView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var project: Project?
-    @State private var documents: [Document] = []
+    @State private var documents: [PocketKit.Document] = []
     @State private var activeConversationId: String?
     @State private var lsNewSession = false
     @State private var projectChats: [ConversationSummary] = []
@@ -35,7 +35,7 @@ struct ProjectDetailView: View {
     /// Set by both delete affordances; cleared by the confirmation alert. A
     /// document costs a text-extraction and embedding pass to rebuild, so the
     /// hairline trash icon does not get to spend it on one stray tap.
-    @State private var pendingDocDelete: Document?
+    @State private var pendingDocDelete: PocketKit.Document?
     @State private var errorMessage: String?
     @State private var showingErrorAlert = false
 
@@ -477,7 +477,7 @@ struct ProjectDetailView: View {
         }
     }
 
-    private func documentRow(_ doc: Document) -> some View {
+    private func documentRow(_ doc: PocketKit.Document) -> some View {
         HStack(spacing: PocketSpacing.s12) {
             Image(systemName: doc.mime.contains("pdf") ? "doc.richtext" : "doc.text")
                 .font(.system(size: 20))
@@ -586,7 +586,7 @@ struct ProjectDetailView: View {
         }
     }
 
-    private func deleteDocument(_ doc: Document) {
+    private func deleteDocument(_ doc: PocketKit.Document) {
         do {
             try model.core.deleteDocument(id: doc.id)
         } catch {

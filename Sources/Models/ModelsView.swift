@@ -444,7 +444,7 @@ struct ModelsView: View {
                     }
                     HStack(spacing: PocketSpacing.s4) {
                         FitBadge(kind: fitKind(hero.fit.verdict), reason: hero.fit.reason)
-                        if ReasoningSupport.supportsReasoning(modelID: hero.manifest.id) { ThinkingBadge() }
+                        if hero.manifest.reasoning { ThinkingBadge() }
                     }
                 }
 
@@ -1010,7 +1010,7 @@ struct ModelsView: View {
             speedText: entry.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
             speedIsMeasured: false,
             licenseLabel: "",
-            supportsReasoning: ReasoningSupport.supportsReasoning(modelID: entry.manifest.id)
+            supportsReasoning: entry.manifest.reasoning ?? false
         )
     }
 
@@ -1096,7 +1096,7 @@ struct ModelsView: View {
             speedText: (entry.fit.measuredTokensPerSec ?? entry.fit.estTokensPerSec).map { "\(Int($0)) tok/s" },
             speedIsMeasured: entry.fit.measuredTokensPerSec != nil,
             licenseLabel: entry.manifest.license.spdx,
-            supportsReasoning: ReasoningSupport.supportsReasoning(modelID: entry.manifest.id)
+            supportsReasoning: entry.manifest.reasoning
         )
     }
 

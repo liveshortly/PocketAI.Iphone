@@ -89,13 +89,13 @@
         }
       }
     },
-    "Apple Mail is not configured on this device. You can copy the report and email it manually to support@getpocketai.app.": {
+    "Apple Mail is not configured on this device. You can copy the report and email it manually to support@pocket.liveshortly.com.": {
       "extractionState": "extracted_with_value",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apple Mail is not configured on this device. You can copy the report and email it manually to support@getpocketai.app."
+            "value": "Apple Mail is not configured on this device. You can copy the report and email it manually to support@pocket.liveshortly.com."
           }
         }
       }
@@ -782,13 +782,13 @@
         }
       }
     },
-    "Don't have PocketAI on Mac? getpocketai.app": {
+    "Don't have PocketAI on Mac? pocket.liveshortly.com": {
       "extractionState": "extracted_with_value",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Don't have PocketAI on Mac? getpocketai.app"
+            "value": "Don't have PocketAI on Mac? pocket.liveshortly.com"
           }
         }
       }

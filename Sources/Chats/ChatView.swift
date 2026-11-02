@@ -99,7 +99,7 @@ struct ChatView: View {
     /// UI-27: the thinking toggle only exists for reasoning-capable models —
     /// never a dead toggle on models that ignore it.
     private var currentModelSupportsReasoning: Bool {
-        currentModelId.map { ReasoningSupport.supportsReasoning(modelID: $0) } ?? false
+        currentModelId.map { cachedCatalog.supportsReasoning(modelID: $0) } ?? false
     }
 
     // ponytail: per-chat UserDefaults key; orphaned on chat delete — move into
@@ -269,70 +269,125 @@ struct ChatView: View {
         let selectedCitation: Int?
     }
 
+    private var messageScroller: some View {
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                ScrollView {
+                    // The error card lives in the message list, so an empty
+                    // chat has to fall through to it — otherwise a failed
+                    // rename/attach/delete reports to nobody.
+                    if messages.isEmpty && errorText == nil {
+                        emptyChatView
+                    } else {
+                        messageList
+                    }
+                }
+                .defaultScrollAnchor(.bottom)
+                .scrollDismissesKeyboard(.immediately)
+                .onScrollGeometryChange(for: Bool.self) { geo in
+                    // Within ~32pt of the bottom counts as "pinned".
+                    geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 32
+                } action: { _, atBottom in
+                    isAtBottom = atBottom
+                    if atBottom {
+                        // Back at the bottom (by hand or by tap): re-pin.
+                        userScrolledUp = false
+                        if showJumpToLatest {
+                            withAnimation(.easeOut(duration: 0.2)) { showJumpToLatest = false }
+                        }
+                    }
+                }
+                .onScrollPhaseChange { _, newPhase in
+                    // Only a real user drag may unpin the chat from the
+                    // bottom — programmatic/streaming scrolls never do.
+                    if newPhase == .interacting { userScrolledUp = true }
+                }
+                .onChange(of: messages.count) { _, _ in
+                    if userScrolledUp && !isAtBottom {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showJumpToLatest = true }
+                    } else {
+                        scrollToLatest(proxy: proxy, animated: false)
+                    }
+                }
+                .onChange(of: genCharCount) { _, _ in
+                    // Streaming grows the last bubble without changing the
+                    // message count; stay pinned unless the user scrolled up.
+                    if userScrolledUp && !isAtBottom {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showJumpToLatest = true }
+                    } else {
+                        scrollToLatest(proxy: proxy, animated: false)
+                    }
+                }
+                // Opening on the newest message is handled by
+                // .defaultScrollAnchor(.bottom) above: `messages` is still
+                // empty while this view first lays out (reload() runs in a
+                // sibling .task), so a scrollTo here has nothing to target.
+                .overlay(alignment: .bottom) {
+                    // Overlay, not stacked: showing it never shifts layout.
+                    if showJumpToLatest {
+                        jumpToLatestButton(proxy: proxy)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var composerArea: some View {
+        if speechPlayback.isSpeaking {
+            speakingAffordance
+                .padding(.horizontal, PocketSpacing.gutterIphone)
+                .padding(.bottom, PocketSpacing.s8)
+        }
+
+        if voiceDictation.isRecording || voiceDictation.isTranscribing {
+            recordingComposerBar
+                .padding(.horizontal, PocketSpacing.gutterIphone)
+                .padding(.bottom, PocketSpacing.s8)
+        } else {
+            pendingAttachmentChip
+
+            Composer(
+                text: $composerText,
+                modelChipLabel: remoteModelChipLabel,
+                isFocused: isComposerFocused || remoteModelChipLabel != nil,
+                isGenerating: isGenerating,
+                hasAttachment: composerHasAttachment,
+                onAttach: { kind in
+                    switch kind {
+                    case .photo:
+                        guard currentModelSupportsVision else { showVisionRequiredAlert = true; return }
+                        isPhotosPickerPresented = true
+                    case .camera:
+                        guard currentModelSupportsVision else { showVisionRequiredAlert = true; return }
+                        if CameraCaptureView.isCameraAvailable {
+                            isCameraPresented = true
+                        } else {
+                            cameraUnavailableAlert = true
+                        }
+                    case .image:
+                        imageGenPrompt = ""
+                        showImageGenSheet = true
+                    case .file, .projectDocument:
+                        break
+                    }
+                },
+                onMic: { startDictation(handsFree: false) },
+                onMicLongPress: { startDictation(handsFree: true) },
+                onSend: { send() },
+                onStop: { stop() },
+                externalFocus: $isComposerFocused
+            )
+            .padding(.horizontal, PocketSpacing.gutterIphone)
+            .padding(.bottom, PocketSpacing.s8)
+        }
+    }
+
     // Split into two computed views so SwiftUI's type-checker handles each
     // modifier chain in reasonable time (the combined chain times out).
     private var chatScaffold: some View {
         VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                VStack(spacing: 0) {
-                    ScrollView {
-                        // The error card lives in the message list, so an empty
-                        // chat has to fall through to it — otherwise a failed
-                        // rename/attach/delete reports to nobody.
-                        if messages.isEmpty && errorText == nil {
-                            emptyChatView
-                        } else {
-                            messageList
-                        }
-                    }
-                    .defaultScrollAnchor(.bottom)
-                    .scrollDismissesKeyboard(.immediately)
-                    .onScrollGeometryChange(for: Bool.self) { geo in
-                        // Within ~32pt of the bottom counts as "pinned".
-                        geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 32
-                    } action: { _, atBottom in
-                        isAtBottom = atBottom
-                        if atBottom {
-                            // Back at the bottom (by hand or by tap): re-pin.
-                            userScrolledUp = false
-                            if showJumpToLatest {
-                                withAnimation(.easeOut(duration: 0.2)) { showJumpToLatest = false }
-                            }
-                        }
-                    }
-                    .onScrollPhaseChange { _, newPhase in
-                        // Only a real user drag may unpin the chat from the
-                        // bottom — programmatic/streaming scrolls never do.
-                        if newPhase == .interacting { userScrolledUp = true }
-                    }
-                    .onChange(of: messages.count) { _, _ in
-                        if userScrolledUp && !isAtBottom {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showJumpToLatest = true }
-                        } else {
-                            scrollToLatest(proxy: proxy, animated: false)
-                        }
-                    }
-                    .onChange(of: genCharCount) { _, _ in
-                        // Streaming grows the last bubble without changing the
-                        // message count; stay pinned unless the user scrolled up.
-                        if userScrolledUp && !isAtBottom {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showJumpToLatest = true }
-                        } else {
-                            scrollToLatest(proxy: proxy, animated: false)
-                        }
-                    }
-                    // Opening on the newest message is handled by
-                    // .defaultScrollAnchor(.bottom) above: `messages` is still
-                    // empty while this view first lays out (reload() runs in a
-                    // sibling .task), so a scrollTo here has nothing to target.
-                    .overlay(alignment: .bottom) {
-                        // Overlay, not stacked: showing it never shifts layout.
-                        if showJumpToLatest {
-                            jumpToLatestButton(proxy: proxy)
-                        }
-                    }
-                }
-            }
+            messageScroller
 
             // §5.1: the live state now lives in the header mark, not a full-width
             // bottom strip. Pulse details open from the header mark.
@@ -342,53 +397,7 @@ struct ChatView: View {
             }
             #endif
 
-            if speechPlayback.isSpeaking {
-                speakingAffordance
-                    .padding(.horizontal, PocketSpacing.gutterIphone)
-                    .padding(.bottom, PocketSpacing.s8)
-            }
-
-            if voiceDictation.isRecording || voiceDictation.isTranscribing {
-                recordingComposerBar
-                    .padding(.horizontal, PocketSpacing.gutterIphone)
-                    .padding(.bottom, PocketSpacing.s8)
-            } else {
-                pendingAttachmentChip
-
-                Composer(
-                    text: $composerText,
-                    modelChipLabel: remoteModelChipLabel,
-                    isFocused: isComposerFocused || remoteModelChipLabel != nil,
-                    isGenerating: isGenerating,
-                    hasAttachment: composerHasAttachment,
-                    onAttach: { kind in
-                        switch kind {
-                        case .photo:
-                            guard currentModelSupportsVision else { showVisionRequiredAlert = true; return }
-                            isPhotosPickerPresented = true
-                        case .camera:
-                            guard currentModelSupportsVision else { showVisionRequiredAlert = true; return }
-                            if CameraCaptureView.isCameraAvailable {
-                                isCameraPresented = true
-                            } else {
-                                cameraUnavailableAlert = true
-                            }
-                        case .image:
-                            imageGenPrompt = ""
-                            showImageGenSheet = true
-                        case .file, .projectDocument:
-                            break
-                        }
-                    },
-                    onMic: { startDictation(handsFree: false) },
-                    onMicLongPress: { startDictation(handsFree: true) },
-                    onSend: { send() },
-                    onStop: { stop() },
-                    externalFocus: $isComposerFocused
-                )
-                .padding(.horizontal, PocketSpacing.gutterIphone)
-                .padding(.bottom, PocketSpacing.s8)
-            }
+            composerArea
         }
         .background(PocketColor.bgCanvas)
         .navigationTitle(title ?? "New chat")
@@ -1304,9 +1313,7 @@ struct ChatView: View {
 
             if voiceDictation.isTranscribing {
                 HStack(spacing: PocketSpacing.s8) {
-                    ProgressView()
-                        .tint(PocketColor.accent)
-                        .controlSize(.small)
+                    PocketMarkView(state: .loading, size: 16)
                     Text("Transcribing…")
                         .font(.pocket(.body))
                         .foregroundStyle(PocketColor.textSecondary)

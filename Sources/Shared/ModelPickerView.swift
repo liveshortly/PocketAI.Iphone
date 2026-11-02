@@ -51,7 +51,8 @@ struct ModelPickerView: View {
                     ForEach(installed, id: \.manifest.id) { entry in
                         row(id: entry.manifest.id,
                             name: ModelNaming.short(entry.manifest.displayName),
-                            detail: capabilityLine(entry.manifest))
+                            detail: capabilityLine(entry.manifest),
+                            reasoning: entry.manifest.reasoning)
                     }
                 }
             }
@@ -61,7 +62,8 @@ struct ModelPickerView: View {
                 Section("Apple Intelligence") {
                     row(id: AppleFoundationModelsEngine.modelId,
                         name: "Apple Intelligence",
-                        detail: "Built in · On this iPhone")
+                        detail: "Built in · On this iPhone",
+                        reasoning: false)
                 }
             }
 
@@ -72,7 +74,8 @@ struct ModelPickerView: View {
                         let remoteId = "mac:\(pair.peer.id)/\(entry.manifest.id)"
                         row(id: remoteId,
                             name: ModelNaming.short(entry.manifest.displayName),
-                            detail: "\(entry.manifest.family) · \(pair.peer.name)")
+                            detail: "\(entry.manifest.family) · \(pair.peer.name)",
+                            reasoning: entry.manifest.reasoning ?? false)
                     }
                 }
             }
@@ -111,7 +114,7 @@ struct ModelPickerView: View {
         }
     }
 
-    private func row(id: String, name: String, detail: String) -> some View {
+    private func row(id: String, name: String, detail: String, reasoning: Bool) -> some View {
         Button {
             onPicked(id)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -123,7 +126,7 @@ struct ModelPickerView: View {
                     Text(detail).font(.pocket(.caption)).foregroundStyle(PocketColor.textSecondary)
                 }
                 // UI-26: thinking models are marked everywhere a model is named.
-                if ReasoningSupport.supportsReasoning(modelID: id) { ThinkingBadge() }
+                if reasoning { ThinkingBadge() }
                 Spacer()
                 if selectedId == id {
                     Image(systemName: "checkmark")

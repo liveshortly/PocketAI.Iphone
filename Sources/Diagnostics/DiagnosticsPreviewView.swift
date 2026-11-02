@@ -107,7 +107,7 @@ public struct DiagnosticsPreviewView: View {
                     HStack(spacing: PocketSpacing.s12) {
                         Image(systemName: "exclamationmark.triangle")
                             .foregroundStyle(PocketColor.statusWarn)
-                        Text("Apple Mail is not configured on this device. You can copy the report and email it manually to support@getpocketai.app.")
+                        Text("Apple Mail is not configured on this device. You can copy the report and email it manually to support@pocket.liveshortly.com.")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textSecondary)
                     }
@@ -201,7 +201,7 @@ public struct DiagnosticsPreviewView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showMailComposer) {
             MailComposeView(
-                recipients: ["support@getpocketai.app"],
+                recipients: ["support@pocket.liveshortly.com"],
                 subject: "PocketAI Diagnostic Report",
                 body: jsonPayload,
                 attachmentData: jsonPayload.data(using: .utf8),
