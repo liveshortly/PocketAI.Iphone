@@ -11,6 +11,14 @@ public final class SpeechPlayback: NSObject {
     public private(set) var isSpeaking: Bool = false
     public private(set) var currentText: String?
 
+    /// Why the last Speak produced no sound. Every failure path used to call
+    /// `resetState()` and nothing else, so synthesis or playback dying looked
+    /// exactly like Speak doing nothing at all. Observers surface it and then
+    /// call `clearError()`.
+    public private(set) var lastError: String?
+
+    public func clearError() { lastError = nil }
+
     private var player: AVAudioPlayer?
     private var tempAudioURL: URL?
     private var synthTask: Task<Void, Never>?
@@ -36,6 +44,7 @@ public final class SpeechPlayback: NSObject {
         self.tempAudioURL = fileURL
         self.currentText = trimmed
         self.isSpeaking = true
+        self.lastError = nil
 
         AccessibilityNotification.Announcement("Speaking reply").post()
 
@@ -63,7 +72,7 @@ public final class SpeechPlayback: NSObject {
                     Self.deleteFile(at: fileURL)
                     return
                 }
-                self.resetState()
+                self.fail("Couldn't read that aloud: \(error.localizedDescription)")
             }
         }
     }
@@ -96,13 +105,20 @@ public final class SpeechPlayback: NSObject {
             let audioPlayer = try AVAudioPlayer(contentsOf: url)
             audioPlayer.delegate = self
             guard audioPlayer.play() else {
-                resetState()
+                fail("Couldn't start audio playback.")
                 return
             }
             self.player = audioPlayer
         } catch {
-            resetState()
+            fail("Couldn't play that aloud: \(error.localizedDescription)")
         }
+    }
+
+    /// Reset, but leave a reason behind so the UI can say why nothing played.
+    private func fail(_ message: String) {
+        resetState()
+        lastError = message
+        AccessibilityNotification.Announcement(message).post()
     }
 
     private func resetState() {
@@ -131,8 +147,9 @@ extension SpeechPlayback: AVAudioPlayerDelegate {
     }
 
     nonisolated public func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: (any Error)?) {
+        let reason = error?.localizedDescription
         Task { @MainActor [weak self] in
-            self?.resetState()
+            self?.fail(reason.map { "Audio playback failed: \($0)" } ?? "Audio playback failed.")
         }
     }
 }

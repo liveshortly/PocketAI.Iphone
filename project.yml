@@ -14,6 +14,9 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
+    scheme:
+      testTargets:
+        - PocketAIUITests
     sources:
       - Sources
       - path: Resources/PrivacyInfo.xcprivacy
@@ -67,3 +70,23 @@ targets:
           - CFBundleURLName: app.getpocketai.pocketai
             CFBundleURLSchemes:
               - pocketai
+
+  # The five suites under UITests/ were written but no target ever referenced
+  # them, so none had been built, let alone run. Mirrors the Mac's
+  # PocketAIUITests target.
+  PocketAIUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [UITests]
+    dependencies:
+      - target: PocketAI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app.uitests
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: 4RK6YA795V
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: PocketAI

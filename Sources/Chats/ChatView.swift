@@ -24,6 +24,7 @@ struct ChatView: View {
     var initialMessage: String?
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
 
     @State private var title: String?
@@ -293,10 +294,10 @@ struct ChatView: View {
                             scrollToLatest(proxy: proxy, animated: false)
                         }
                     }
-                    .task {
-                        // Open pinned to the latest message, instantly.
-                        scrollToLatest(proxy: proxy, animated: false)
-                    }
+                    // Opening on the newest message is handled by
+                    // .defaultScrollAnchor(.bottom) above: `messages` is still
+                    // empty while this view first lays out (reload() runs in a
+                    // sibling .task), so a scrollTo here has nothing to target.
                     .overlay(alignment: .bottom) {
                         // Overlay, not stacked: showing it never shifts layout.
                         if showJumpToLatest {
@@ -454,6 +455,14 @@ struct ChatView: View {
                     }
                 }
             }
+        }
+        .onChange(of: speechPlayback.lastError) { _, message in
+            // A dead Speak used to be indistinguishable from a working one:
+            // every failure path just reset the state. Route it through the
+            // error card the rest of this screen already uses.
+            guard let message else { return }
+            errorText = message
+            speechPlayback.clearError()
         }
         .alert("Delete this chat?", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) {
@@ -1094,9 +1103,20 @@ struct ChatView: View {
         guard activeStreamId == streamId else { return }
         isGenerating = false
         liveTokPerSec = 0
+        // Only a reply the reader was not watching is worth a notification,
+        // and only one that actually took a while (§7.10) — an instant answer
+        // needs no announcement.
+        let took = genStartTime.map { Date().timeIntervalSince($0) } ?? 0
+        if took >= Self.replyNotifyAfterSeconds, scenePhase != .active || showJumpToLatest {
+            Notifier.shared.replyFinished(
+                chatTitle: title ?? "New chat", conversationId: conversationId)
+        }
         genStartTime = nil
         reload()
     }
+
+    /// A reply shorter than this is not worth interrupting anyone for.
+    private static let replyNotifyAfterSeconds: TimeInterval = 10
 
     /// Phone browse-to-reconnect (APL-08): a remote (`mac:`) turn that fails
     /// with a connection error is most likely a Mac IP change. Rediscover the

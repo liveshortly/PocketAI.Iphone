@@ -121,6 +121,19 @@ struct SettingsView: View {
                     }
                 }
 
+                // MARK: Notifications
+                Section("Notifications") {
+                    NavigationLink {
+                        NotificationSettingsView()
+                    } label: {
+                        SettingsRow(
+                            icon: "bell.badge",
+                            title: "Notifications",
+                            accessory: .none)
+                    }
+                    .accessibilityIdentifier("settings_notifications_row")
+                }
+
                 // MARK: Integrations
                 Section("Integrations") {
                     NavigationLink {

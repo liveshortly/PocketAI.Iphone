@@ -1,4 +1,5 @@
 import SwiftUI
+import PocketKit
 import PocketUI
 
 /// Tab shell per 02-design-system.md §6.1. Screens are placeholders until
@@ -50,11 +51,58 @@ struct RootTabView: View {
         .task {
             checkSharedInbox()
         }
+        .task {
+            // Download notifications live here, not on the Models screen: a
+            // download that finishes while you are reading a chat is the whole
+            // point, and ModelsView's poll stops when it goes away.
+            await watchDownloads()
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 checkSharedInbox()
+                // "Arrives when you open PocketAI" — honest, and the only
+                // thing a suspended app can do (§7.10).
+                checkPendingApprovals()
             }
         }
+    }
+
+    /// Reports a download that finished or failed since the last poll. Only
+    /// transitions notify, so models already installed at launch are silent.
+    private func watchDownloads() async {
+        var last: [String: ModelState] = [:]
+        var seeded = false
+        while !Task.isCancelled {
+            let entries = model.core.catalog(
+                filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false))
+            var next: [String: ModelState] = [:]
+            for entry in entries {
+                let id = entry.manifest.id
+                next[id] = entry.state
+                guard seeded, let previous = last[id], previous != entry.state else { continue }
+                guard previous == .downloading || previous == .verifying else { continue }
+                let name = ModelNaming.short(entry.manifest.displayName)
+                switch entry.state {
+                case .installed:
+                    Notifier.shared.downloadFinished(modelName: name)
+                case .failed(let reason):
+                    Notifier.shared.downloadFailed(modelName: name, reason: reason)
+                default:
+                    break
+                }
+            }
+            last = next
+            seeded = true
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+    }
+
+    /// On return to the foreground, surface any agent session that asked for a
+    /// decision while the app was away. Each session is announced once per
+    /// probe, keyed on the probe's own event id.
+    private func checkPendingApprovals() {
+        guard model.hasOnboarded, Notifier.shared.isEnabled(.approvalNeeded) else { return }
+        Task { await LSApprovalWatcher.shared.check(account: model.liveShortly) }
     }
 
     private func checkSharedInbox() {

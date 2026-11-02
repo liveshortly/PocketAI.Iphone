@@ -574,7 +574,14 @@ struct HomeData: Sendable {
         for e in fullCatalog { nameIndex[e.manifest.id] = ModelNaming.short(e.manifest.displayName) }
 
         let peers = core.peers()
-        data.macName = peers.first?.name
+        // Name the Mac the selected model actually runs on; peers.first named
+        // the wrong one as soon as a second Mac was paired.
+        if let selectedModelId, let pid = RemoteEngine.peerId(from: selectedModelId),
+           let owner = peers.first(where: { $0.id == pid }) {
+            data.macName = owner.name
+        } else {
+            data.macName = peers.first?.name
+        }
 
         // Downloaded models: verified local installs only (§4.3 metric).
         let installedEntries = fullCatalog.filter { $0.state == .installed }

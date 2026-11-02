@@ -47,6 +47,9 @@ struct ModelsView: View {
     @State private var hubSearchError: String?
     @State private var isSearchingHub = false
     @State private var peers: [Peer] = []
+    /// Which paired Mac "On your Mac" is showing. nil = follow `macPeer`'s
+    /// default (the Mac behind the selected model, else the only one).
+    @State private var macPeerId: String?
     @State private var remoteCatalog: [RemoteCatalogEntry] = []
     @State private var remoteError: String?
     /// Surfaces a failed delete / remote download start — both used to fail
@@ -165,6 +168,13 @@ struct ModelsView: View {
             }
             .onChange(of: segment) { _, newValue in
                 if newValue == .onMac { Task { await reloadRemote() } }
+            }
+            .onChange(of: macPeerId) {
+                // Switching Mac has to re-fetch: the old Mac's catalog is not
+                // the new one's.
+                remoteCatalog = []
+                remoteError = nil
+                if segment == .onMac { Task { await reloadRemote() } }
             }
             .refreshable {
                 reload()
@@ -314,7 +324,20 @@ struct ModelsView: View {
                 if let remoteError {
                     Text(remoteError).font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
                 }
-                Section("On your Mac") {
+                if peers.count > 1 {
+                    // With two paired Macs the screen used to show the first
+                    // one's catalog with no way to tell, let alone switch.
+                    Picker("Mac", selection: Binding(
+                        get: { macPeer?.id ?? "" },
+                        set: { macPeerId = $0.isEmpty ? nil : $0 }
+                    )) {
+                        ForEach(peers, id: \.id) { peer in
+                            Text(peer.name).tag(peer.id)
+                        }
+                    }
+                    .font(.pocket(.footnote))
+                }
+                Section(macPeer.map { peers.count > 1 ? $0.name : "On your Mac" } ?? "On your Mac") {
                     ForEach(remoteCatalog) { entry in
                         ModelRow(
                             data: remoteRowData(for: entry),
@@ -902,6 +925,18 @@ struct ModelsView: View {
         }
     }
 
+    /// The Mac this screen acts on. An explicit pick wins; otherwise follow the
+    /// peer named in the selected `mac:<peerId>/<modelId>`, the way the rest of
+    /// the app resolves it. `peers.first` is only the single-Mac case, and was
+    /// silently wrong with two paired Macs.
+    private var macPeer: Peer? {
+        if let macPeerId, let picked = peers.first(where: { $0.id == macPeerId }) { return picked }
+        if let selected = model.selectedModelId,
+           let pid = RemoteEngine.peerId(from: selected),
+           let owner = peers.first(where: { $0.id == pid }) { return owner }
+        return peers.first
+    }
+
     /// Current best address for a stored peer: a Bonjour-rediscovered override
     /// (set after an IP change) wins over the stale stored address.
     private func peerEndpoint(for peer: Peer) -> PeerEndpoint {
@@ -914,7 +949,7 @@ struct ModelsView: View {
     }
 
     private func reloadRemote() async {
-        guard let peer = peers.first else { return }
+        guard let peer = macPeer else { return }
         guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) }) else {
             remoteError = "No saved credential for \(peer.name) - try pairing again."
             return
@@ -955,7 +990,7 @@ struct ModelsView: View {
     }
 
     private func isRemoteModelSelected(_ entry: RemoteCatalogEntry) -> Bool {
-        guard let peer = peers.first else { return false }
+        guard let peer = macPeer else { return false }
         return model.selectedModelId == "mac:\(peer.id)/\(entry.manifest.id)"
     }
 
@@ -971,7 +1006,7 @@ struct ModelsView: View {
     }
 
     private func performRemotePrimaryAction(for entry: RemoteCatalogEntry) {
-        guard let peer = peers.first else { return }
+        guard let peer = macPeer else { return }
         switch entry.state {
         case .installed:
             let remoteId = "mac:\(peer.id)/\(entry.manifest.id)"
