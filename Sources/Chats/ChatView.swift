@@ -68,6 +68,9 @@ struct ChatView: View {
     @State private var isAtBottom = true
     /// True only after a real user drag; programmatic scrolls never unpin.
     @State private var userScrolledUp = false
+    /// UI-36: Think chip + model pill fade out while the user reads history.
+    @State private var accessoryCollapsed = false
+    @State private var scrollInteracting = false
     @State private var didReconnectRetry = false
     /// UI-31: the notice the last Mac re-check posted, so a later good check
     /// clears only that and never an unrelated error.
@@ -300,6 +303,7 @@ struct ChatView: View {
                     if atBottom {
                         // Back at the bottom (by hand or by tap): re-pin.
                         userScrolledUp = false
+                        setAccessoryCollapsed(false)
                         if showJumpToLatest {
                             withAnimation(.easeOut(duration: 0.2)) { showJumpToLatest = false }
                         }
@@ -309,7 +313,12 @@ struct ChatView: View {
                     // Only a real user drag may unpin the chat from the
                     // bottom — programmatic/streaming scrolls never do.
                     if newPhase == .interacting { userScrolledUp = true }
+                    scrollInteracting = newPhase == .interacting
                 }
+                .modifier(AccessoryCollapseTracking(
+                    isInteracting: scrollInteracting,
+                    collapse: { if !isComposerFocused { setAccessoryCollapsed(true) } }
+                ))
                 .onChange(of: messages.count) { _, _ in
                     if userScrolledUp && !isAtBottom {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showJumpToLatest = true }
@@ -355,18 +364,12 @@ struct ChatView: View {
         } else {
             pendingAttachmentChip
 
-            // UI-30: thinking state visible without opening a menu; sits
-            // directly above the composer's `+`. Hidden for non-reasoning models.
-            if currentModelSupportsReasoning {
-                ThinkingToggleChip(isOn: thinkingBinding)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, PocketSpacing.gutterIphone + PocketSpacing.s8)
-            }
-
             Composer(
                 text: $composerText,
-                modelChipLabel: remoteModelChipLabel,
-                isFocused: isComposerFocused || remoteModelChipLabel != nil,
+                // UI-36: the model pill lives in `accessoryRow` so it can
+                // collapse with the Think chip.
+                modelChipLabel: nil,
+                isFocused: false,
                 isGenerating: isGenerating,
                 hasAttachment: composerHasAttachment,
                 onAttach: { kind in
@@ -429,8 +432,59 @@ struct ChatView: View {
             }
             #endif
 
-            composerArea
+            accessoryRow
+            VStack(spacing: 0) { composerArea }
+                .background(PocketColor.bgCanvas.ignoresSafeArea(edges: .bottom))
+                .overlay(alignment: .top) { if accessoryCollapsed { ChromeTopFade() } }
         }
+        .onChange(of: isComposerFocused) { _, focused in
+            if focused { setAccessoryCollapsed(false) }
+        }
+    }
+
+    private var showsAccessoryRow: Bool {
+        !(voiceDictation.isRecording || voiceDictation.isTranscribing)
+            && (currentModelSupportsReasoning || remoteModelChipLabel != nil)
+    }
+
+    /// UI-36: Think chip and model pill. Collapsing fades them out but keeps
+    /// their height, so the scroll inset (UI-29) never changes and the
+    /// thread doesn't jump; the opaque canvas then starts at the field.
+    @ViewBuilder
+    private var accessoryRow: some View {
+        if showsAccessoryRow {
+            VStack(alignment: .leading, spacing: 0) {
+                if currentModelSupportsReasoning {
+                    ThinkingToggleChip(isOn: thinkingBinding)
+                }
+                if let label = remoteModelChipLabel {
+                    modelPill(label)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, PocketSpacing.gutterIphone + PocketSpacing.s8)
+            .padding(.bottom, PocketSpacing.s4)
+            .opacity(accessoryCollapsed ? 0 : 1)
+            .offset(y: accessoryCollapsed ? PocketSpacing.s8 : 0)
+            .allowsHitTesting(!accessoryCollapsed)
+            .accessibilityHidden(accessoryCollapsed)
+            .background(PocketColor.bgCanvas.opacity(accessoryCollapsed ? 0 : 1))
+            .overlay(alignment: .top) { if !accessoryCollapsed { ChromeTopFade() } }
+        }
+    }
+
+    private func modelPill(_ label: String) -> some View {
+        HStack(spacing: PocketSpacing.s4) {
+            Text(label).font(.pocket(.caption))
+            Image(systemName: "chevron.down").font(.system(size: 9))
+        }
+        .foregroundStyle(PocketColor.textSecondary)
+        .padding(.vertical, PocketSpacing.s4)
+    }
+
+    private func setAccessoryCollapsed(_ collapsed: Bool) {
+        guard accessoryCollapsed != collapsed else { return }
+        withAnimation(.easeOut(duration: 0.2)) { accessoryCollapsed = collapsed }
     }
 
     // Split into two computed views so SwiftUI's type-checker handles each
@@ -967,6 +1021,7 @@ struct ChatView: View {
             scrollToLatest(proxy: proxy)
             showJumpToLatest = false
             userScrolledUp = false
+            setAccessoryCollapsed(false)
         } label: {
             HStack(spacing: PocketSpacing.s4) {
                 Image(systemName: "arrow.down")
@@ -1645,4 +1700,53 @@ struct ChatView: View {
         .padding(.bottom, PocketSpacing.s4)
     }
     #endif
+}
+
+/// UI-36: collapses the composer accessory row while the user reads history:
+/// on an upward drag, or once the thread is more than a screen from the bottom.
+private struct AccessoryCollapseTracking: ViewModifier {
+    let isInteracting: Bool
+    let collapse: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
+                if isInteracting && new < old - 4 { collapse() }
+            }
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                geo.contentSize.height - geo.contentOffset.y - geo.containerSize.height > geo.containerSize.height
+            } action: { _, farFromBottom in
+                if farFromBottom { collapse() }
+            }
+    }
+}
+
+/// UI-36: 12pt fade-to-canvas on the top edge of the opaque bottom chrome, so
+/// scrolled text dissolves into it instead of being cut by a hard edge.
+private struct ChromeTopFade: View {
+    var body: some View {
+        LinearGradient(colors: [PocketColor.bgCanvas.opacity(0), PocketColor.bgCanvas],
+                       startPoint: .top, endPoint: .bottom)
+            .frame(height: 12)
+            .offset(y: -12)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+#Preview("Light") {
+    NavigationStack { ChatView(conversationId: "fixture-0") }
+        .environment(AppModel())
+}
+
+#Preview("Dark") {
+    NavigationStack { ChatView(conversationId: "fixture-0") }
+        .environment(AppModel())
+        .preferredColorScheme(.dark)
+}
+
+#Preview("AX3") {
+    NavigationStack { ChatView(conversationId: "fixture-0") }
+        .environment(AppModel())
+        .environment(\.dynamicTypeSize, .accessibility3)
 }

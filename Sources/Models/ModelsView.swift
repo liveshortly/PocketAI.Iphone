@@ -234,45 +234,111 @@ struct ModelsView: View {
 
     // MARK: - Filter row & sort
 
+    /// UI-35: the filter row never scrolls sideways. `ViewThatFits` picks the
+    /// first layout that fits the width: every chip → a "Filter" menu plus the
+    /// active filters as clearable chips → the menu alone (largest text sizes).
     private var filterRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: PocketSpacing.s8) {
-                ForEach(CapabilityFilter.allCases, id: \.self) { cap in
-                    filterChip(cap.rawValue, selected: capabilityFilter == cap) {
-                        capabilityFilter = capabilityFilter == cap ? .all : cap
-                    }
-                }
-                if segment == .browse {
-                    Divider().frame(height: 20)
-                    fitsChip
-                }
-            }
-            .padding(.horizontal, PocketSpacing.gutterIphone)
+        ViewThatFits(in: .horizontal) {
+            fullFilterRow
+            compactFilterRow
+            filterMenu
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, PocketSpacing.gutterIphone)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("models_filter_row")
     }
 
-    private func filterChip(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private var fullFilterRow: some View {
+        HStack(spacing: PocketSpacing.s8) {
+            ForEach(CapabilityFilter.allCases, id: \.self) { cap in
+                filterChip(cap.rawValue, selected: capabilityFilter == cap, clearable: cap != .all) {
+                    capabilityFilter = capabilityFilter == cap ? .all : cap
+                }
+            }
+            if segment == .browse {
+                Divider().frame(height: 20)
+                fitsChip(short: false)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var compactFilterRow: some View {
+        HStack(spacing: PocketSpacing.s8) {
+            filterMenu
+            if capabilityFilter != .all {
+                filterChip(capabilityFilter.rawValue, selected: true, clearable: true) {
+                    capabilityFilter = .all
+                }
+            }
+            if segment == .browse, fitsOnly {
+                fitsChip(short: true)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var activeFilterCount: Int {
+        (capabilityFilter != .all ? 1 : 0) + (segment == .browse && fitsOnly ? 1 : 0)
+    }
+
+    /// Holds every filter, so each stays reachable whichever row layout fits.
+    private var filterMenu: some View {
+        Menu {
+            Picker("Show", selection: $capabilityFilter) {
+                ForEach(CapabilityFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            if segment == .browse {
+                Toggle("Fits this iPhone", isOn: $fitsOnly)
+            }
+        } label: {
+            HStack(spacing: PocketSpacing.s4) {
+                Image(systemName: "line.3.horizontal.decrease")
+                Text(activeFilterCount > 0 ? "Filter · \(activeFilterCount)" : "Filter")
+            }
+            .font(.pocket(.footnote))
+            .foregroundStyle(PocketColor.textPrimary)
+            .padding(.horizontal, PocketSpacing.s12)
+            .padding(.vertical, 6)
+            .background(PocketColor.bgSunken, in: Capsule())
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .fixedSize()
+        .accessibilityLabel(activeFilterCount > 0 ? "Filter, \(activeFilterCount) active" : "Filter")
+        .accessibilityIdentifier("models_filter_menu")
+    }
+
+    private func filterChip(_ label: String, selected: Bool, clearable: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label)
-                .font(.pocket(.footnote))
-                .fontWeight(selected ? .semibold : .regular)
-                .foregroundStyle(selected ? PocketColor.accentOnAccent : PocketColor.textSecondary)
-                .padding(.horizontal, PocketSpacing.s12)
-                .padding(.vertical, 6)
-                .background(selected ? PocketColor.accent : PocketColor.bgSunken, in: Capsule())
-                .frame(minHeight: 44) // 44pt hit target; visual capsule stays compact
-                .contentShape(Rectangle())
+            HStack(spacing: PocketSpacing.s4) {
+                Text(label)
+                    .fontWeight(selected ? .semibold : .regular)
+                if selected && clearable {
+                    Image(systemName: "xmark").font(.caption2.weight(.bold))
+                }
+            }
+            .font(.pocket(.footnote))
+            .foregroundStyle(selected ? PocketColor.accentOnAccent : PocketColor.textSecondary)
+            .padding(.horizontal, PocketSpacing.s12)
+            .padding(.vertical, 6)
+            .background(selected ? PocketColor.accent : PocketColor.bgSunken, in: Capsule())
+            .frame(minHeight: 44) // 44pt hit target; visual capsule stays compact
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityHint(selected && clearable ? "Clears this filter" : "")
         .accessibilityIdentifier("models_filter_\(label)")
     }
 
     /// UI-26: the fits filter never cuts silently — while on, the chip itself
     /// says how many models it is hiding ("Fits this iPhone · 23 hidden").
-    private var fitsChipLabel: String {
+    private func fitsChipLabel(short: Bool) -> String {
         let hidden = fitsHiddenCount
-        return fitsOnly && hidden > 0 ? "Fits this iPhone · \(hidden) hidden" : "Fits this iPhone"
+        let base = short ? "Fits" : "Fits this iPhone"
+        return fitsOnly && hidden > 0 ? "\(base) · \(hidden) hidden" : base
     }
 
     /// Browse entries (after search/capability filters) that the fits filter
@@ -288,13 +354,13 @@ struct ModelsView: View {
         return entries.filter { $0.fit.verdict != .runsWell && $0.fit.verdict != .runsSlow }.count
     }
 
-    private var fitsChip: some View {
+    private func fitsChip(short: Bool) -> some View {
         Button {
             fitsOnly.toggle()
         } label: {
             HStack(spacing: PocketSpacing.s4) {
-                if fitsOnly { Image(systemName: "checkmark").font(.caption2.weight(.bold)) }
-                Text(fitsChipLabel).font(.pocket(.footnote)).fontWeight(fitsOnly ? .semibold : .regular)
+                Text(fitsChipLabel(short: short)).font(.pocket(.footnote)).fontWeight(fitsOnly ? .semibold : .regular)
+                if fitsOnly { Image(systemName: "xmark").font(.caption2.weight(.bold)) }
             }
             .foregroundStyle(fitsOnly ? PocketColor.accentOnAccent : PocketColor.textSecondary)
             .padding(.horizontal, PocketSpacing.s12)
