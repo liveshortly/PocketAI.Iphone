@@ -437,7 +437,7 @@ struct ModelsView: View {
                 // hyphenated mid-word. Stack them instead.
                 heroHeaderLayout {
                     HStack(spacing: PocketSpacing.s4) {
-                        PocketMarkView(state: .idle, size: 10)
+                        PocketMarkView(state: .still, size: 10)
                         Text("Recommended for this iPhone")
                             .font(.pocket(.caption))
                             .foregroundStyle(PocketColor.accent)
@@ -1214,7 +1214,7 @@ private struct ModelDetailSheet: View {
                 Section {
                     VStack(alignment: .leading, spacing: PocketSpacing.s12) {
                         HStack(spacing: PocketSpacing.s12) {
-                            PocketMarkView(state: .idle, size: 36)
+                            PocketMarkView(state: .still, size: 36)
                             VStack(alignment: .leading, spacing: PocketSpacing.s2) {
                                 Text(entry.manifest.displayName)
                                     .font(.pocket(.title))

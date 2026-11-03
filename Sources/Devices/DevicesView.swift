@@ -169,7 +169,7 @@ struct DevicesView: View {
             HStack(spacing: 4) {
                 beam
 
-                PocketMarkView(state: .working(tokPerSec: nil), size: 36)
+                PocketMarkView(state: .thinking(tokPerSec: nil), size: 36)
 
                 beam
             }

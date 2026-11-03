@@ -195,7 +195,7 @@ struct ChatView: View {
 
     /// Header state mark (§5.1): animates while answering, static otherwise.
     private var headerMarkState: PocketMarkState {
-        isGenerating ? .working(tokPerSec: liveTokPerSec > 0 ? liveTokPerSec : nil) : .idle
+        isGenerating ? .thinking(tokPerSec: liveTokPerSec > 0 ? liveTokPerSec : nil) : .idle
     }
 
     /// Model for the header subtitle (U2) — one short line. Remote routes name
@@ -806,7 +806,7 @@ struct ChatView: View {
                 // Role affordance only on the first bubble of a run (grouping).
                 if showHeader {
                     HStack(spacing: PocketSpacing.s8) {
-                        PocketMarkView(state: isCurrentStreaming ? .working(tokPerSec: liveTokPerSec) : .idle, size: 20)
+                        PocketMarkView(state: isCurrentStreaming ? .thinking(tokPerSec: liveTokPerSec) : .still, size: 20)
                         Text("PocketAI")
                             .font(.pocket(.caption))
                             .fontWeight(.semibold)
