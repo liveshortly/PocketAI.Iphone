@@ -1,5 +1,6 @@
 import SwiftUI
 import PocketKit
+import PocketLiveShortly
 import PocketUI
 
 /// Tab shell per 02-design-system.md §6.1: Home (UI-25, owner 2026-11-02:
@@ -8,6 +9,8 @@ struct RootTabView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var isShowingSharedInboxSheet = false
+    /// A session opened from a link (LSI-19).
+    @State private var linkedSessionID: String?
 
     private struct HeartbeatKey: Equatable { var active: Bool; var online: Bool }
     private var heartbeatKey: HeartbeatKey {
@@ -48,6 +51,21 @@ struct RootTabView: View {
             SharedInboxIngestSheet(core: model.core) {
                 isShowingSharedInboxSheet = false
             }
+        }
+        .sheet(isPresented: .init(
+            get: { linkedSessionID != nil },
+            set: { if !$0 { linkedSessionID = nil } })
+        ) {
+            if let id = linkedSessionID {
+                NavigationStack {
+                    LSSessionView(account: model.liveShortly, sessionID: id)
+                }
+            }
+        }
+        // LSI-19: liveshortly.com/session/<id> (universal link, once the
+        // associated domain is live) and pocketai://session/<id>.
+        .onOpenURL { url in
+            linkedSessionID = LSSessionLink.sessionID(in: url, server: model.liveShortly.serverURL)
         }
         .task {
             checkSharedInbox()
