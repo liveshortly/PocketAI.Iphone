@@ -16,6 +16,7 @@ struct HomeView: View {
     @State private var lsSessions: [LSSession]?
     @State private var lsFailed = false
     @State private var openSessionId: String?
+    @State private var newChatError: String?
 
     private struct RefreshKey: Equatable {
         var tab: AppNavigator.Tab
@@ -42,6 +43,24 @@ struct HomeView: View {
             }
             .background(PocketColor.bgCanvas)
             .navigationTitle("PocketAI")
+            .toolbar {
+                // UI-49: the one thing people open the app to do, one tap away.
+                ToolbarItem(placement: .primaryAction) {
+                    Button { startNewChat() } label: {
+                        Label("New chat", systemImage: "square.and.pencil")
+                    }
+                    .disabled(model.coreOpenError != nil)
+                    .accessibilityIdentifier("home_new_chat")
+                }
+            }
+            .alert("Couldn't start a new chat", isPresented: Binding(
+                get: { newChatError != nil },
+                set: { if !$0 { newChatError = nil } }
+            )) {
+                Button("OK", role: .cancel) { newChatError = nil }
+            } message: {
+                Text(newChatError ?? "")
+            }
             .navigationDestination(item: $openSessionId) { id in
                 LSSessionView(account: model.liveShortly, sessionID: id)
             }
@@ -55,7 +74,7 @@ struct HomeView: View {
     private func cards(_ s: HomeSnapshot) -> some View {
         ScrollView {
             VStack(spacing: PocketSpacing.s12) {
-                ContinueCard(chats: s.recent)
+                ContinueCard(chats: s.recent, onNewChat: { startNewChat() })
                 ModelCard(snapshot: s)
                 MacCard(peer: s.macPeer, chatModelOnMac: s.macChatModel)
                 if model.liveShortly.isConnected {
@@ -66,6 +85,19 @@ struct HomeView: View {
             }
             .padding(.horizontal, PocketSpacing.gutterIphone)
             .padding(.vertical, PocketSpacing.s16)
+        }
+        .refreshable { await reload() }
+    }
+
+    /// Same create call as Chats' New chat button; the Chats tab then opens
+    /// it through the existing `openConversation` route.
+    private func startNewChat() {
+        do {
+            let c = try model.core.createConversation(
+                NewConversation(title: nil, projectId: nil, modelId: model.selectedModelId))
+            model.nav.openConversation(id: c.id)
+        } catch {
+            newChatError = error.localizedDescription
         }
     }
 
@@ -105,6 +137,8 @@ private struct HomeCard<Leading: View, Content: View>: View {
     var action: (() -> Void)?
     @ViewBuilder let leading: Leading
     @ViewBuilder let content: Content
+    /// Grows with Dynamic Type so the glyph never overflows its column.
+    @ScaledMetric(relativeTo: .headline) private var iconSize = PocketSpacing.s32
 
     var body: some View {
         if let action {
@@ -119,7 +153,7 @@ private struct HomeCard<Leading: View, Content: View>: View {
 
     private func shell(chevron: Bool) -> some View {
         HStack(alignment: .top, spacing: PocketSpacing.s12) {
-            leading.frame(width: PocketSpacing.s32, height: PocketSpacing.s32)
+            leading.frame(width: iconSize, height: iconSize)
             VStack(alignment: .leading, spacing: PocketSpacing.s4) {
                 Text(title)
                     .font(.pocket(.caption))
@@ -173,13 +207,14 @@ private struct CardLines: View {
 private struct ContinueCard: View {
     @Environment(AppModel.self) private var model
     let chats: [HomeSnapshot.Chat]
+    let onNewChat: () -> Void
 
     var body: some View {
         if chats.isEmpty {
-            HomeCard(title: "Continue", action: { model.nav.select(tab: .chats) }) {
+            HomeCard(title: "Continue", action: onNewChat) {
                 CardIcon(systemName: "bubble.left.and.bubble.right")
             } content: {
-                CardLines(primary: "No chats yet", secondary: "Start one in Chats.")
+                CardLines(primary: "Start your first chat", secondary: "It stays on this iPhone.")
             }
         } else {
             HomeCard(title: "Continue") {
@@ -227,7 +262,10 @@ private struct ModelCard: View {
 
     var body: some View {
         HomeCard(title: "Model", action: { model.nav.select(tab: .models) }) {
+            // Decorative here: its "PocketAI is offline" label would misstate
+            // a model that is merely not chosen; the lines say the real state.
             PocketMarkView(state: snapshot.model?.ready == true ? .idle : .offline, size: PocketSpacing.s32)
+                .accessibilityHidden(true)
         } content: {
             if let m = snapshot.model {
                 CardLines(primary: m.name, secondary: m.detail)
@@ -318,7 +356,7 @@ private struct LiveShortlyCard: View {
             let live = sessions.filter(\.isLive).count
             CardLines(primary: latest.title, secondary: live == 0 ? "No live sessions" : "\(live) live")
         } else if sessions != nil {
-            CardLines(primary: "No sessions yet", secondary: "Run `live claude` in a terminal to stream an agent here.")
+            CardLines(primary: "No sessions yet", secondary: "Run \u{201C}live claude\u{201D} in a terminal to stream an agent here.")
         } else {
             CardLines(primary: "Loading sessions…")
         }
@@ -394,13 +432,14 @@ private struct HomeUnavailableView: View {
                 Text("PocketAI is unavailable")
                     .font(.pocket(.title))
                     .foregroundStyle(PocketColor.textPrimary)
-                Text("The on-device engine couldn't start. Your chats and models are safe on this iPhone. Please restart the app to try again.")
+                Text("The on-device engine couldn't start. Your chats and models are safe on this iPhone. Quit and reopen PocketAI to try again.")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
                 if let detail {
                     Text(detail)
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
+                        .textSelection(.enabled)
                 }
             }
             .multilineTextAlignment(.center)

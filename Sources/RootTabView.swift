@@ -182,7 +182,9 @@ struct RootTabView: View {
                 .tabItem {
                     Label(
                         "Mac",
-                        systemImage: isSelected(.devices) ? "laptopcomputer.and.iphone" : "laptopcomputer"
+                        // One glyph in both states (§6.1): swapping shapes on select
+                        // made the tab look like a different destination.
+                        systemImage: "laptopcomputer"
                     )
                 }
                 .tag(AppTab.devices)

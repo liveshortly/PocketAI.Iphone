@@ -57,6 +57,10 @@ public struct OnboardingFlow: View {
                             // never a silent dead end.
                             downloadStartError = error.localizedDescription
                         }
+                    } else if modelId == nil {
+                        // UI-54: nothing fits / skipped. "You're ready" would be
+                        // untrue; Home's Model card says "No model yet — Get one".
+                        onFinished()
                     } else {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             step = .ready
@@ -117,7 +121,7 @@ private struct OnboardingWelcomeView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: PocketSpacing.s24) {
-                Spacer(minLength: 20)
+                Spacer(minLength: PocketSpacing.s20)
 
                 PocketMarkView(state: .idle, size: 96)
                     .padding(.bottom, PocketSpacing.s8)
@@ -129,7 +133,7 @@ private struct OnboardingWelcomeView: View {
                         .foregroundStyle(PocketColor.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("Run modern open-weights models locally on Apple Silicon. Zero cloud, zero accounts, completely offline.")
+                    Text("No cloud. No account. Nothing leaves.")
                         .font(.pocket(.callout))
                         .foregroundStyle(PocketColor.textSecondary)
                         .multilineTextAlignment(.center)
@@ -143,23 +147,23 @@ private struct OnboardingWelcomeView: View {
                     benefitCard(
                         icon: "iphone.gen3",
                         title: "Runs on this iPhone, even offline",
-                        subtitle: "Inference executes locally via Metal and MLX."
+                        subtitle: "Answers are made right here. No internet needed."
                     )
                     benefitCard(
                         icon: "lock.shield.fill",
-                        title: "Nothing leaves your device",
-                        subtitle: "See every network connection in the egress log."
+                        title: "Nothing leaves without you seeing it",
+                        subtitle: "Every connection is listed in Settings."
                     )
                     benefitCard(
                         icon: "laptopcomputer",
                         title: "Use your Mac's bigger models",
-                        subtitle: "Pair over local Wi-Fi to tap into your Mac's unified memory."
+                        subtitle: "Pair once, then chat with your Mac's models from here."
                     )
                 }
                 .padding(.horizontal, PocketSpacing.gutterIphone)
                 .padding(.vertical, PocketSpacing.s8)
 
-                Spacer(minLength: 20)
+                Spacer(minLength: PocketSpacing.s20)
 
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -183,24 +187,28 @@ private struct OnboardingWelcomeView: View {
     private func benefitCard(icon: String, title: String, subtitle: String) -> some View {
         HStack(spacing: PocketSpacing.s12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous)
                     .fill(PocketColor.accentSoft)
-                    .frame(width: 40, height: 40)
+                    .frame(width: PocketSpacing.s40, height: PocketSpacing.s40)
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.pocket(.headline))
                     .foregroundStyle(PocketColor.accent)
             }
+            .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: PocketSpacing.s2) {
                 Text(title)
                     .font(.pocket(.headline))
                     .foregroundStyle(PocketColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(subtitle)
-                    .font(.pocket(.caption))
+                    .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .accessibilityElement(children: .combine)
         .padding(PocketSpacing.s12)
         .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
         .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
@@ -214,6 +222,7 @@ private struct OnboardingDeviceCheckView: View {
     let onContinue: () -> Void
 
     @State private var revealedRows = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var rows: [String] {
         var r = [
@@ -267,8 +276,9 @@ private struct OnboardingDeviceCheckView: View {
                     if index < revealedRows {
                         HStack(spacing: PocketSpacing.s12) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 20))
+                                .font(.pocket(.headline))
                                 .foregroundStyle(PocketColor.statusOk)
+                                .accessibilityHidden(true)
                             Text(row)
                                 .font(.pocket(.body))
                                 .foregroundStyle(PocketColor.textPrimary)
@@ -277,7 +287,8 @@ private struct OnboardingDeviceCheckView: View {
                         .padding(PocketSpacing.s12)
                         .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
                         .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        // §3.4: Reduce Motion gets cross-fades only.
+                        .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
             }
@@ -312,8 +323,17 @@ private struct OnboardingPickModelView: View {
             ?? catalog.first { $0.fit.verdict == .runsWell }
     }
 
+    /// §1.4 "fit before download": never offer a model that won't run here.
     private var alternates: [CatalogEntry] {
-        catalog.filter { $0.manifest.id != recommended?.manifest.id }.prefix(2).map { $0 }
+        catalog.filter {
+            $0.manifest.id != recommended?.manifest.id
+                && ($0.fit.verdict == .runsWell || $0.fit.verdict == .runsSlow)
+        }.prefix(2).map { $0 }
+    }
+
+    /// Real download size, the same rule for every card.
+    private func downloadSize(_ e: CatalogEntry) -> String {
+        formatBytes(e.fit.diskBytes != 0 ? e.fit.diskBytes : e.manifest.estRuntimeBytes)
     }
 
     var body: some View {
@@ -324,11 +344,29 @@ private struct OnboardingPickModelView: View {
                         .font(.pocket(.display))
                         .foregroundStyle(PocketColor.textPrimary)
 
-                    Text("We test fit on your device before downloading.")
+                    Text("We checked which ones fit this iPhone.")
                         .font(.pocket(.callout))
                         .foregroundStyle(PocketColor.textSecondary)
                 }
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, PocketSpacing.s16)
+
+                if recommended == nil, alternates.isEmpty, !AppleFoundationModelsEngine.isAvailable {
+                    // Never a dead end: an empty catalog (or nothing that fits)
+                    // still lets the user in; Home then offers "Get one".
+                    VStack(spacing: PocketSpacing.s12) {
+                        Text("No model fits this iPhone right now. You can browse more in Models later.")
+                            .font(.pocket(.callout))
+                            .foregroundStyle(PocketColor.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Continue without a model") { onPick(nil) }
+                            .font(.pocket(.headline))
+                            .foregroundStyle(PocketColor.accent)
+                            .frame(minHeight: 44)
+                    }
+                }
 
                 if AppleFoundationModelsEngine.isAvailable {
                     OnboardingAppleCard { onPick(AppleFoundationModelsEngine.modelId) }
@@ -347,26 +385,26 @@ private struct OnboardingPickModelView: View {
                                 familyParamsQuant: "\(recommended.manifest.family) · \(recommended.manifest.quant)",
                                 fitKind: fitKind(recommended.fit.verdict),
                                 fitReason: recommended.fit.reason,
-                                sizeOnDisk: formatBytes(recommended.fit.diskBytes != 0 ? recommended.fit.diskBytes : recommended.manifest.estRuntimeBytes),
+                                sizeOnDisk: downloadSize(recommended),
                                 speedText: recommended.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
                                 speedIsMeasured: false,
                                 licenseLabel: recommended.manifest.license.spdx
                             ),
-                            primaryActionLabel: "Download \(formatBytes(recommended.fit.diskBytes != 0 ? recommended.fit.diskBytes : recommended.manifest.estRuntimeBytes))",
+                            primaryActionLabel: "Download \(downloadSize(recommended))",
                             onPrimaryAction: {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 onPick(recommended.manifest.id)
                             }
                         )
-                        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(PocketColor.lineHairline))
+                        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
+                        .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
 
-                        HStack(spacing: 4) {
+                        HStack(spacing: PocketSpacing.s4) {
                             Image(systemName: "wifi")
-                                .font(.caption2)
+                                .accessibilityHidden(true)
                             Text("Wi-Fi recommended")
-                                .font(.pocket(.caption))
                         }
+                        .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
                     }
                 }
@@ -385,7 +423,7 @@ private struct OnboardingPickModelView: View {
                                     familyParamsQuant: "\(entry.manifest.family) · \(entry.manifest.quant)",
                                     fitKind: fitKind(entry.fit.verdict),
                                     fitReason: entry.fit.reason,
-                                    sizeOnDisk: formatBytes(entry.manifest.estRuntimeBytes),
+                                    sizeOnDisk: downloadSize(entry),
                                     speedText: entry.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
                                     speedIsMeasured: false,
                                     licenseLabel: entry.manifest.license.spdx
@@ -396,8 +434,8 @@ private struct OnboardingPickModelView: View {
                                     onPick(entry.manifest.id)
                                 }
                             )
-                            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 16))
-                            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(PocketColor.lineHairline))
+                            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
+                            .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
                         }
                     }
                 }
@@ -424,19 +462,20 @@ private struct OnboardingAppleCard: View {
         Button(action: onPick) {
             HStack(spacing: PocketSpacing.s12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous)
                         .fill(PocketColor.bgSunken)
-                        .frame(width: 40, height: 40)
+                        .frame(width: PocketSpacing.s40, height: PocketSpacing.s40)
                     Image(systemName: "apple.logo")
-                        .font(.system(size: 20))
+                        .font(.pocket(.headline))
                         .foregroundStyle(PocketColor.textPrimary)
                 }
+                .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: PocketSpacing.s2) {
                     Text("Start instantly with Apple Intelligence")
                         .font(.pocket(.headline))
                         .foregroundStyle(PocketColor.textPrimary)
-                    Text("No download required · Built into iOS")
+                    Text("No download. Built into this iPhone.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
                 }
@@ -444,12 +483,14 @@ private struct OnboardingAppleCard: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.caption)
+                    .font(.pocket(.caption))
                     .foregroundStyle(PocketColor.textTertiary)
+                    .accessibilityHidden(true)
             }
+            .accessibilityElement(children: .combine)
             .padding(PocketSpacing.s16)
-            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(PocketColor.lineHairline))
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
+            .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
         }
         .buttonStyle(.plain)
     }
@@ -498,7 +539,9 @@ private struct OnboardingDownloadingView: View {
             ScrollView { progress }
         }
         .task {
-            while true {
+            // UI-55: `try? Task.sleep` swallows cancellation, so `while true`
+            // spun hot (polling Core with no sleep) after the view went away.
+            while !Task.isCancelled {
                 let updated = core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false))
                     .first { $0.manifest.id == modelId }
                 entry = updated
@@ -524,7 +567,7 @@ private struct OnboardingDownloadingView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Setting up on-device neural weights")
+                Text("This takes a few minutes. Stay on Wi-Fi if you can.")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
                     .multilineTextAlignment(.center)
@@ -540,20 +583,10 @@ private struct OnboardingDownloadingView: View {
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.statusBad)
                         .multilineTextAlignment(.center)
-                    HStack(spacing: PocketSpacing.s16) {
-                        Button("Retry") {
-                            retryError = nil
-                            do {
-                                try core.startDownload(modelId: modelId)
-                            } catch {
-                                retryError = error.localizedDescription
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(PocketColor.accent)
-                        Button("Choose another model") { onBack() }
-                            .buttonStyle(.bordered)
-                            .tint(PocketColor.accent)
+                    // Side by side when they fit, stacked at large text sizes.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: PocketSpacing.s16) { failureButtons }
+                        VStack(spacing: PocketSpacing.s12) { failureButtons }
                     }
                     if let retryError {
                         Text(retryError)
@@ -589,30 +622,54 @@ private struct OnboardingDownloadingView: View {
                 Button("Try Apple's model while you wait", action: onSkipToApple)
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.accent)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
 
             VStack(alignment: .leading, spacing: PocketSpacing.s12) {
                 ForEach(Self.tips, id: \.self) { tip in
                     HStack(alignment: .top, spacing: PocketSpacing.s8) {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.pocket(.caption))
                             .foregroundStyle(PocketColor.accent)
-                            .padding(.top, 3)
+                            .padding(.top, PocketSpacing.s2)
+                            .accessibilityHidden(true)
                         Text(tip)
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             .padding(PocketSpacing.s16)
-            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(PocketColor.lineHairline))
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
+            .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
             .padding(.horizontal, PocketSpacing.gutterIphone)
 
             Spacer(minLength: PocketSpacing.s16)
         }
         .padding(.vertical, PocketSpacing.s32)
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder private var failureButtons: some View {
+        Button {
+            retryError = nil
+            do {
+                try core.startDownload(modelId: modelId)
+            } catch {
+                retryError = error.localizedDescription
+            }
+        } label: {
+            // Explicit on-accent text: the default white fails contrast on
+            // the dark-mode green fill.
+            Text("Retry").foregroundStyle(PocketColor.accentOnAccent)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(PocketColor.accent)
+        Button("Choose another model") { onBack() }
+            .buttonStyle(.bordered)
+            .tint(PocketColor.accent)
     }
 }
 
@@ -661,16 +718,18 @@ private struct OnboardingReadyView: View {
                     Button(action: { onStart(title) }) {
                         HStack(spacing: PocketSpacing.s12) {
                             Image(systemName: icon)
-                                .font(.system(size: 15))
+                                .font(.pocket(.callout))
                                 .foregroundStyle(PocketColor.accent)
-                                .frame(width: 24)
+                                .frame(width: PocketSpacing.s24)
+                                .accessibilityHidden(true)
                             Text(title)
                                 .font(.pocket(.callout))
                                 .foregroundStyle(PocketColor.textPrimary)
                             Spacer()
                             Image(systemName: "arrow.up.right")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.pocket(.caption))
                                 .foregroundStyle(PocketColor.textTertiary)
+                                .accessibilityHidden(true)
                         }
                         .padding(.horizontal, PocketSpacing.s16)
                         .padding(.vertical, PocketSpacing.s12)
@@ -690,6 +749,7 @@ private struct OnboardingReadyView: View {
             } label: {
                 Text("Start chatting")
                     .font(.pocket(.headline))
+                    .foregroundStyle(PocketColor.accentOnAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PocketSpacing.s12)
             }
