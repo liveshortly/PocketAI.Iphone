@@ -75,6 +75,10 @@ struct ChatView: View {
     /// UI-31: the notice the last Mac re-check posted, so a later good check
     /// clears only that and never an unrelated error.
     @State private var lastRemoteCheckError: String?
+    /// The error the last reply stream posted. Only that one offers Retry —
+    /// a failed rename/attach/delete used to show Retry, which regenerated
+    /// the last reply instead of retrying the thing that failed.
+    @State private var lastStreamError: String?
     @State private var cursorBlink = false
     // Honest instruments: a live decode rate derived from the real stream,
     // not a hardcoded constant. Updated as deltas arrive; the final
@@ -289,7 +293,7 @@ struct ChatView: View {
                     }
                 }
                 .defaultScrollAnchor(.bottom)
-                .scrollDismissesKeyboard(.immediately)
+                .scrollDismissesKeyboard(.interactively)
                 // UI-31: pull at the top of history resyncs this chat. System
                 // spinner: UIRefreshControl can't host PocketMark. If "load
                 // older" pagination lands, it takes the top pull and this
@@ -476,13 +480,25 @@ struct ChatView: View {
         }
     }
 
+    /// The chevron promised a picker; it was a dead label. Opens the same
+    /// per-chat picker as the header.
     private func modelPill(_ label: String) -> some View {
-        HStack(spacing: PocketSpacing.s4) {
-            Text(label).font(.pocket(.caption))
-            Image(systemName: "chevron.down").font(.system(size: 9))
+        Button(action: openModelPicker) {
+            HStack(spacing: PocketSpacing.s4) {
+                Text(label).font(.pocket(.caption))
+                Image(systemName: "chevron.down").font(.system(size: 9))
+            }
+            .foregroundStyle(PocketColor.textSecondary)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
-        .foregroundStyle(PocketColor.textSecondary)
-        .padding(.vertical, PocketSpacing.s4)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Model: \(label)")
+        .accessibilityHint("Changes the model for this chat")
+    }
+
+    private func openModelPicker() {
+        if isGenerating { showSwitchWhileGeneratingAlert = true } else { showModelPicker = true }
     }
 
     private func setAccessoryCollapsed(_ collapsed: Bool) {
@@ -509,14 +525,16 @@ struct ChatView: View {
                     // Live state mark left of the title (§5.1); tap opens Pulse.
                     Button { showPulseDetailSheet = true } label: {
                         PocketMarkView(state: headerMarkState, size: 22)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Live status, opens Pulse")
+                    .accessibilityLabel("Pulse")
+                    .accessibilityValue(isGenerating ? "Generating" : "Ready")
+                    .accessibilityHint("Shows memory, speed and loaded models")
                     // The whole title block opens the per-chat model picker
                     // (U2/U8) — a 9pt chevron alone was undiscoverable.
-                    Button {
-                        if isGenerating { showSwitchWhileGeneratingAlert = true } else { showModelPicker = true }
-                    } label: {
+                    Button(action: openModelPicker) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(title ?? "New chat")
                                 .font(.pocket(.headline))
@@ -536,7 +554,9 @@ struct ChatView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Model: \(modelLocationLabel). Tap to change.")
+                    // The title is the chat's name; VoiceOver must hear it too.
+                    .accessibilityLabel("\(title ?? "New chat"), \(modelLocationLabel)")
+                    .accessibilityHint("Changes the model for this chat")
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -561,14 +581,14 @@ struct ChatView: View {
                                 .frame(minWidth: 44, minHeight: 44)
                                 .contentShape(Rectangle())
                         }
-                        .accessibilityLabel(autoSpeakReplies ? "Auto-speak replies enabled" : "Auto-speak replies disabled")
-                        .accessibilityHint("Toggles automatic speech for assistant replies")
+                        .accessibilityLabel("Speak replies")
+                        .accessibilityValue(autoSpeakReplies ? "On" : "Off")
+                        .accessibilityAddTraits(.isToggle)
+                        .accessibilityHint("Reads each new reply aloud")
                     }
 
                     Menu {
-                        Button("Change model", systemImage: "cpu") {
-                            if isGenerating { showSwitchWhileGeneratingAlert = true } else { showModelPicker = true }
-                        }
+                        Button("Change model", systemImage: "cpu", action: openModelPicker)
                         stateMenuItems
                         Divider()
                         Button("Generate image", systemImage: "sparkles") {
@@ -576,11 +596,11 @@ struct ChatView: View {
                             showImageGenSheet = true
                         }
                         Divider()
-                        Button("Rename") { newTitle = title ?? ""; renamingTitle = true }
+                        Button("Rename", systemImage: "pencil") { newTitle = title ?? ""; renamingTitle = true }
                         ShareLink(item: markdownTranscript()) {
                             Label("Export as Markdown", systemImage: "square.and.arrow.up")
                         }
-                        Button("Delete", role: .destructive) {
+                        Button("Delete", systemImage: "trash", role: .destructive) {
                             showDeleteConfirm = true
                         }
                     } label: {
@@ -588,6 +608,7 @@ struct ChatView: View {
                             .frame(minWidth: 44, minHeight: 44)
                             .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("Chat options")
                 }
             }
         }
@@ -630,7 +651,7 @@ struct ChatView: View {
             }
             .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-        .alert("Voice Input Permission Required", isPresented: Binding(
+        .alert("Allow voice input", isPresented: Binding(
             get: {
                 if case .denied = voiceDictation.state { return true }
                 return false
@@ -651,7 +672,7 @@ struct ChatView: View {
                 Text(message)
             }
         }
-        .alert("Voice Input Error", isPresented: Binding(
+        .alert("Voice input didn't work", isPresented: Binding(
             get: {
                 if case .error = voiceDictation.state { return true }
                 return false
@@ -703,10 +724,10 @@ struct ChatView: View {
                 }
             )
         }
-        .alert("Camera Unavailable", isPresented: $cameraUnavailableAlert) {
+        .alert("Camera unavailable", isPresented: $cameraUnavailableAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Camera is not available on this device or simulator.")
+            Text("This device has no camera PocketAI can use.")
         }
     }
 
@@ -757,7 +778,7 @@ struct ChatView: View {
                     lastReply: lastReplyStats,
                     egressCountToday: model.core.egressLog(limit: 500).count
                 )
-                .navigationTitle("Pulse Diagnostics")
+                .navigationTitle("Pulse")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
@@ -791,18 +812,38 @@ struct ChatView: View {
         }
     }
 
+    /// Honest location line (§1.2): says where answers come from, never a
+    /// generic claim that would be false for a Mac-routed chat.
+    private var emptyChatSubtitle: String {
+        guard let id = currentModelId else { return "Download a model in Models, or pair your Mac." }
+        if id.hasPrefix("mac:") {
+            return "Runs on \(Self.humanLabel(peerName(for: id)) ?? "your Mac"), over your own network."
+        }
+        return "Runs on this iPhone. Nothing leaves it."
+    }
+
     @ViewBuilder
     private var emptyChatView: some View {
         VStack(spacing: PocketSpacing.s20) {
             Spacer(minLength: 40)
             PocketMarkView(state: .idle, size: 64)
             VStack(spacing: PocketSpacing.s8) {
-                Text("How can I help you today?")
+                Text(currentModelId == nil ? "Choose a model to start" : "How can I help?")
                     .font(.pocket(.title))
                     .foregroundStyle(PocketColor.textPrimary)
-                Text("Private on-device intelligence")
+                Text(emptyChatSubtitle)
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
+            }
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            // A chat with no model can only fail on send; give the fix first.
+            if currentModelId == nil {
+                Button("Choose a model", action: openModelPicker)
+                    .font(.pocket(.headline))
+                    .buttonStyle(.borderedProminent)
+                    .tint(PocketColor.accent)
+                    .frame(minHeight: 44)
             }
             Spacer(minLength: 40)
         }
@@ -812,12 +853,14 @@ struct ChatView: View {
 
     @ViewBuilder
     private var messageList: some View {
+        // Once per render, not per row: rows re-render on every streamed delta.
+        let lastAssistantId = messages.last(where: { $0.role == "assistant" })?.id
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                 // A message starts a new group when the role differs from the
                 // one before it; grouped messages sit tight, groups breathe.
                 let isGroupStart = index == 0 || messages[index - 1].role != message.role
-                messageRow(message, showHeader: isGroupStart)
+                messageRow(message, showHeader: isGroupStart, isLatestReply: message.id == lastAssistantId)
                     .id(message.id)
                     .padding(.top, index == 0 ? 0 : (isGroupStart ? PocketSpacing.s16 : PocketSpacing.s4))
             }
@@ -840,20 +883,26 @@ struct ChatView: View {
     private static let tailId = "chat-tail"
 
     @ViewBuilder
-    private func messageRow(_ message: Message, showHeader: Bool) -> some View {
+    private func messageRow(_ message: Message, showHeader: Bool, isLatestReply: Bool) -> some View {
         let text = textForMessage(message)
         let thumbnails = imagesForMessage(message)
 
         if message.role == "user" {
             UserBubble(text: text, attachmentThumbnails: thumbnails)
                 .accessibilityIdentifier("chat_bubble_user")
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(thumbnails.isEmpty ? "You: \(text)" : "You, with image: \(text)")
                 .contextMenu {
                     if !text.isEmpty {
-                        Button("Copy") { UIPasteboard.general.string = text }
+                        Button("Copy", systemImage: "doc.on.doc") { copyToPasteboard(text) }
+                        ShareLink(item: text) { Label("Share", systemImage: "square.and.arrow.up") }
                     }
                 }
         } else {
             let isCurrentSpeaking = speechPlayback.isSpeaking && speechPlayback.currentText == text
+            // regenerateLastTurn() always redoes the newest reply, so Retry is
+            // only honest on that one, and never mid-stream.
+            let canRetry = !isGenerating && isLatestReply
             #if DEBUG
             let isCurrentStreaming = !PerfDiagnostics.isEnabled && isGenerating && message.id == messages.last?.id
             #else
@@ -888,8 +937,8 @@ struct ChatView: View {
                         reasoning: message.reasoning,
                         isThinking: message.status == .streaming && message.stats == nil,
                         statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
-                        onCopy: { UIPasteboard.general.string = text },
-                        onRetry: { regenerateLastTurn() },
+                        onCopy: { copyToPasteboard(text) },
+                        onRetry: { if canRetry { regenerateLastTurn() } },
                         onSpeak: {
                             if isCurrentSpeaking {
                                 speechPlayback.stop()
@@ -907,6 +956,7 @@ struct ChatView: View {
                             .opacity(cursorBlink ? 1.0 : 0.2)
                             .animation(.easeInOut(duration: 0.45), value: cursorBlink)
                             .padding(.bottom, 4)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -945,10 +995,10 @@ struct ChatView: View {
                                     Text("[\(num)]")
                                         .font(.pocket(.footnote))
                                         .foregroundStyle(PocketColor.accent)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 4)
-                                        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 6))
-                                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(PocketColor.lineHairline))
+                                        .padding(.horizontal, PocketSpacing.s8)
+                                        .padding(.vertical, PocketSpacing.s4)
+                                        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous).strokeBorder(PocketColor.lineHairline))
                                         .frame(minWidth: 44, minHeight: 44)
                                         .contentShape(Rectangle())
                                 }
@@ -963,10 +1013,24 @@ struct ChatView: View {
                     // ponytail: inline [n] tap-through needs MessageView token parsing
                 }
             }
+            // VoiceOver: the reply reads as one element with its actions in
+            // the rotor — the long-press menu is unreachable otherwise.
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(isCurrentStreaming ? .updatesFrequently : [])
+            .accessibilityAction(named: "Copy") { copyToPasteboard(text) }
+            .accessibilityAction(named: isCurrentSpeaking ? "Stop speaking" : "Speak") {
+                if isCurrentSpeaking { speechPlayback.stop() } else { speechPlayback.speak(text) }
+            }
+            .accessibilityActions {
+                if canRetry { Button("Retry") { regenerateLastTurn() } }
+            }
             .contextMenu {
-                Button("Copy") { UIPasteboard.general.string = text }
+                Button("Copy", systemImage: "doc.on.doc") { copyToPasteboard(text) }
+                if !text.isEmpty {
+                    ShareLink(item: text) { Label("Share", systemImage: "square.and.arrow.up") }
+                }
                 if isCurrentSpeaking {
-                    Button("Stop Speaking", systemImage: "stop.fill") {
+                    Button("Stop speaking", systemImage: "stop.fill") {
                         speechPlayback.stop()
                     }
                     .accessibilityLabel("Stop speaking")
@@ -981,9 +1045,16 @@ struct ChatView: View {
                         openSourceSheet(for: message, selectedCitation: nil)
                     }
                 }
-                Button("Retry") { regenerateLastTurn() }
+                if canRetry {
+                    Button("Retry", systemImage: "arrow.clockwise") { regenerateLastTurn() }
+                }
             }
         }
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        UIPasteboard.general.string = text
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     private func extractCitationNumbers(from text: String) -> [Int] {
@@ -1035,10 +1106,12 @@ struct ChatView: View {
             }
             .foregroundStyle(PocketColor.accent)
             .padding(.horizontal, PocketSpacing.s12)
-            .padding(.vertical, 7)
+            .padding(.vertical, PocketSpacing.s8)
             .background(.regularMaterial, in: Capsule())
             .overlay(Capsule().strokeBorder(PocketColor.lineHairline))
             .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+            .frame(minHeight: 44) // pill stays slim; the hit target doesn't
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -1061,23 +1134,58 @@ struct ChatView: View {
         }
     }
 
+    /// §7.2 error state: reason + the fix that matches it. Retry only for a
+    /// failed reply; model problems (stream or Mac re-check) offer the picker;
+    /// every card can be dismissed.
     private func errorCard(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-            Text(text)
-                .font(.pocket(.footnote))
-                .foregroundStyle(PocketColor.statusBad)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("Retry") {
-                errorText = nil
-                regenerateLastTurn()
+        let isStreamError = text == lastStreamError
+        let isModelProblem = isStreamError || text == lastRemoteCheckError
+        return VStack(alignment: .leading, spacing: PocketSpacing.s4) {
+            HStack(alignment: .firstTextBaseline, spacing: PocketSpacing.s8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(PocketColor.statusBad)
+                    .accessibilityHidden(true)
+                Text(text)
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    errorText = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.pocket(.footnote).weight(.semibold))
+                        .foregroundStyle(PocketColor.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss")
             }
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
+            if isModelProblem {
+                HStack(spacing: PocketSpacing.s16) {
+                    if isStreamError && !isGenerating {
+                        Button("Retry") {
+                            errorText = nil
+                            regenerateLastTurn()
+                        }
+                        .frame(minHeight: 44)
+                    }
+                    Button("Change model", action: openModelPicker)
+                        .frame(minHeight: 44)
+                }
+                .font(.pocket(.footnote).weight(.semibold))
+                .tint(PocketColor.accent)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(PocketSpacing.s12)
-        .background(PocketColor.bgSunken)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.leading, PocketSpacing.s12)
+        .padding(.vertical, PocketSpacing.s4)
+        .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
+                .strokeBorder(PocketColor.statusBad.opacity(0.4), lineWidth: 0.5)
+        )
     }
 
     private func reload() {
@@ -1170,6 +1278,7 @@ struct ChatView: View {
         speechPlayback.stop()
         let text = promptText
         composerText = ""
+        UIImpactFeedbackGenerator(style: .light).impactOccurred() // §3.4 send
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         let attachment = pendingAttachment
         pendingAttachment = nil
@@ -1252,12 +1361,18 @@ struct ChatView: View {
     private func consumeStream(_ stream: AsyncThrowingStream<ChatStreamEvent, Error>, shouldAutoSpeak: Bool, streamId: UUID) async {
         var partialText = ""
         var partialReasoning = ""
+        var sawFirstToken = false
         do {
             // No reload here: it would race the core's DB write and wipe the
             // instant local echo. The .done event reloads with persisted rows.
             for try await event in stream {
                 switch event {
                 case .delta(let delta):
+                    if !sawFirstToken, !(delta.text.isEmpty && delta.reasoning.isEmpty) {
+                        // §3.4: one soft tap when the reply starts, never per token.
+                        sawFirstToken = true
+                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                    }
                     partialText += delta.text
                     partialReasoning += delta.reasoning
                     genCharCount += delta.text.count + delta.reasoning.count
@@ -1298,7 +1413,11 @@ struct ChatView: View {
                 // owns the generation state, so skip this turn's cleanup.
                 return
             }
-            if activeStreamId == streamId { errorText = friendlyError(error) }
+            if activeStreamId == streamId {
+                let message = friendlyError(error)
+                errorText = message
+                lastStreamError = message
+            }
         }
         // Only the stream that still owns the screen may clean up — a Stop
         // followed by an immediate Retry must not be clobbered by the old
@@ -1306,6 +1425,10 @@ struct ChatView: View {
         guard activeStreamId == streamId else { return }
         isGenerating = false
         liveTokPerSec = 0
+        // §8: one announcement when the reply completes, not per token.
+        if errorText == nil {
+            AccessibilityNotification.Announcement("Reply finished").post()
+        }
         // Only a reply the reader was not watching is worth a notification,
         // and only one that actually took a while (§7.10) — an instant answer
         // needs no announcement.
@@ -1448,7 +1571,7 @@ struct ChatView: View {
         }
         .padding(.horizontal, PocketSpacing.s12)
         .padding(.vertical, PocketSpacing.s8)
-        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
     }
 
     private var recordingComposerBar: some View {
@@ -1595,7 +1718,7 @@ struct ChatView: View {
                 .accessibilityLabel("Remove attached image")
             }
             .padding(PocketSpacing.s8)
-            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
             .padding(.horizontal, PocketSpacing.gutterIphone)
             .padding(.bottom, PocketSpacing.s8)
         }

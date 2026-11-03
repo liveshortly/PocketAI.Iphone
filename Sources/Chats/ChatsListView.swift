@@ -84,8 +84,8 @@ struct ChatsListView: View {
         var groups: [ConversationGroup] = []
         if !today.isEmpty { groups.append(ConversationGroup(title: "Today", conversations: today)) }
         if !yesterday.isEmpty { groups.append(ConversationGroup(title: "Yesterday", conversations: yesterday)) }
-        if !last7Days.isEmpty { groups.append(ConversationGroup(title: "Previous 7 Days", conversations: last7Days)) }
-        if !last30Days.isEmpty { groups.append(ConversationGroup(title: "Previous 30 Days", conversations: last30Days)) }
+        if !last7Days.isEmpty { groups.append(ConversationGroup(title: "Previous 7 days", conversations: last7Days)) }
+        if !last30Days.isEmpty { groups.append(ConversationGroup(title: "Previous 30 days", conversations: last30Days)) }
         if !earlier.isEmpty { groups.append(ConversationGroup(title: "Earlier", conversations: earlier)) }
         return groups
     }
@@ -135,7 +135,7 @@ struct ChatsListView: View {
             } message: {
                 Text("This permanently deletes the project and its documents.")
             }
-            .alert("Rename Project", isPresented: Binding(
+            .alert("Rename project", isPresented: Binding(
                 get: { renamingProject != nil },
                 set: { if !$0 { renamingProject = nil } }
             )) {
@@ -301,7 +301,7 @@ struct ChatsListView: View {
                 }
                 .disabled(selectedIds.isEmpty)
                 Spacer()
-                Button("Select All") {
+                Button("Select all") {
                     selectedIds = Set(conversations.map(\.id))
                 }
             }
@@ -396,6 +396,7 @@ struct ChatsListView: View {
                         .foregroundStyle(PocketColor.accent)
                 }
                 .padding(.top, 2)
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: PocketSpacing.s4) {
                     Text(conversation.title ?? "New chat")
@@ -422,7 +423,7 @@ struct ChatsListView: View {
             .padding(.vertical, PocketSpacing.s4)
         }
         .contextMenu {
-            Button("Select Chats", systemImage: "checkmark.circle") {
+            Button("Select chats", systemImage: "checkmark.circle") {
                 selectedIds = [conversation.id]
                 withAnimation { editMode = .active }
             }
@@ -510,20 +511,23 @@ struct ChatsListView: View {
 
     // MARK: - Projects Content
 
-    @ViewBuilder
     private var projectsContent: some View {
-        if filteredProjects.isEmpty {
-            emptyProjectsState
-        } else {
-            List {
-                ForEach(filteredProjects, id: \.id) { project in
-                    projectRow(project)
+        // .searchable on the Group, like chats: a no-hit query used to swap
+        // the List out and take its own search field (and clear) with it.
+        Group {
+            if filteredProjects.isEmpty {
+                emptyProjectsState
+            } else {
+                List {
+                    ForEach(filteredProjects, id: \.id) { project in
+                        projectRow(project)
+                    }
                 }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .searchable(text: $searchText, prompt: "Search projects")
         }
+        .searchable(text: $searchText, prompt: "Search projects")
     }
 
     private func projectRow(_ project: Project) -> some View {
@@ -538,6 +542,7 @@ struct ChatsListView: View {
                         .foregroundStyle(PocketColor.accent)
                 }
                 .padding(.top, 2)
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: PocketSpacing.s4) {
                     HStack(alignment: .firstTextBaseline) {
@@ -572,13 +577,12 @@ struct ChatsListView: View {
             }
             .padding(.vertical, PocketSpacing.s4)
         }
-        .accessibilityLabel("Project: \(project.name)")
         .contextMenu {
             Button("Rename", systemImage: "pencil") {
                 renamingProject = project
                 renameProjectName = project.name
             }
-            Button("Delete", role: .destructive) {
+            Button("Delete", systemImage: "trash", role: .destructive) {
                 pendingDeleteProject = project
             }
         }
@@ -615,7 +619,7 @@ struct ChatsListView: View {
                     .foregroundStyle(PocketColor.textPrimary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Group chats with customized instructions and documents.")
+                Text(projects.isEmpty ? "Group chats with customized instructions and documents." : "Try a different name.")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
                     .multilineTextAlignment(.center)
@@ -629,7 +633,7 @@ struct ChatsListView: View {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     isShowingCreateProject = true
                 } label: {
-                    Label("Create Project", systemImage: "plus")
+                    Label("Create project", systemImage: "plus")
                         .font(.pocket(.headline))
                         // Spans the content column rather than hugging a
                         // constant, so it reads the same on every width.
