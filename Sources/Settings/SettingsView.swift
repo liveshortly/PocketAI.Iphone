@@ -278,7 +278,7 @@ private struct NetworkProofView: View {
                 Section("This session") {
                     ForEach(entries, id: \.ts) { entry in
                         VStack(alignment: .leading, spacing: PocketSpacing.s4) {
-                            Text(entry.purpose).font(.pocket(.body))
+                            Text(NetPurpose.label(for: entry.purpose)).font(.pocket(.body))
                             Text("\(entry.host) · \(formatBytes(entry.bytesOut + entry.bytesIn))")
                                 .font(.pocket(.caption))
                                 .foregroundStyle(PocketColor.textTertiary)
@@ -288,7 +288,7 @@ private struct NetworkProofView: View {
             }
 
             Section {
-                Text("Connections to your paired Mac are listed under Devices.")
+                Text("Chat sync with your paired Mac shows here as “To your Mac”. Other connections to it are listed under Devices.")
                     .font(.pocket(.caption))
                     .foregroundStyle(PocketColor.textTertiary)
             }

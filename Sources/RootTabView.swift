@@ -65,9 +65,15 @@ struct RootTabView: View {
             guard heartbeatKey.active, heartbeatKey.online, model.hasOnboarded else { return }
             await MacLink.shared.runHeartbeats(core: model.core, hooks: model.hooks)
         }
+        .task(id: heartbeatKey) {
+            // NET-22: chat sync with the paired Mac while foreground + online.
+            guard heartbeatKey.active, heartbeatKey.online, model.hasOnboarded else { return }
+            await ChatSync.shared.runForeground(core: model.core, hooks: model.hooks)
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
                 MacLink.shared.sayGoodbye(core: model.core, hooks: model.hooks)
+                ChatSync.scheduleBackgroundTask()
             }
             if newPhase == .active {
                 checkSharedInbox()

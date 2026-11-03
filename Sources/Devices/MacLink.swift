@@ -55,6 +55,8 @@ final class MacLink {
                 do {
                     try await client.heartbeat()
                     misses[peer.id] = 0
+                    // NET-22: the Mac just came (back) online - catch chats up.
+                    if let was = states[peer.id], was != .connected { ChatSync.shared.syncSoon(core: core, hooks: hooks) }
                     states[peer.id] = .connected
                 } catch PeerClientError.disconnectedByHost {
                     // Probe once per foreground run; the Mac may lift it.
@@ -132,6 +134,7 @@ final class MacLink {
             try await client.openSession()
             try await client.heartbeat()
             states[peer.id] = .connected
+            ChatSync.shared.syncSoon(core: AppModel.shared.core, hooks: hooks)
             return true
         } catch {
             states[peer.id] = .unreachable

@@ -387,6 +387,8 @@ struct DevicesView: View {
 
             MacLinkSection(peer: peer)
 
+            ChatSyncSection(peer: peer)
+
             Section("Mac Capabilities") {
                 NavigationLink {
                     ModelsView(startOnMac: true, embedded: true)

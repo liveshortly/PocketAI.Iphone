@@ -432,6 +432,9 @@ struct ChatView: View {
             }
             #endif
 
+            // NET-22: quiet, only while this chat waits to reach the Mac.
+            ChatSyncNote(conversationId: conversationId)
+                .padding(.bottom, PocketSpacing.s4)
             accessoryRow
             VStack(spacing: 0) { composerArea }
                 .background(PocketColor.bgCanvas.ignoresSafeArea(edges: .bottom))

@@ -7,6 +7,7 @@ struct PocketAIApp: App {
 
     init() {
         DiagnosticsLog.shared.append("PocketAIApp: application initialized")
+        ChatSync.registerBackgroundTask()
         RemoteChatSelfTestRunner.shared.runIfNeeded(model: AppModel.shared)
     }
 

@@ -409,9 +409,12 @@ struct ChatsListView: View {
                             .multilineTextAlignment(.leading)
                     }
 
-                    Text(Self.relativeFormatter.localizedString(for: Date(millisecondsSince1970: conversation.updatedAt), relativeTo: Date()))
-                        .font(.pocket(.caption))
-                        .foregroundStyle(PocketColor.textTertiary)
+                    HStack(spacing: PocketSpacing.s4) {
+                        Text(Self.relativeFormatter.localizedString(for: Date(millisecondsSince1970: conversation.updatedAt), relativeTo: Date()))
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.textTertiary)
+                        ChatSyncDot(conversationId: conversation.id)
+                    }
                 }
             }
             .padding(.vertical, PocketSpacing.s4)

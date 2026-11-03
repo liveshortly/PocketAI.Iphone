@@ -61,6 +61,9 @@ targets:
         NSLocalNetworkUsageDescription: "PocketAI finds and connects to your Mac on this network."
         NSBonjourServices:
           - _pocketai._tcp
+        # NET-22: chat-sync catch-up with the paired Mac.
+        UIBackgroundModes: [processing]
+        BGTaskSchedulerPermittedIdentifiers: [app.getpocketai.chatsync]
         NSCameraUsageDescription: "Scan your Mac's pairing code and take photos for vision models."
         NSMicrophoneUsageDescription: "PocketAI uses the microphone for voice input."
         NSSpeechRecognitionUsageDescription: "PocketAI transcribes your voice on-device for voice input."
