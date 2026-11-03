@@ -35,15 +35,16 @@ struct StorageUsedView: View {
                         .font(.pocket(.body))
                         .foregroundStyle(PocketColor.textPrimary)
                     Spacer()
-                    Text(formatBytes(total))
+                    Text(installed.isEmpty ? "None" : formatBytes(total))
                         .font(.pocket(.body).weight(.semibold))
                         .foregroundStyle(PocketColor.textPrimary)
                 }
+                .accessibilityElement(children: .combine)
             }
 
             if installed.isEmpty {
                 Section {
-                    Text("No models are stored on this iPhone.")
+                    Text("No models are stored on this iPhone. Download one from the Models tab.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
                 }
@@ -65,11 +66,18 @@ struct StorageUsedView: View {
                             } label: {
                                 Image(systemName: "trash")
                                     .foregroundStyle(PocketColor.statusBad)
+                                    // UI-111: the bare glyph was a ~20 pt target.
+                                    .frame(minWidth: 44, minHeight: 44)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.borderless)
                             .accessibilityLabel("Delete \(entry.manifest.displayName)")
                         }
                         .accessibilityIdentifier("storage_row_\(entry.manifest.id)")
+                        // UI-111: the iOS convention for removing a list item.
+                        .swipeActions {
+                            Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = entry }
+                        }
                     }
                 }
             }
@@ -88,6 +96,7 @@ struct StorageUsedView: View {
                     do {
                         try model.core.deleteModel(modelId: entry.manifest.id)
                         if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
                     } catch {
                         deleteError = "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)"
                     }
@@ -98,7 +107,10 @@ struct StorageUsedView: View {
             Button("Cancel", role: .cancel) { pendingDelete = nil }
         } message: {
             if let entry = pendingDelete {
-                Text("Frees \(formatBytes(diskBytes(entry))).")
+                // UI-111: say so when this is the model new chats use.
+                Text(model.selectedModelId == entry.manifest.id
+                     ? "Frees \(formatBytes(diskBytes(entry))). It's your default chat model, so you'll choose another next time you chat."
+                     : "Frees \(formatBytes(diskBytes(entry))). You can download it again later.")
             }
         }
         .alert(
@@ -112,7 +124,9 @@ struct StorageUsedView: View {
     }
 
     private func reload() {
+        // UI-111: largest first, like iPhone Storage — the reason to be here.
         installed = model.core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: true))
+            .sorted { diskBytes($0) > diskBytes($1) }
     }
 }
 
@@ -200,7 +214,8 @@ struct SpeechToTextView: View {
             Section("Apple Speech Recognition") {
                 LabeledContent("Language", value: Locale.current.localizedString(forIdentifier: langId) ?? langId)
                 LabeledContent("Available", value: (rec?.isAvailable ?? false) ? "Yes" : "No")
-                LabeledContent("On-device", value: (rec?.supportsOnDeviceRecognition ?? false) ? "Supported" : "Server-based")
+                // UI-112: says where audio goes, not "Server-based".
+                LabeledContent("Processed", value: (rec?.supportsOnDeviceRecognition ?? false) ? "On this iPhone" : "By Apple")
                 LabeledContent("Permission", value: authLabel)
             }
 
@@ -211,6 +226,8 @@ struct SpeechToTextView: View {
                             UIApplication.shared.open(url)
                         }
                     }
+                } footer: {
+                    Text("Speech recognition is off for PocketAI. Turn it on in iOS Settings to dictate messages.")
                 }
             }
 
@@ -271,6 +288,7 @@ struct TextToSpeechVoiceView: View {
                         }
                     }
                 }
+                .accessibilityAddTraits(ttsVoiceId.isEmpty ? .isSelected : [])
             }
 
             if voices.isEmpty {
@@ -280,7 +298,8 @@ struct TextToSpeechVoiceView: View {
                         .foregroundStyle(PocketColor.textSecondary)
                 }
             } else {
-                Section("\(Locale.current.identifier) voices") {
+                // UI-112: "English voices", not the raw "en_IN voices".
+                Section("\(languageName) voices") {
                     ForEach(voices, id: \.identifier) { voice in
                         Button {
                             ttsVoiceId = voice.identifier
@@ -291,7 +310,7 @@ struct TextToSpeechVoiceView: View {
                                     Text(voice.name)
                                         .font(.pocket(.body))
                                         .foregroundStyle(PocketColor.textPrimary)
-                                    Text(voice.language)
+                                    Text(voiceDetail(voice))
                                         .font(.pocket(.caption))
                                         .foregroundStyle(PocketColor.textSecondary)
                                 }
@@ -302,6 +321,8 @@ struct TextToSpeechVoiceView: View {
                                 }
                             }
                         }
+                        .accessibilityAddTraits(ttsVoiceId == voice.identifier ? .isSelected : [])
+                        .accessibilityHint("Plays a sample and uses this voice for spoken replies")
                         .accessibilityIdentifier("tts_voice_row_\(voice.identifier)")
                     }
                 }
@@ -319,6 +340,22 @@ struct TextToSpeechVoiceView: View {
         // The sample kept talking after you left the screen, and the only
         // control that could stop it was back here.
         .onDisappear { preview.stopSpeaking(at: .immediate) }
+    }
+
+    private var languageName: String {
+        Locale.current.localizedString(forLanguageCode: Locale.current.language.languageCode?.identifier ?? "")
+            ?? Locale.current.identifier
+    }
+
+    /// Region plus quality, so two "Samantha"s can be told apart and the
+    /// better-sounding downloads are visible.
+    private func voiceDetail(_ voice: AVSpeechSynthesisVoice) -> String {
+        let region = Locale.current.localizedString(forIdentifier: voice.language) ?? voice.language
+        switch voice.quality {
+        case .premium: return "\(region) · Premium"
+        case .enhanced: return "\(region) · Enhanced"
+        default: return region
+        }
     }
 
     private func speak(_ voice: AVSpeechSynthesisVoice) {
@@ -341,7 +378,15 @@ struct PairMacView: View {
             if peers.isEmpty {
                 Section {
                     stepCard(number: "1", title: "Open PocketAI on your Mac", subtitle: "Go to Devices → Pair iPhone to show your QR code.")
-                    stepCard(number: "2", title: "Open the Mac tab here", subtitle: "Tap Mac in the tab bar, then Scan pairing code to point this iPhone at your Mac.")
+                    stepCard(number: "2", title: "Scan the code from the Mac tab", subtitle: "The Mac tab opens the camera to scan your Mac's pairing code.")
+                    // UI-113: go there instead of describing where it is.
+                    Button {
+                        model.nav.select(tab: .devices)
+                    } label: {
+                        Label("Open the Mac tab", systemImage: "qrcode.viewfinder")
+                    }
+                    .tint(PocketColor.accent)
+                    .accessibilityIdentifier("settings_pair_open_mac_tab")
                 } header: {
                     Text("Pair over local Wi-Fi")
                 } footer: {
@@ -356,13 +401,21 @@ struct PairMacView: View {
                             icon: "laptopcomputer",
                             tint: PocketColor.statusOk,
                             title: peer.name,
-                            accessory: .value(peer.addrs.first ?? "Connected")
+                            // UI-113: a raw IP read as jargon, and "Connected"
+                            // claimed a live link nobody had checked.
+                            accessory: .value("Paired")
                         )
                     }
+                    Button {
+                        model.nav.select(tab: .devices)
+                    } label: {
+                        Label("Manage in the Mac tab", systemImage: "laptopcomputer")
+                    }
+                    .tint(PocketColor.accent)
                 } header: {
                     Text("Paired")
                 } footer: {
-                    Text("Manage or disconnect paired Macs from the Mac tab.")
+                    Text("Connection, custom address, chat sync and Forget live in the Mac tab.")
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
                 }
@@ -376,14 +429,14 @@ struct PairMacView: View {
 
     private func stepCard(number: String, title: String, subtitle: String) -> some View {
         HStack(alignment: .top, spacing: PocketSpacing.s12) {
-            ZStack {
-                Circle()
-                    .fill(PocketColor.accentSoft)
-                    .frame(width: 28, height: 28)
-                Text(number)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(PocketColor.accent)
-            }
+            // UI-114: the number scales with Dynamic Type; the circle grows
+            // around it instead of clipping a fixed 13 pt glyph.
+            Text(number)
+                .font(.pocket(.footnote).weight(.bold))
+                .foregroundStyle(PocketColor.accent)
+                .frame(minWidth: 28, minHeight: 28)
+                .background(Circle().fill(PocketColor.accentSoft))
+                .accessibilityLabel("Step \(number)")
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.pocket(.headline))
@@ -395,6 +448,8 @@ struct PairMacView: View {
             Spacer()
         }
         .padding(.vertical, PocketSpacing.s4)
+        // UI-114: "Step 1, Open PocketAI…" as one element.
+        .accessibilityElement(children: .combine)
     }
 }
 

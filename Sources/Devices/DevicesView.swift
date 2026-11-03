@@ -59,17 +59,20 @@ struct DevicesView: View {
                 titleVisibility: .visible
             ) {
                 // NET-22: keeping synced chats is the first, default choice.
-                Button("Forget · Keep Synced Chats") {
+                // UI-115: sentence case, per the voice rules.
+                Button("Forget, keep synced chats") {
                     if let peer = peerToRevoke { revoke(peer) }
                     peerToRevoke = nil
                 }
-                Button("Forget and Remove Chats from \(peerToRevoke?.name ?? "Mac")", role: .destructive) {
+                Button("Forget and remove chats from \(peerToRevoke?.name ?? "Mac")", role: .destructive) {
                     if let peer = peerToRevoke { revoke(peer, removeChats: true) }
                     peerToRevoke = nil
                 }
                 Button("Cancel", role: .cancel) { peerToRevoke = nil }
             } message: {
-                Text("This removes the pairing. Chats synced from this Mac stay on this iPhone unless you remove them; nothing is deleted on the Mac. To pause without unpairing, use Disconnect instead. You can pair again anytime by scanning the code on your Mac.")
+                // UI-115: shorter; the footer under the button already
+                // points at Disconnect.
+                Text("You'll need to scan the code on your Mac to pair again. Nothing is deleted on the Mac.")
             }
             .alert(
                 "Something went wrong",
@@ -90,6 +93,8 @@ struct DevicesView: View {
                 // Hardware illustration card
                 hardwareIllustration
                     .padding(.top, PocketSpacing.s12)
+                    // UI-114: decorative; the heading below says the same.
+                    .accessibilityHidden(true)
 
                 VStack(spacing: PocketSpacing.s8) {
                     Text("Use your Mac's models from this iPhone")
@@ -97,6 +102,7 @@ struct DevicesView: View {
                         .foregroundStyle(PocketColor.textPrimary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
 
                     Text("Pair over local Wi-Fi to run larger models using your Mac's unified memory. Everything stays on your devices.")
                         .font(.pocket(.callout))
@@ -148,8 +154,12 @@ struct DevicesView: View {
                             .font(.caption)
                     }
                     .font(.pocket(.footnote))
-                    .foregroundStyle(PocketColor.textTertiary)
+                    // UI-114: tertiary (40 %) fails AA for a link.
+                    .foregroundStyle(PocketColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(minHeight: 44)
                 }
+                .padding(.horizontal, PocketSpacing.gutterIphone)
                 .padding(.bottom, PocketSpacing.s24)
             }
         }
@@ -208,14 +218,14 @@ struct DevicesView: View {
 
     private func stepCard(number: String, title: String, subtitle: String) -> some View {
         HStack(alignment: .top, spacing: PocketSpacing.s12) {
-            ZStack {
-                Circle()
-                    .fill(PocketColor.accentSoft)
-                    .frame(width: 28, height: 28)
-                Text(number)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(PocketColor.accent)
-            }
+            // UI-114: the number scales with Dynamic Type; the circle grows
+            // around it instead of clipping a fixed 13 pt glyph.
+            Text(number)
+                .font(.pocket(.footnote).weight(.bold))
+                .foregroundStyle(PocketColor.accent)
+                .frame(minWidth: 28, minHeight: 28)
+                .background(Circle().fill(PocketColor.accentSoft))
+                .accessibilityLabel("Step \(number)")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -228,6 +238,7 @@ struct DevicesView: View {
             Spacer()
         }
         .padding(PocketSpacing.s16)
+        .accessibilityElement(children: .combine)
         .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card))
         .overlay(RoundedRectangle(cornerRadius: PocketRadius.card).strokeBorder(PocketColor.lineHairline))
     }
@@ -254,24 +265,28 @@ struct DevicesView: View {
                                 .foregroundStyle(PocketColor.textPrimary)
                                 .fixedSize(horizontal: false, vertical: true)
 
+                            // UI-115: the dot used to be green "Paired" even
+                            // while the Status row below said "Not answering".
+                            // Pairing alone (no live state yet) still says Paired.
+                            let badge = statusBadge(peer)
                             HStack(spacing: 6) {
                                 Circle()
-                                    .fill(PocketColor.statusOk)
+                                    .fill(badge.color)
                                     .frame(width: 8, height: 8)
-                                // Honest: pairing is a stored credential, not a
-                                // live link — reachability shows when it's used.
-                                Text("Paired")
+                                    .accessibilityHidden(true)
+                                Text(badge.label)
                                     .font(.pocket(.caption))
-                                    .foregroundStyle(PocketColor.statusOk)
+                                    .foregroundStyle(badge.color)
                             }
                         }
                     }
+                    .accessibilityElement(children: .combine)
 
                     Divider()
 
                     if let addr = peer.addrs.first {
                         HStack {
-                            Text("Network Address")
+                            Text("Network address")
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
                             Spacer(minLength: PocketSpacing.s8)
@@ -330,6 +345,7 @@ struct DevicesView: View {
                         Circle()
                             .fill(probe == nil ? PocketColor.statusBad : PocketColor.statusOk)
                             .frame(width: 8, height: 8)
+                            .accessibilityHidden(true)
                         Text(probe.map { "Responded in \(Int($0 * 1000)) ms" } ?? "No answer from this Mac")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textPrimary)
@@ -361,6 +377,8 @@ struct DevicesView: View {
             Section {
                 TextField("mac.tailnet.ts.net or 100.64.0.3:\(peer.port)", text: $manualAddress)
                     .font(.pocket(.mono))
+                    .accessibilityLabel("Custom address")
+                    .submitLabel(.done)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
@@ -372,18 +390,24 @@ struct DevicesView: View {
                         .foregroundStyle(PocketColor.statusBad)
                 }
 
+                // UI-115: two buttons in one List row both fired on any tap
+                // in the row until they were made borderless. "Use discovered
+                // address" is a reset, not a destructive act, so it isn't red.
                 HStack {
                     Button("Save") { saveManualAddress(for: peer) }
+                        .disabled(manualAddress.trimmingCharacters(in: .whitespaces).isEmpty)
                     Spacer()
-                    Button("Use discovered address", role: .destructive) {
+                    Button("Use discovered address") {
                         manualAddress = ""
                         saveManualAddress(for: peer)
                     }
                     .disabled(manualAddress.isEmpty)
                 }
+                .buttonStyle(.borderless)
+                .frame(minHeight: 44)
                 .font(.pocket(.callout))
             } header: {
-                Text("Custom Address")
+                Text("Custom address")
             } footer: {
                 Text("Optional. Use your Mac's hostname (and port, if it isn't \(String(peer.port))) to reach it over a VPN or mesh network like Tailscale, where local discovery doesn't work. This address is preferred over the discovered one. The connection is still verified against your Mac's paired certificate.")
             }
@@ -392,7 +416,7 @@ struct DevicesView: View {
 
             ChatSyncSection(peer: peer)
 
-            Section("Mac Capabilities") {
+            Section("Mac models") {
                 NavigationLink {
                     ModelsView(startOnMac: true, embedded: true)
                 } label: {
@@ -416,6 +440,15 @@ struct DevicesView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+    }
+
+    private func statusBadge(_ peer: Peer) -> (label: String, color: Color) {
+        switch MacLink.shared.state(for: peer) {
+        case .connected: return ("Connected", PocketColor.statusOk)
+        case .unreachable: return ("Not answering", PocketColor.statusBad)
+        case .disconnected, .disconnectedByHost: return ("Disconnected", PocketColor.statusWarn)
+        case nil: return ("Paired", PocketColor.statusOk)
+        }
     }
 
     private func statusText(_ peer: Peer) -> String {
@@ -485,6 +518,11 @@ struct DevicesView: View {
             await MainActor.run {
                 lastRTT = .some(rtt)
                 isProbing = false
+                // UI-115: the result appears silently below the button.
+                AccessibilityNotification.Announcement(
+                    rtt.map { "Responded in \(Int($0 * 1000)) milliseconds" } ?? "No answer from this Mac"
+                ).post()
+                UINotificationFeedbackGenerator().notificationOccurred(rtt == nil ? .error : .success)
             }
         }
     }
@@ -521,6 +559,10 @@ private struct PairingFlowView: View {
     /// poll loop spins forever and onPaired can fire after the sheet is gone.
     @State private var pairTask: Task<Void, Never>?
     @State private var pollTask: Task<Void, Never>?
+    @FocusState private var codeFieldFocused: Bool
+
+    private var isSuccess: Bool { if case .success = step { return true }; return false }
+    private var isError: Bool { if case .error = step { return true }; return false }
 
     var body: some View {
         NavigationStack {
@@ -538,6 +580,7 @@ private struct PairingFlowView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, PocketSpacing.s16)
                         .padding(.vertical, PocketSpacing.s8)
+                        .frame(minHeight: 44) // UI-116: was ~37 pt tall
                         .background(.ultraThinMaterial, in: Capsule())
                         .padding(.bottom, PocketSpacing.s40)
                     }
@@ -553,6 +596,15 @@ private struct PairingFlowView: View {
                             .textFieldStyle(.roundedBorder)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
+                            .accessibilityLabel("Pairing code")
+                            // UI-116: keyboard up on arrival; Return connects.
+                            .focused($codeFieldFocused)
+                            .submitLabel(.go)
+                            .onSubmit {
+                                if !manualCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    handle(code: manualCode)
+                                }
+                            }
                             .padding(.horizontal, PocketSpacing.gutterIphone)
 
                         Button("Connect") {
@@ -562,8 +614,15 @@ private struct PairingFlowView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(PocketColor.accent)
                         .disabled(manualCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        // UI-116: the only way back to the camera was Cancel.
+                        Button("Scan the code instead") { step = .scan }
+                            .font(.pocket(.callout))
+                            .tint(PocketColor.accent)
+                            .frame(minHeight: 44)
                     }
                     .padding(.top, PocketSpacing.s40)
+                    .onAppear { codeFieldFocused = true }
                 case .connecting:
                     VStack(spacing: PocketSpacing.s20) {
                         PocketMarkView(state: .loading, size: 72)
@@ -574,6 +633,7 @@ private struct PairingFlowView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.horizontal, PocketSpacing.gutterIphone)
+                    .accessibilityElement(children: .combine)
                 case .waitingForApproval:
                     VStack(spacing: PocketSpacing.s20) {
                         PocketMarkView(state: .loading, size: 72)
@@ -589,11 +649,13 @@ private struct PairingFlowView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.horizontal, PocketSpacing.gutterIphone)
+                    .accessibilityElement(children: .combine)
                 case .success:
                     VStack(spacing: PocketSpacing.s20) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 56))
                             .foregroundStyle(PocketColor.statusOk)
+                            .accessibilityHidden(true)
                         Text("Paired with Mac")
                             .font(.pocket(.title))
                             .foregroundStyle(PocketColor.textPrimary)
@@ -617,7 +679,7 @@ private struct PairingFlowView: View {
                             }
                             .fixedSize(horizontal: false, vertical: true)
 
-                            Text("This works while both are on this Wi-Fi. To reach this Mac from anywhere, add its VPN or mesh hostname — Tailscale, Tailnet, WireGuard — under Mac ▸ Custom Address.")
+                            Text("This works while both are on this Wi-Fi. To reach this Mac from anywhere, add its VPN or mesh hostname — Tailscale, Tailnet, WireGuard — under Mac ▸ Custom address.")
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -643,20 +705,30 @@ private struct PairingFlowView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 48))
                             .foregroundStyle(PocketColor.statusBad)
+                            .accessibilityHidden(true)
                         Text(message)
                             .font(.pocket(.body))
                             .foregroundStyle(PocketColor.textPrimary)
                             .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                         Button("Try again") {
                             step = .scan
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(PocketColor.accent)
+                        // UI-116: a code the camera can't read can still be typed.
+                        Button("Enter code manually") { step = .manualEntry }
+                            .font(.pocket(.callout))
+                            .tint(PocketColor.accent)
+                            .frame(minHeight: 44)
                     }
                     .padding(.horizontal, PocketSpacing.gutterIphone)
                 }
             }
-            .navigationTitle("Pair Mac")
+            .navigationTitle("Pair a Mac")
+            // UI-116 / §3.4: pairing success gets a success haptic.
+            .sensoryFeedback(.success, trigger: isSuccess) { _, new in new }
+            .sensoryFeedback(.error, trigger: isError) { _, new in new }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

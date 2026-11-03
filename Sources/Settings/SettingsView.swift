@@ -16,6 +16,9 @@ struct SettingsView: View {
     @State private var egressCount = 0
     @State private var defaultModelName = "Choose"
     @State private var storageTotal: UInt64 = 0
+    /// UI-109: the Mac row names the paired Mac instead of always offering
+    /// "Pair a Mac" to someone who already has.
+    @State private var pairedMacName: String?
 
     /// Reads and writes the one shared flag. Settings and Network Proof both
     /// offer this switch; when each kept its own copy they disagreed.
@@ -58,7 +61,9 @@ struct SettingsView: View {
                     NavigationLink {
                         EnginesView()
                     } label: {
-                        SettingsRow(icon: "bolt.fill", title: "Engine availability", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "Apple + MLX + llama.cpp" : "MLX + llama.cpp"))
+                        // UI-109: a count, not three engine names that wrapped
+                        // or truncated beside the title.
+                        SettingsRow(icon: "bolt.fill", title: "Engines", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "3 available" : "2 available"))
                     }
                     .accessibilityIdentifier("settings_engines_row")
                 }
@@ -105,9 +110,8 @@ struct SettingsView: View {
                         title: "Share diagnostic reports",
                         accessory: .toggle($diagnosticsEnabled)
                     )
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Share diagnostic reports")
-                    .accessibilityValue(diagnosticsEnabled ? "On" : "Off")
+                    // UI-113: the switch now carries its own label; combining
+                    // the row hid the switch's toggle action from VoiceOver.
                     .accessibilityHint("Enables the option to send an in-app diagnostic report to support")
 
                     if diagnosticsEnabled {
@@ -147,12 +151,15 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings_liveshortly_row")
                 }
 
-                // MARK: Mac & devices
-                Section("Mac & devices") {
+                // MARK: Mac
+                Section("Mac") {
                     NavigationLink {
                         PairMacView()
                     } label: {
-                        SettingsRow(icon: "laptopcomputer", title: "Pair a Mac", accessory: .none)
+                        SettingsRow(
+                            icon: "laptopcomputer",
+                            title: pairedMacName == nil ? "Pair a Mac" : "Paired Mac",
+                            accessory: pairedMacName.map { SettingsRowAccessory.value($0) } ?? SettingsRowAccessory.none)
                     }
                     .accessibilityIdentifier("settings_pair_mac_row")
                 }
@@ -160,6 +167,12 @@ struct SettingsView: View {
                 // MARK: About
                 Section("About") {
                     SettingsRow(icon: "info.circle.fill", title: "Version", accessory: .value(appVersionString))
+                        // UI-109: support asks for this; long-press copies it.
+                        .contextMenu {
+                            Button("Copy version", systemImage: "doc.on.doc") {
+                                UIPasteboard.general.string = appVersionString
+                            }
+                        }
                 }
             }
             .listStyle(.insetGrouped)
@@ -173,6 +186,7 @@ struct SettingsView: View {
             .onAppear {
                 egressCount = model.core.egressLog(limit: Self.egressScopeLimit).count
                 refreshModelsInfo()
+                pairedMacName = model.core.peers().first?.name
             }
             .onChange(of: model.selectedModelId) { refreshModelsInfo() }
             .onChange(of: diagnosticsEnabled) { _, newValue in
@@ -264,6 +278,8 @@ private struct NetworkProofView: View {
                         .foregroundStyle(PocketColor.textTertiary)
                 }
                 .padding(.vertical, PocketSpacing.s8)
+                // UI-110: one element, read as a sentence, not "12" then a label.
+                .accessibilityElement(children: .combine)
             }
 
             Section {
@@ -276,19 +292,23 @@ private struct NetworkProofView: View {
 
             if !entries.isEmpty {
                 Section("This session") {
-                    ForEach(entries, id: \.ts) { entry in
+                    // UI-110: two requests in the same millisecond shared an
+                    // id, and SwiftUI dropped or duplicated one of the rows.
+                    ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
                         VStack(alignment: .leading, spacing: PocketSpacing.s4) {
                             Text(NetPurpose.label(for: entry.purpose)).font(.pocket(.body))
                             Text("\(entry.host) · \(formatBytes(entry.bytesOut + entry.bytesIn))")
                                 .font(.pocket(.caption))
                                 .foregroundStyle(PocketColor.textTertiary)
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 }
             }
 
             Section {
-                Text("Chat sync with your paired Mac shows here as “To your Mac”. Other connections to it are listed under Devices.")
+                // UI-110: the iPhone tab is called Mac, not Devices.
+                Text("Chat sync with your paired Mac shows here as “To your Mac”. Other connections to it are listed in the Mac tab.")
                     .font(.pocket(.caption))
                     .foregroundStyle(PocketColor.textTertiary)
             }

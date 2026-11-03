@@ -43,6 +43,10 @@ struct ModelsView: View {
     /// (stale) CatalogEntry (F09/§6.2).
     @State private var detailId: String?
     @State private var pendingDelete: CatalogEntry?
+    /// UI-117: a download being stopped mid-transfer (its bytes are thrown
+    /// away), confirmed first per §1.5.
+    @State private var pendingCancel: CatalogEntry?
+    @State private var isLoadingRemote = false
     @State private var hubResults: [CatalogEntry] = []
     @State private var hubSearchError: String?
     @State private var isSearchingHub = false
@@ -209,6 +213,7 @@ struct ModelsView: View {
                         do {
                             try model.core.deleteModel(modelId: entry.manifest.id)
                             if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
                         } catch {
                             actionError = "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)"
                         }
@@ -219,7 +224,28 @@ struct ModelsView: View {
                 Button("Cancel", role: .cancel) { pendingDelete = nil }
             } message: {
                 if let entry = pendingDelete {
-                    Text("Frees \(formatBytes(diskBytes(entry))).")
+                    // UI-117: say so when this is the model new chats use.
+                    Text(model.selectedModelId == entry.manifest.id
+                         ? "Frees \(formatBytes(diskBytes(entry))). It's your default chat model, so you'll choose another next time you chat."
+                         : "Frees \(formatBytes(diskBytes(entry))). You can download it again later.")
+                }
+            }
+            .confirmationDialog(
+                "Stop downloading \(pendingCancel.map { ModelNaming.short($0.manifest.displayName) } ?? "this model")?",
+                isPresented: Binding(get: { pendingCancel != nil }, set: { if !$0 { pendingCancel = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Stop download", role: .destructive) {
+                    if let entry = pendingCancel {
+                        try? model.core.cancelDownload(modelId: entry.manifest.id)
+                        reload()
+                    }
+                    pendingCancel = nil
+                }
+                Button("Keep downloading", role: .cancel) { pendingCancel = nil }
+            } message: {
+                if let entry = pendingCancel {
+                    Text("The \(formatBytes(entry.bytesDone)) downloaded so far will be discarded. To stop for now and continue later, use Pause.")
                 }
             }
             .alert(
@@ -408,7 +434,22 @@ struct ModelsView: View {
 
             if segment == .onMac {
                 if let remoteError {
-                    Text(remoteError).font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
+                    // UI-117: an error with a way out, not a dead end.
+                    VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                        Text(remoteError).font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
+                        Button("Try again") { Task { await reloadRemote() } }
+                            .font(.pocket(.footnote))
+                            .tint(PocketColor.accent)
+                            .disabled(isLoadingRemote)
+                    }
+                } else if remoteCatalog.isEmpty, isLoadingRemote {
+                    HStack(spacing: PocketSpacing.s8) {
+                        PocketMarkView(state: .loading, size: 16)
+                            .accessibilityHidden(true)
+                        Text("Asking \(macPeer?.name ?? "your Mac") for its models…")
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textSecondary)
+                    }
                 }
                 if peers.count > 1 {
                     // With two paired Macs the screen used to show the first
@@ -543,6 +584,9 @@ struct ModelsView: View {
                                 isPrimaryActionDisabled(hero) ? PocketColor.textTertiary : PocketColor.accent,
                                 in: Capsule()
                             )
+                            // UI-117: 44 pt hit target; the capsule stays compact.
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(isPrimaryActionDisabled(hero))
@@ -780,7 +824,7 @@ struct ModelsView: View {
                         setUserPaused(id, true)
                         reload()
                     },
-                    onCancel: { try? model.core.cancelDownload(modelId: id); reload() }
+                    onCancel: { pendingCancel = entry }
                 )
             }
         case .paused:
@@ -796,7 +840,7 @@ struct ModelsView: View {
                         setUserPaused(id, false)
                         reload()
                     },
-                    onCancel: { try? model.core.cancelDownload(modelId: id); reload() }
+                    onCancel: { pendingCancel = entry }
                 )
             }
         case .queued:
@@ -808,6 +852,9 @@ struct ModelsView: View {
                     .font(.pocket(.footnote))
                     .buttonStyle(.plain)
                     .foregroundStyle(PocketColor.accent)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("Cancel queued download")
             }
         case .verifying:
             HStack(spacing: PocketSpacing.s12) {
@@ -823,8 +870,10 @@ struct ModelsView: View {
                 HStack(spacing: PocketSpacing.s16) {
                     Button("Retry") { try? model.core.startDownload(modelId: id); setUserPaused(id, false); reload() }
                         .buttonStyle(.plain).foregroundStyle(PocketColor.accent)
+                        .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
                     Button("Remove") { try? model.core.cancelDownload(modelId: id); reload() }
                         .buttonStyle(.plain).foregroundStyle(PocketColor.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
                     Spacer()
                 }
                 .font(.pocket(.footnote))
@@ -842,19 +891,13 @@ struct ModelsView: View {
                 Text("Turn off Offline mode in Settings to resume.").font(.pocket(.caption)).foregroundStyle(PocketColor.textSecondary)
             }
             Spacer()
-            Button("Cancel") { try? model.core.cancelDownload(modelId: entry.manifest.id); reload() }
+            Button("Cancel") { pendingCancel = entry }
                 .font(.pocket(.footnote)).buttonStyle(.plain).foregroundStyle(PocketColor.accent)
+                .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                .accessibilityLabel("Cancel download")
         }
     }
 
-    private func failureText(_ reason: String) -> String {
-        switch reason {
-        case "network": return "Download failed — check your connection, then retry."
-        case "disk": return "Download failed — not enough storage."
-        case "checksum": return "Download failed — files didn't verify. Retry to download again."
-        default: return "Download failed."
-        }
-    }
 
     /// Entries shown in the On this iPhone segment: merged installs (incl.
     /// noncurated — F25) plus any curated model mid-transfer, so a browse
@@ -1041,6 +1084,8 @@ struct ModelsView: View {
 
     private func reloadRemote() async {
         guard let peer = macPeer else { return }
+        isLoadingRemote = true
+        defer { isLoadingRemote = false }
         guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) }) else {
             remoteError = "No saved credential for \(peer.name) - try pairing again."
             return
@@ -1155,7 +1200,8 @@ struct ModelsView: View {
             hubResults = results
         } catch {
             hubResults = []
-            hubSearchError = "Search failed: \(error)"
+            // UI-117: the raw error dump read as a crash log.
+            hubSearchError = "Couldn't search Hugging Face: \(error.localizedDescription)"
         }
     }
 
@@ -1262,6 +1308,7 @@ private struct ModelDetailSheet: View {
     @State private var benchmark: Benchmark?
     @State private var benchmarking = false
     @State private var benchmarkError: String?
+    @State private var confirmCancel = false
 
     private var realDiskBytes: UInt64 {
         entry.fit.diskBytes != 0 ? entry.fit.diskBytes : entry.manifest.estRuntimeBytes
@@ -1281,6 +1328,7 @@ private struct ModelDetailSheet: View {
                     VStack(alignment: .leading, spacing: PocketSpacing.s12) {
                         HStack(spacing: PocketSpacing.s12) {
                             PocketMarkView(state: .still, size: 36)
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: PocketSpacing.s2) {
                                 Text(entry.manifest.displayName)
                                     .font(.pocket(.title))
@@ -1297,9 +1345,9 @@ private struct ModelDetailSheet: View {
 
                 Section("Specs") {
                     LabeledContent("Quantization", value: entry.manifest.quant)
-                    LabeledContent("Context Length", value: "\(entry.manifest.contextLength) tokens")
+                    LabeledContent("Context length", value: "\(entry.manifest.contextLength) tokens")
                     if realDiskBytes != 0 {
-                        LabeledContent("Download Size", value: formatBytes(realDiskBytes))
+                        LabeledContent("Download size", value: formatBytes(realDiskBytes))
                     }
                     LabeledContent("Format", value: "\(entry.manifest.format)")
                     if let speed = entry.fit.measuredTokensPerSec {
@@ -1315,12 +1363,12 @@ private struct ModelDetailSheet: View {
                     }
                 }
 
-                Section("License & Source") {
+                Section("License and source") {
                     LabeledContent("License", value: entry.manifest.license.spdx)
                     if let url = URL(string: "https://huggingface.co/\(entry.manifest.hfRepo)") {
                         Link(destination: url) {
                             HStack {
-                                Text("Hugging Face Model Page")
+                                Text("Model page on Hugging Face")
                                 Spacer()
                                 Image(systemName: "arrow.up.right").font(.caption)
                             }
@@ -1329,7 +1377,7 @@ private struct ModelDetailSheet: View {
                     if let licenseURL = URL(string: entry.manifest.license.url), !entry.manifest.license.url.isEmpty {
                         Link(destination: licenseURL) {
                             HStack {
-                                Text("License Terms")
+                                Text("License terms")
                                 Spacer()
                                 Image(systemName: "arrow.up.right").font(.caption)
                             }
@@ -1356,14 +1404,14 @@ private struct ModelDetailSheet: View {
 
                     if let onDelete {
                         Button(role: .destructive, action: onDelete) {
-                            Text("Delete from Device")
+                            Text("Delete from this iPhone")
                                 .frame(maxWidth: .infinity, alignment: .center)
                         }
                     }
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("Model Details")
+            .navigationTitle("Model details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -1376,6 +1424,16 @@ private struct ModelDetailSheet: View {
                 if entry.state == .installed, benchmark == nil {
                     benchmark = model.core.storedBenchmark(id: entry.manifest.id)
                 }
+            }
+            .confirmationDialog(
+                "Stop downloading \(ModelNaming.short(entry.manifest.displayName))?",
+                isPresented: $confirmCancel,
+                titleVisibility: .visible
+            ) {
+                Button("Stop download", role: .destructive, action: onCancel)
+                Button("Keep downloading", role: .cancel) {}
+            } message: {
+                Text("The \(formatBytes(entry.bytesDone)) downloaded so far will be discarded. To stop for now and continue later, use Pause.")
             }
             .alert(
                 "Benchmark failed",
@@ -1396,9 +1454,9 @@ private struct ModelDetailSheet: View {
     private var benchmarkRows: some View {
         if let benchmark {
             LabeledContent("Throughput", value: String(format: "%.1f tok/s", benchmark.tps))
-            LabeledContent("Time to First Token", value: "\(benchmark.ttftMs) ms")
+            LabeledContent("Time to first token", value: "\(benchmark.ttftMs) ms")
             if benchmark.peakBytes > 0 {
-                LabeledContent("Peak Memory", value: formatBytes(benchmark.peakBytes))
+                LabeledContent("Peak memory", value: formatBytes(benchmark.peakBytes))
             }
         }
         if benchmarking {
@@ -1410,7 +1468,7 @@ private struct ModelDetailSheet: View {
                     .foregroundStyle(PocketColor.textSecondary)
             }
         } else {
-            Button(benchmark == nil ? "Benchmark This Model" : "Run Again") { runBenchmark() }
+            Button(benchmark == nil ? "Benchmark this model" : "Run again") { runBenchmark() }
                 .tint(PocketColor.accent)
         }
     }
@@ -1452,7 +1510,7 @@ private struct ModelDetailSheet: View {
                     .foregroundStyle(PocketColor.accent)
             }
         case .failed(let reason):
-            Text(reason == "network" ? "Download failed — check your connection." : "Download failed (\(reason)).")
+            Text(failureText(reason))
                 .font(.pocket(.footnote)).foregroundStyle(PocketColor.statusBad)
         case .downloading, .paused:
             if isOffline {
@@ -1468,7 +1526,7 @@ private struct ModelDetailSheet: View {
                         ? .paused(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(realDiskBytes == 0 ? max(entry.bytesDone, 1) : realDiskBytes))
                         : .downloading(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(realDiskBytes == 0 ? max(entry.bytesDone, 1) : realDiskBytes), bytesPerSecond: downloadBytesPerSecond),
                     onPauseResume: onPrimaryAction,
-                    onCancel: onCancel
+                    onCancel: { confirmCancel = true }
                 )
             }
         default:
@@ -1493,6 +1551,17 @@ private struct ModelDetailSheet: View {
         case .willNotFit: return .willNotFit
         case .notSupported: return .notSupported
         }
+    }
+}
+
+/// One wording for a failed download, shared by rows and the detail sheet
+/// (UI-118: the sheet printed the raw reason code, "Download failed (disk).").
+private func failureText(_ reason: String) -> String {
+    switch reason {
+    case "network": return "Download failed — check your connection, then retry."
+    case "disk": return "Download failed — not enough storage. Free space in Settings ▸ Storage used."
+    case "checksum": return "Download failed — files didn't verify. Retry to download again."
+    default: return "Download failed. Retry to try again."
     }
 }
 
