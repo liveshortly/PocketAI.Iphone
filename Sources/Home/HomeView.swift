@@ -275,7 +275,7 @@ private struct ModelCard: View {
             } else if snapshot.hasInstalledChatModel {
                 CardLines(primary: "No model chosen", secondary: "Choose one in Models.")
             } else {
-                CardLines(primary: "No model yet — Get one", secondary: "Download a model that runs on this iPhone.")
+                CardLines(primary: "No model yet", secondary: "Download one that runs on this iPhone.")
             }
         }
         .accessibilityIdentifier("home_model_card")

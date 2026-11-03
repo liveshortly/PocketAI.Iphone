@@ -28,12 +28,14 @@ struct SourceSheet: View {
                 } else if hits.isEmpty {
                     VStack(spacing: PocketSpacing.s12) {
                         Image(systemName: "doc.text.magnifyingglass")
-                            .font(.system(size: 40))
+                            .font(.pocket(.display))
                             .foregroundStyle(PocketColor.textTertiary)
-                        Text("No Sources Found")
+                            .accessibilityHidden(true)
+                        Text("No sources found")
+                            .accessibilityAddTraits(.isHeader)
                             .font(.pocket(.headline))
                             .foregroundStyle(PocketColor.textPrimary)
-                        Text("No matching passages found in project documents for this query.")
+                        Text("None of this project's documents mention this.")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textSecondary)
                             .multilineTextAlignment(.center)
@@ -53,7 +55,7 @@ struct SourceSheet: View {
                                         .foregroundStyle(PocketColor.textPrimary)
                                         .padding(PocketSpacing.s8)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: 8))
+                                        .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
                                 }
                                 .padding(.horizontal, PocketSpacing.gutterIphone)
                                 .padding(.top, PocketSpacing.s8)
@@ -72,7 +74,7 @@ struct SourceSheet: View {
                                                 .padding(.vertical, 2)
                                                 .background(
                                                     isHighlighted ? PocketColor.accent.opacity(0.15) : PocketColor.bgSunken,
-                                                    in: RoundedRectangle(cornerRadius: 6)
+                                                    in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous)
                                                 )
 
                                             Image(systemName: doc?.mime.contains("pdf") == true ? "doc.richtext" : "doc.text")
@@ -98,7 +100,7 @@ struct SourceSheet: View {
                                             .textSelection(.enabled)
                                             .padding(PocketSpacing.s12)
                                             .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: 8))
+                                            .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
 
                                         if hit.score > 0 {
                                             Text(String(format: "Relevance score: %.2f", hit.score))
@@ -107,9 +109,9 @@ struct SourceSheet: View {
                                         }
                                     }
                                     .padding(PocketSpacing.s12)
-                                    .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+                                    .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
+                                        RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                                             .strokeBorder(isHighlighted ? PocketColor.accent : PocketColor.lineHairline, lineWidth: isHighlighted ? 2 : 1)
                                     )
                                     .padding(.horizontal, PocketSpacing.gutterIphone)

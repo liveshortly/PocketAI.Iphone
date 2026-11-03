@@ -81,7 +81,7 @@ final class ImageGenSheetViewModel {
 
             // ponytail: needs an installed-image-model-path accessor on CoreClient
             guard let installed = self.resolveInstalledModelDirectory() else {
-                self.state = .error("No image model installed — install one in Models")
+                self.state = .error("No image model yet. Download one in Models.")
                 return
             }
 
@@ -92,7 +92,7 @@ final class ImageGenSheetViewModel {
                 try await gen.load(modelDirectory: installed.url, modelId: installed.modelId)
             } catch {
                 if Task.isCancelled { return }
-                self.state = .error("No image model installed — install one in Models")
+                self.state = .error("No image model yet. Download one in Models.")
                 return
             }
 
@@ -134,7 +134,7 @@ final class ImageGenSheetViewModel {
                         self.state = .idle
                         return
                     case .modelNotFound, .notLoaded:
-                        self.state = .error("No image model installed — install one in Models")
+                        self.state = .error("No image model yet. Download one in Models.")
                         return
                     default:
                         break
@@ -170,7 +170,7 @@ final class ImageGenSheetViewModel {
                     self.isSavedToPhotos = true
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 } catch {
-                    self.photoSaveErrorMessage = "Failed to save: \(error.localizedDescription)"
+                    self.photoSaveErrorMessage = "Couldn't save to Photos: \(error.localizedDescription)"
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                 }
             case .denied, .restricted:
@@ -259,7 +259,7 @@ struct ImageGenerationSheet: View {
             }
             .background(PocketColor.bgCanvas)
             .task { viewModel.adoptInstalledModelDefaults() }
-            .navigationTitle("Generate Image")
+            .navigationTitle("Generate image")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -273,7 +273,7 @@ struct ImageGenerationSheet: View {
                     .accessibilityLabel("Close image generation")
                 }
             }
-            .alert("Photo Library Access Denied", isPresented: $viewModel.photoLibraryPermissionDenied) {
+            .alert("PocketAI can't save to Photos", isPresented: $viewModel.photoLibraryPermissionDenied) {
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
@@ -281,9 +281,9 @@ struct ImageGenerationSheet: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("PocketAI needs permission to save generated images to your photo library. You can grant access in Settings.")
+                Text("Allow photo library access in Settings to save generated images.")
             }
-            .alert("Save Error", isPresented: Binding(
+            .alert("Couldn't save image", isPresented: Binding(
                 get: { viewModel.photoSaveErrorMessage != nil },
                 set: { if !$0 { viewModel.photoSaveErrorMessage = nil } }
             )) {
@@ -300,7 +300,7 @@ struct ImageGenerationSheet: View {
 
     private var promptSection: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-            Text("PROMPT")
+            Text("Prompt")
                 .font(.pocket(.caption))
                 .foregroundStyle(PocketColor.textSecondary)
 
@@ -309,9 +309,9 @@ struct ImageGenerationSheet: View {
                 .lineLimit(2...5)
                 .textFieldStyle(.plain)
                 .padding(PocketSpacing.s12)
-                .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+                .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                         .stroke(PocketColor.lineHairline, lineWidth: 1)
                 )
                 .disabled(viewModel.isBusy)
@@ -364,7 +364,7 @@ struct ImageGenerationSheet: View {
             }
         }
         .padding(PocketSpacing.s12)
-        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
     }
 
     private var actionSection: some View {
@@ -373,20 +373,20 @@ struct ImageGenerationSheet: View {
                 Button(action: { viewModel.cancel() }) {
                     HStack(spacing: PocketSpacing.s8) {
                         Image(systemName: "xmark.circle.fill")
-                        Text("Cancel Generation")
+                        Text("Stop generating")
                     }
                     .font(.pocket(.body))
                     .foregroundStyle(PocketColor.statusBad)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PocketSpacing.s12)
-                    .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+                    .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                             .stroke(PocketColor.statusBad.opacity(0.3), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Cancel image generation")
+                .accessibilityLabel("Stop generating the image")
             } else {
                 Button(action: { viewModel.startGeneration() }) {
                     HStack(spacing: PocketSpacing.s8) {
@@ -401,13 +401,13 @@ struct ImageGenerationSheet: View {
                         viewModel.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             ? PocketColor.textTertiary
                             : PocketColor.accent,
-                        in: RoundedRectangle(cornerRadius: 12)
+                        in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                     )
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityLabel("Generate image")
-                .accessibilityHint("Starts on-device image generation with SDXL-Turbo")
+                .accessibilityHint("Generates the image on this iPhone")
             }
         }
     }
@@ -421,13 +421,14 @@ struct ImageGenerationSheet: View {
         case .loadingModel:
             VStack(spacing: PocketSpacing.s12) {
                 PocketMarkView(state: .loading, size: 48)
-                Text("Loading SDXL-Turbo model…")
+                    .accessibilityHidden(true) // the adjacent text carries the status
+                Text("Loading the image model…")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, PocketSpacing.s24)
-            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Loading image generation model")
 
@@ -437,9 +438,9 @@ struct ImageGenerationSheet: View {
                     Image(uiImage: preview)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                                 .stroke(PocketColor.lineHairline, lineWidth: 1)
                         )
                         .accessibilityLabel("Live image preview step \(current) of \(total)")
@@ -452,6 +453,8 @@ struct ImageGenerationSheet: View {
 
                 HStack(spacing: PocketSpacing.s8) {
                     ProgressView(value: Double(current), total: Double(total))
+                        .accessibilityLabel("Generation progress")
+                        .accessibilityValue("Step \(current) of \(total)")
                         .tint(PocketColor.accent)
                     Text("Step \(current)/\(total)")
                         .font(.pocket(.caption))
@@ -460,7 +463,7 @@ struct ImageGenerationSheet: View {
                 }
             }
             .padding(PocketSpacing.s12)
-            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
 
         case .completed:
             if let image = viewModel.finalImage {
@@ -468,9 +471,9 @@ struct ImageGenerationSheet: View {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                                 .stroke(PocketColor.lineHairline, lineWidth: 1)
                         )
                         .accessibilityLabel("Generated image for \(viewModel.prompt)")
@@ -486,7 +489,7 @@ struct ImageGenerationSheet: View {
                                 .foregroundStyle(viewModel.isSavedToPhotos ? PocketColor.statusOk : PocketColor.textPrimary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, PocketSpacing.s8)
-                                .background(PocketColor.bgCanvas, in: RoundedRectangle(cornerRadius: 8))
+                                .background(PocketColor.bgCanvas, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .disabled(viewModel.isSavedToPhotos)
@@ -504,7 +507,7 @@ struct ImageGenerationSheet: View {
                                 .foregroundStyle(PocketColor.textPrimary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, PocketSpacing.s8)
-                                .background(PocketColor.bgCanvas, in: RoundedRectangle(cornerRadius: 8))
+                                .background(PocketColor.bgCanvas, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Share generated image")
@@ -517,13 +520,13 @@ struct ImageGenerationSheet: View {
                             }) {
                                 HStack(spacing: PocketSpacing.s4) {
                                     Image(systemName: "paperplane")
-                                    Text("Attach to Chat")
+                                    Text("Attach to chat")
                                 }
                                 .font(.pocket(.callout))
                                 .foregroundStyle(PocketColor.accent)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, PocketSpacing.s8)
-                                .background(PocketColor.accentSoft, in: RoundedRectangle(cornerRadius: 8))
+                                .background(PocketColor.accentSoft, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Attach generated image to chat message")
@@ -531,7 +534,7 @@ struct ImageGenerationSheet: View {
                     }
                 }
                 .padding(PocketSpacing.s12)
-                .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+                .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
             }
 
         case .error(let error):
@@ -539,11 +542,12 @@ struct ImageGenerationSheet: View {
                 HStack(spacing: PocketSpacing.s8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(PocketColor.statusBad)
+                        .accessibilityHidden(true)
                     Text(error)
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.statusBad)
                 }
-                Button("Try Again") {
+                Button("Try again") {
                     viewModel.startGeneration()
                 }
                 .font(.pocket(.footnote).bold())
@@ -551,9 +555,9 @@ struct ImageGenerationSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(PocketSpacing.s12)
-            .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: 12))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Generation error: \(error)")
+            .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+            // Not combined: that folded Try again into the label, so
+            // VoiceOver could read the error but not retry.
         }
     }
 }

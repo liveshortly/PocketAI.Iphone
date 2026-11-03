@@ -325,7 +325,7 @@ struct ChatView: View {
                 ))
                 .onChange(of: messages.count) { _, _ in
                     if userScrolledUp && !isAtBottom {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showJumpToLatest = true }
+                        withAnimation(PocketMotion.standard) { showJumpToLatest = true }
                     } else {
                         scrollToLatest(proxy: proxy, animated: false)
                     }
@@ -334,7 +334,7 @@ struct ChatView: View {
                     // Streaming grows the last bubble without changing the
                     // message count; stay pinned unless the user scrolled up.
                     if userScrolledUp && !isAtBottom {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showJumpToLatest = true }
+                        withAnimation(PocketMotion.standard) { showJumpToLatest = true }
                     } else {
                         scrollToLatest(proxy: proxy, animated: false)
                     }
@@ -1114,7 +1114,7 @@ struct ChatView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .transition(PocketMotion.slide(from: .bottom))
         .padding(.bottom, PocketSpacing.s8)
         .accessibilityLabel("Jump to latest message")
     }

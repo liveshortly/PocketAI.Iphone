@@ -65,12 +65,13 @@ struct ProjectDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button("Rename Project", systemImage: "pencil") {
+                    Button("Rename project", systemImage: "pencil") {
                         newProjectName = project?.name ?? ""
                         renamingProject = true
                     }
-                    Button("Edit Instructions", systemImage: "text.quote") {
+                    Button("Edit instructions", systemImage: "text.quote") {
                         editableInstructions = project?.instructions ?? ""
+                        errorMessage = nil
                         editingInstructions = true
                     }
                 } label: {
@@ -82,7 +83,7 @@ struct ProjectDetailView: View {
         .task {
             reload()
         }
-        .alert("Rename Project", isPresented: $renamingProject) {
+        .alert("Rename project", isPresented: $renamingProject) {
             TextField("Project name", text: $newProjectName)
             Button("Cancel", role: .cancel) {}
             Button("Save") {
@@ -101,10 +102,20 @@ struct ProjectDetailView: View {
         .sheet(isPresented: $editingInstructions) {
             NavigationStack {
                 Form {
-                    Section("Project Instructions") {
+                    Section("Project instructions") {
                         TextEditor(text: $editableInstructions)
                             .frame(minHeight: 150)
                             .accessibilityLabel("Edit project instructions")
+                    }
+                    // UI-134: a failed save set this but nothing showed it —
+                    // the alert can't present over this sheet, so Done
+                    // looked like it did nothing.
+                    if let errorMessage {
+                        Section {
+                            Label("Couldn't save: \(errorMessage)", systemImage: "exclamationmark.triangle.fill")
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.statusBad)
+                        }
                     }
                 }
                 .navigationTitle("Instructions")
@@ -201,10 +212,12 @@ struct ProjectDetailView: View {
                     renamingProject = true
                 } label: {
                     Image(systemName: "pencil")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.pocket(.callout).weight(.semibold))
                         .foregroundStyle(PocketColor.accent)
                         .padding(PocketSpacing.s8)
                         .background(PocketColor.bgSunken, in: Circle())
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Rename project")
@@ -221,6 +234,7 @@ struct ProjectDetailView: View {
                     Spacer(minLength: 0)
                     Button("Edit") {
                         editableInstructions = project?.instructions ?? ""
+                        errorMessage = nil
                         editingInstructions = true
                     }
                     .font(.pocket(.footnote))
@@ -234,7 +248,7 @@ struct ProjectDetailView: View {
                         .foregroundStyle(PocketColor.textPrimary)
                         .lineLimit(4)
                 } else {
-                    Text("No custom instructions set. Tap Edit to add instructions guiding assistant answers.")
+                    Text("No instructions yet. Tap Edit to tell the assistant how to answer in this project.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textTertiary)
                         .italic()
@@ -242,8 +256,8 @@ struct ProjectDetailView: View {
             }
         }
         .padding(PocketSpacing.s16)
-        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(PocketColor.lineHairline))
+        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous).strokeBorder(PocketColor.lineHairline))
     }
 
     // MARK: - Primary Action
@@ -254,17 +268,18 @@ struct ProjectDetailView: View {
         } label: {
             HStack(spacing: PocketSpacing.s8) {
                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.pocket(.headline))
+                    .accessibilityHidden(true)
                 Text("New chat in this project")
                     .font(.pocket(.headline))
                 Spacer()
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.pocket(.callout).weight(.semibold))
             }
             .foregroundStyle(PocketColor.accentOnAccent)
             .padding(.horizontal, PocketSpacing.s16)
             .padding(.vertical, PocketSpacing.s12)
-            .background(PocketColor.accent, in: RoundedRectangle(cornerRadius: 12))
+            .background(PocketColor.accent, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("New chat in this project")
@@ -283,7 +298,7 @@ struct ProjectDetailView: View {
                         .font(.pocket(.headline))
                     Spacer()
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.pocket(.callout).weight(.semibold))
                 }
                 .foregroundStyle(PocketColor.accent)
                 .padding(.horizontal, PocketSpacing.s16)
@@ -308,9 +323,12 @@ struct ProjectDetailView: View {
     @ViewBuilder private var projectChatsSection: some View {
         if !projectChats.isEmpty || !lsSessions.isEmpty {
             VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-                Text("CHATS IN THIS PROJECT")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(PocketColor.textTertiary)
+                // Was a fixed 11pt all-caps label that ignored Dynamic Type
+                // and sat under a "Documents" title styled differently.
+                Text("Chats")
+                    .font(.pocket(.title))
+                    .foregroundStyle(PocketColor.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
                 VStack(spacing: 0) {
                     ForEach(lsSessions) { s in
                         NavigationLink {
@@ -331,11 +349,11 @@ struct ProjectDetailView: View {
                         } label: {
                             HStack(spacing: PocketSpacing.s12) {
                                 Image(systemName: "bubble.left.fill")
-                                    .font(.system(size: 14))
+                                    .font(.pocket(.callout))
                                     .foregroundStyle(PocketColor.accent)
                                     .frame(width: 34, height: 34)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous)
                                             .fill(PocketColor.accentSoft)
                                     )
                                 Text(c.title ?? "New chat")
@@ -343,7 +361,7 @@ struct ProjectDetailView: View {
                                     .lineLimit(1)
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.pocket(.caption).weight(.semibold))
                                     .foregroundStyle(PocketColor.textTertiary)
                             }
                             .padding(.horizontal, PocketSpacing.s12)
@@ -373,6 +391,7 @@ struct ProjectDetailView: View {
                     Text("Documents")
                         .font(.pocket(.title))
                         .foregroundStyle(PocketColor.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
                     Text("\(documents.count)")
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textSecondary)
@@ -388,7 +407,7 @@ struct ProjectDetailView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.pocket(.caption).weight(.bold))
                         Text("Add document")
                             .font(.pocket(.footnote))
                     }
@@ -396,6 +415,8 @@ struct ProjectDetailView: View {
                     .padding(.horizontal, PocketSpacing.s12)
                     .padding(.vertical, 6)
                     .background(PocketColor.bgSunken, in: Capsule())
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Add document")
@@ -413,7 +434,7 @@ struct ProjectDetailView: View {
                     Spacer()
                 }
                 .padding(PocketSpacing.s12)
-                .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: 10))
+                .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Indexing \(indexingFilename)")
             }
@@ -423,13 +444,13 @@ struct ProjectDetailView: View {
                 HStack(spacing: PocketSpacing.s8) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(PocketColor.accent)
-                    Text("Added & indexed \(added)")
+                    Text("Added and indexed \(added)")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textPrimary)
                     Spacer()
                 }
                 .padding(PocketSpacing.s12)
-                .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: 10))
+                .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
                 .transition(.opacity)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Added and indexed \(added)")
@@ -438,8 +459,9 @@ struct ProjectDetailView: View {
             if documents.isEmpty && !isIndexing {
                 VStack(spacing: PocketSpacing.s8) {
                     Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 32))
+                        .font(.pocket(.display))
                         .foregroundStyle(PocketColor.textTertiary)
+                        .accessibilityHidden(true)
                         .padding(.top, PocketSpacing.s8)
                     Text("No documents yet")
                         .font(.pocket(.headline))
@@ -452,7 +474,7 @@ struct ProjectDetailView: View {
                     Button {
                         isShowingFileImporter = true
                     } label: {
-                        Text("Choose File")
+                        Text("Choose a file")
                             .font(.pocket(.callout))
                             .foregroundStyle(PocketColor.accent)
                             .padding(.horizontal, PocketSpacing.s16)
@@ -461,12 +483,13 @@ struct ProjectDetailView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, PocketSpacing.s4)
-                    .accessibilityLabel("Choose file to add")
+                    .frame(minHeight: 44)
+                    .accessibilityLabel("Choose a file to add")
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PocketSpacing.s24)
-                .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(PocketColor.lineHairline))
+                .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous).strokeBorder(PocketColor.lineHairline))
             } else {
                 VStack(spacing: PocketSpacing.s8) {
                     ForEach(documents, id: \.id) { doc in
@@ -480,7 +503,7 @@ struct ProjectDetailView: View {
     private func documentRow(_ doc: PocketKit.Document) -> some View {
         HStack(spacing: PocketSpacing.s12) {
             Image(systemName: doc.mime.contains("pdf") ? "doc.richtext" : "doc.text")
-                .font(.system(size: 20))
+                .font(.pocket(.title))
                 .foregroundStyle(PocketColor.accent)
                 .frame(width: 28)
 
@@ -506,29 +529,33 @@ struct ProjectDetailView: View {
                 .foregroundStyle(PocketColor.accent)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(PocketColor.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                .background(PocketColor.accentSoft, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
 
             Button(role: .destructive) {
                 pendingDocDelete = doc
             } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 14))
-                    .foregroundStyle(PocketColor.textTertiary)
+                    .font(.pocket(.callout))
+                    .foregroundStyle(PocketColor.textSecondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Delete document \(doc.name)")
             .accessibilityHint("Removes this document from the project")
         }
         .padding(PocketSpacing.s12)
-        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(PocketColor.lineHairline))
+        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous).strokeBorder(PocketColor.lineHairline))
         .contextMenu {
             Button("Delete", role: .destructive) {
                 pendingDocDelete = doc
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(doc.name), \(doc.textChars) characters, \(doc.state)")
+        .accessibilityLabel("\(doc.name), \(doc.textChars) characters, \(doc.state.capitalized)")
+        // Combining the row swallowed its trash button for VoiceOver.
+        .accessibilityAction(named: "Delete") { pendingDocDelete = doc }
     }
 
     // MARK: - Actions
@@ -603,7 +630,7 @@ struct ProjectDetailView: View {
         case .success(let urls):
             guard let url = urls.first else { return }
             guard url.startAccessingSecurityScopedResource() else {
-                errorMessage = "Could not access the selected file."
+                errorMessage = "PocketAI couldn't open that file. Try choosing it again."
                 showingErrorAlert = true
                 return
             }
@@ -636,6 +663,7 @@ struct ProjectDetailView: View {
                         withAnimation {
                             justAddedDocName = filename
                         }
+                        AccessibilityNotification.Announcement("Added and indexed \(filename)").post()
                     }
 
                     // Clear brief added state after 3 seconds
@@ -649,7 +677,7 @@ struct ProjectDetailView: View {
                     }
                 } catch {
                     await MainActor.run {
-                        errorMessage = error.localizedDescription
+                        errorMessage = "Couldn't add “\(filename)”: \(error.localizedDescription)"
                         showingErrorAlert = true
                     }
                 }

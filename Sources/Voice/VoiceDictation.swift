@@ -86,7 +86,7 @@ public final class VoiceDictation {
         let speechStatus = SFSpeechRecognizer.authorizationStatus()
         switch speechStatus {
         case .denied, .restricted:
-            state = .denied("Speech recognition permission has been denied. Please enable it in Settings to transcribe voice input.")
+            state = .denied("Speech recognition is off for PocketAI. Turn it on in Settings to dictate.")
             return false
         case .notDetermined:
             let granted = await withCheckedContinuation { continuation in
@@ -110,7 +110,7 @@ public final class VoiceDictation {
             let status = AVAudioApplication.shared.recordPermission
             switch status {
             case .denied:
-                state = .denied("Microphone permission has been denied. Please enable it in Settings to record audio.")
+                state = .denied("Microphone access is off for PocketAI. Turn it on in Settings to dictate.")
                 return false
             case .undetermined:
                 micGranted = await AVAudioApplication.requestRecordPermission()
@@ -123,7 +123,7 @@ public final class VoiceDictation {
             let session = AVAudioSession.sharedInstance()
             switch session.recordPermission {
             case .denied:
-                state = .denied("Microphone permission has been denied. Please enable it in Settings to record audio.")
+                state = .denied("Microphone access is off for PocketAI. Turn it on in Settings to dictate.")
                 return false
             case .undetermined:
                 micGranted = await withCheckedContinuation { continuation in

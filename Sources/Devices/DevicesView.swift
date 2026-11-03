@@ -104,7 +104,7 @@ struct DevicesView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
 
-                    Text("Pair over local Wi-Fi to run larger models using your Mac's unified memory. Everything stays on your devices.")
+                    Text("Pair over local Wi-Fi to run your Mac's larger models from this iPhone. Everything stays on your devices.")
                         .font(.pocket(.callout))
                         .foregroundStyle(PocketColor.textSecondary)
                         .multilineTextAlignment(.center)
@@ -118,7 +118,7 @@ struct DevicesView: View {
                     stepCard(
                         number: "1",
                         title: "Open PocketAI on your Mac",
-                        subtitle: "Go to Devices → Pair iPhone to show your QR code."
+                        subtitle: "Go to Devices › Pair a device… to show a pairing code."
                     )
                     stepCard(
                         number: "2",
@@ -679,7 +679,7 @@ private struct PairingFlowView: View {
                             }
                             .fixedSize(horizontal: false, vertical: true)
 
-                            Text("This works while both are on this Wi-Fi. To reach this Mac from anywhere, add its VPN or mesh hostname — Tailscale, Tailnet, WireGuard — under Mac ▸ Custom address.")
+                            Text("This works while both are on this Wi-Fi. To reach this Mac from anywhere, add its VPN or mesh hostname — Tailscale, Tailnet, WireGuard — under Mac › Custom address.")
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -752,7 +752,7 @@ private struct PairingFlowView: View {
     private func handle(code: String) {
         step = .connecting
         guard let offer = try? model.core.parsePairingQr(code) else {
-            step = .error("That isn't a PocketAI pairing code. On your Mac, open Devices ▸ Pair iPhone and scan the code shown there.")
+            step = .error("That isn't a PocketAI pairing code. On your Mac, open Devices › Pair a device… and scan the code shown there.")
             return
         }
         self.offer = offer

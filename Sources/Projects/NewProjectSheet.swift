@@ -17,7 +17,7 @@ struct NewProjectSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Project Details") {
+                Section("Project details") {
                     TextField("Project name", text: $name)
                         .accessibilityLabel("Project name")
 
@@ -31,7 +31,7 @@ struct NewProjectSheet: View {
                     }
                 }
             }
-            .navigationTitle("New Project")
+            .navigationTitle("New project")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -47,7 +47,7 @@ struct NewProjectSheet: View {
                     }
                     .disabled(!isValid)
                     .accessibilityLabel("Create project")
-                    .accessibilityHint("Creates the project with specified name and instructions")
+                    .accessibilityHint("Creates the project with this name and instructions")
                 }
             }
         }

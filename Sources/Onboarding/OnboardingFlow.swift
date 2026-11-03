@@ -29,14 +29,14 @@ public struct OnboardingFlow: View {
             switch step {
             case .welcome:
                 OnboardingWelcomeView {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    withAnimation(PocketMotion.standard) {
                         step = .deviceCheck
                     }
                 }
             case .deviceCheck:
                 OnboardingDeviceCheckView(profile: deviceProfile) {
                     catalog = core.catalog(filter: CatalogFilter(modality: .text, curatedOnly: true, installedOnly: false))
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    withAnimation(PocketMotion.standard) {
                         step = .pickModel
                     }
                 }
@@ -49,7 +49,7 @@ public struct OnboardingFlow: View {
                     if let modelId, modelId != AppleFoundationModelsEngine.modelId {
                         do {
                             try core.startDownload(modelId: modelId)
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            withAnimation(PocketMotion.standard) {
                                 step = .downloading
                             }
                         } catch {
@@ -62,7 +62,7 @@ public struct OnboardingFlow: View {
                         // untrue; Home's Model card says "No model yet — Get one".
                         onFinished()
                     } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        withAnimation(PocketMotion.standard) {
                             step = .ready
                         }
                     }
@@ -75,18 +75,18 @@ public struct OnboardingFlow: View {
                         // "Try Apple while downloading" actually selects Apple's
                         // route as the default (F15), keeping the download going.
                         AppModel.shared.selectedModelId = AppleFoundationModelsEngine.modelId
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        withAnimation(PocketMotion.standard) {
                             step = .ready
                         }
                     } : nil,
                     onBack: {
                         // Cancel returns to the model picker — never a dead end.
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        withAnimation(PocketMotion.standard) {
                             step = .pickModel
                         }
                     },
                     onReady: {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        withAnimation(PocketMotion.standard) {
                             step = .ready
                         }
                     }

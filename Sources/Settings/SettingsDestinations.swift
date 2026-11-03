@@ -293,7 +293,7 @@ struct TextToSpeechVoiceView: View {
 
             if voices.isEmpty {
                 Section {
-                    Text("No voices for your language are installed. Add them in iOS Settings → Accessibility → Spoken Content → Voices.")
+                    Text("No voices for your language are installed. Add them in the Settings app › Accessibility › Spoken Content › Voices.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
                 }
@@ -377,7 +377,7 @@ struct PairMacView: View {
         List {
             if peers.isEmpty {
                 Section {
-                    stepCard(number: "1", title: "Open PocketAI on your Mac", subtitle: "Go to Devices → Pair iPhone to show your QR code.")
+                    stepCard(number: "1", title: "Open PocketAI on your Mac", subtitle: "Go to Devices › Pair a device… to show a pairing code.")
                     stepCard(number: "2", title: "Scan the code from the Mac tab", subtitle: "The Mac tab opens the camera to scan your Mac's pairing code.")
                     // UI-113: go there instead of describing where it is.
                     Button {

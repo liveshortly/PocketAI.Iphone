@@ -46,11 +46,11 @@ final class SharedInboxViewModel {
             var warnings: [String] = []
 
             for (index, item) in currentItems.enumerated() {
-                ingestingStatus = "Adding \(index + 1) of \(currentItems.count): \(item.originalName)..."
+                ingestingStatus = "Adding \(index + 1) of \(currentItems.count): \(item.originalName)…"
 
                 guard let fileURL = SharedInbox.payloadURL(for: item),
                       FileManager.default.fileExists(atPath: fileURL.path) else {
-                    warnings.append("Could not locate payload for '\(item.originalName)'")
+                    warnings.append("Couldn't find the shared file for “\(item.originalName)”")
                     SharedInbox.deleteItem(item)
                     continue
                 }
@@ -65,7 +65,7 @@ final class SharedInboxViewModel {
                     )
                     SharedInbox.deleteItem(item)
                 } catch {
-                    warnings.append("Skipped '\(item.originalName)': \(error.localizedDescription)")
+                    warnings.append("Skipped “\(item.originalName)”: \(error.localizedDescription)")
                     SharedInbox.deleteItem(item)
                 }
             }
@@ -145,6 +145,7 @@ final class SharedInboxViewModel {
 
 public struct SharedInboxIngestSheet: View {
     @State private var viewModel: SharedInboxViewModel
+    @State private var confirmDiscardAll = false
     let onDismiss: () -> Void
 
     public init(core: CoreClient, onDismiss: @escaping () -> Void) {
@@ -175,7 +176,18 @@ public struct SharedInboxIngestSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(PocketColor.bgCanvas)
-            .navigationTitle("Add to Project")
+            .navigationTitle("Add to project")
+            .confirmationDialog(
+                "Discard \(viewModel.items.count) shared item\(viewModel.items.count == 1 ? "" : "s")?",
+                isPresented: $confirmDiscardAll, titleVisibility: .visible
+            ) {
+                Button("Discard", role: .destructive) {
+                    viewModel.discardAll()
+                    onDismiss()
+                }
+            } message: {
+                Text("They're removed from PocketAI. Share them again to add them later.")
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -186,9 +198,9 @@ public struct SharedInboxIngestSheet: View {
                 }
                 if !viewModel.items.isEmpty && !viewModel.isIngesting {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Discard All", role: .destructive) {
-                            viewModel.discardAll()
-                            onDismiss()
+                        // UI-134: discarding can't be undone, so it asks first.
+                        Button("Discard all", role: .destructive) {
+                            confirmDiscardAll = true
                         }
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.statusBad)
@@ -233,8 +245,8 @@ public struct SharedInboxIngestSheet: View {
         }
         .padding(PocketSpacing.s12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(PocketColor.statusWarn.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(PocketColor.statusWarn.opacity(0.3)))
+        .background(PocketColor.statusWarn.opacity(0.12), in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous).strokeBorder(PocketColor.statusWarn.opacity(0.3)))
     }
 
     private var ingestingCard: some View {
@@ -247,14 +259,14 @@ public struct SharedInboxIngestSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(PocketSpacing.s20)
-        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(PocketColor.lineHairline))
+        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous).strokeBorder(PocketColor.lineHairline))
     }
 
     private var itemsSection: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s12) {
             HStack {
-                Text("Shared Items")
+                Text("Shared items")
                     .font(.pocket(.title))
                     .foregroundStyle(PocketColor.textPrimary)
                 Text("\(viewModel.items.count)")
@@ -266,7 +278,7 @@ public struct SharedInboxIngestSheet: View {
             }
 
             if viewModel.items.isEmpty {
-                Text("No pending items in inbox.")
+                Text("Nothing waiting to be added.")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textTertiary)
                     .padding(.vertical, PocketSpacing.s8)
@@ -283,7 +295,7 @@ public struct SharedInboxIngestSheet: View {
     private func itemRow(_ item: SharedInboxItem) -> some View {
         HStack(spacing: PocketSpacing.s12) {
             itemIcon(for: item.kind)
-                .font(.system(size: 20))
+                .font(.pocket(.title))
                 .foregroundStyle(PocketColor.accent)
                 .frame(width: 28)
 
@@ -318,16 +330,18 @@ public struct SharedInboxIngestSheet: View {
                     }
                 } label: {
                     Image(systemName: "trash")
-                        .font(.system(size: 14))
-                        .foregroundStyle(PocketColor.textTertiary)
+                        .font(.pocket(.callout))
+                        .foregroundStyle(PocketColor.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove \(item.originalName)")
             }
         }
         .padding(PocketSpacing.s12)
-        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(PocketColor.lineHairline))
+        .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous).strokeBorder(PocketColor.lineHairline))
     }
 
     private func itemIcon(for kind: SharedInboxItemKind) -> Image {
@@ -345,7 +359,7 @@ public struct SharedInboxIngestSheet: View {
 
     private var destinationSection: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s12) {
-            Text("Add to Project")
+            Text("Add to project")
                 .font(.pocket(.title))
                 .foregroundStyle(PocketColor.textPrimary)
 
@@ -355,10 +369,10 @@ public struct SharedInboxIngestSheet: View {
             } label: {
                 HStack(spacing: PocketSpacing.s12) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.pocket(.title))
                         .foregroundStyle(PocketColor.accent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("New Project…")
+                        Text("New project…")
                             .font(.pocket(.headline))
                             .foregroundStyle(PocketColor.accent)
                         Text("Create a new project and add these items")
@@ -367,12 +381,12 @@ public struct SharedInboxIngestSheet: View {
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14))
+                        .font(.pocket(.callout))
                         .foregroundStyle(PocketColor.textTertiary)
                 }
                 .padding(PocketSpacing.s12)
-                .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(PocketColor.lineHairline))
+                .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous).strokeBorder(PocketColor.lineHairline))
             }
             .buttonStyle(.plain)
             .disabled(viewModel.isIngesting || viewModel.items.isEmpty)
@@ -380,7 +394,7 @@ public struct SharedInboxIngestSheet: View {
             // Existing projects
             if viewModel.projects.isEmpty {
                 VStack(spacing: PocketSpacing.s4) {
-                    Text("No existing projects found.")
+                    Text("No projects yet.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textTertiary)
                 }
@@ -403,7 +417,7 @@ public struct SharedInboxIngestSheet: View {
         } label: {
             HStack(spacing: PocketSpacing.s12) {
                 Image(systemName: "folder")
-                    .font(.system(size: 18))
+                    .font(.pocket(.title))
                     .foregroundStyle(PocketColor.accent)
                     .frame(width: 24)
 
@@ -424,12 +438,12 @@ public struct SharedInboxIngestSheet: View {
                 Spacer()
 
                 Image(systemName: "arrow.down.doc")
-                    .font(.system(size: 14))
+                    .font(.pocket(.callout))
                     .foregroundStyle(PocketColor.accent)
             }
             .padding(PocketSpacing.s12)
-            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(PocketColor.lineHairline))
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous).strokeBorder(PocketColor.lineHairline))
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isIngesting || viewModel.items.isEmpty)

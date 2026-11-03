@@ -1559,7 +1559,7 @@ private struct ModelDetailSheet: View {
 private func failureText(_ reason: String) -> String {
     switch reason {
     case "network": return "Download failed — check your connection, then retry."
-    case "disk": return "Download failed — not enough storage. Free space in Settings ▸ Storage used."
+    case "disk": return "Download failed — not enough storage. Free space in Settings › Storage used."
     case "checksum": return "Download failed — files didn't verify. Retry to download again."
     default: return "Download failed. Retry to try again."
     }
