@@ -1336,7 +1336,7 @@ struct ChatView: View {
         guard let pid = RemoteEngine.peerId(from: currentModelId ?? ""),
               let peer = model.core.peers().first(where: { $0.id == pid }),
               !PeerAddressBook.shared.isUserDisconnected(fingerprint: peer.certSha256),
-              let resolved = await Browser.rediscover(hostId: peer.name) else { return false }
+              let resolved = await Browser.rediscover(hostId: peer.name, fingerprint: peer.certSha256) else { return false }
         PeerAddressBook.shared.setOverride(resolved, forHostId: peer.name)
         guard messages.contains(where: { $0.role == "user" }) else { return false }
         isGenerating = false

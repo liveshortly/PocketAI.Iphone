@@ -673,7 +673,7 @@ private struct PairingFlowView: View {
     private func handle(code: String) {
         step = .connecting
         guard let offer = try? model.core.parsePairingQr(code) else {
-            step = .error("Mac not reachable. Make sure both are on the same Wi-Fi, or enter the address.")
+            step = .error("That isn't a PocketAI pairing code. On your Mac, open Devices ▸ Pair iPhone and scan the code shown there.")
             return
         }
         self.offer = offer
@@ -715,7 +715,8 @@ private struct PairingFlowView: View {
                     step = .error("Pairing was denied on your Mac.")
                     return
                 case .failed(let message):
-                    step = .error("Mac not reachable. Make sure both are on the same Wi-Fi, or enter the address. (\(message))")
+                    // MAC-21: the coordinator names the step that failed.
+                    step = .error(message)
                     return
                 case .idle, .connecting:
                     break

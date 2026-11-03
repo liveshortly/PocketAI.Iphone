@@ -1056,7 +1056,7 @@ struct ModelsView: View {
                 remoteError = peerError.description
                 return
             }
-            if let resolved = await Browser.rediscover(hostId: peer.name) {
+            if let resolved = await Browser.rediscover(hostId: peer.name, fingerprint: peer.certSha256) {
                 PeerAddressBook.shared.setOverride(resolved, forHostId: peer.name)
                 let endpoint = PeerEndpoint(host: resolved.host, port: resolved.port, fingerprint: peer.certSha256)
                 let retryClient = RemoteCatalogClient(peerClient: PeerClient(endpoint: endpoint, token: token))
