@@ -7,9 +7,12 @@ import PocketKit
 /// server only). Triggers: a Mac coming online (connect / first good
 /// heartbeat), a local write (debounced), a modest foreground timer, and a
 /// `BGProcessingTask` catch-up. The Mac enforces Pro; a 403 parks auto-sync
-/// for that Mac until the user flips the toggle or taps Sync now.
-/// ponytail: near-live Mac->phone is the foreground timer - the Mac has no
-/// "new ops" signal to the phone yet (needs a Rust heartbeat/SSE hint).
+/// for that Mac until the user flips the toggle or taps Sync now; a 403
+/// `sync_disabled` (the Mac's per-phone toggle) only pauses the near-live
+/// watch and is re-checked on the foreground timer.
+/// Near-live Mac->phone: while foreground, a long-poll on the Mac's
+/// `/pocket/v1/sync/wait` returns as soon as anything changes there (or its
+/// menu-bar "Sync now"), and that triggers a sync - well under 1 s.
 @Observable
 @MainActor
 final class ChatSync {
@@ -24,6 +27,8 @@ final class ChatSync {
     private(set) var lastSyncedAt: [String: Date] = [:]
     /// Macs that answered 403 not_entitled (keyed by `Peer.id`).
     private(set) var notEntitled: Set<String> = []
+    /// Macs whose "Sync chats" is off for this iPhone (403 sync_disabled).
+    private(set) var syncDisabled: Set<String> = []
     private(set) var isSyncing = false
 
     @ObservationIgnored private var again = false
@@ -40,6 +45,7 @@ final class ChatSync {
     func setEnabled(_ on: Bool, peer: Peer, core: CoreClient, hooks: PlatformHooks) {
         UserDefaults.standard.set(on, forKey: Self.enabledKey(peer.id))
         notEntitled.remove(peer.id)
+        syncDisabled.remove(peer.id)
         refreshStatus(core: core)
         if on { Task { await syncNow(core: core, hooks: hooks) } }
     }
@@ -65,17 +71,45 @@ final class ChatSync {
                 syncSoon(core: core, hooks: hooks)
             }
         }
-        defer { writes.cancel() }
+        let watch = Task { await watchMac(core: core, hooks: hooks) }
+        defer { writes.cancel(); watch.cancel() }
         while !Task.isCancelled {
             await syncNow(core: core, hooks: hooks)
             try? await Task.sleep(for: Self.foregroundInterval)
         }
     }
 
+    /// Keeps one `/sync/wait` long-poll open to the Mac; a moved cursor means
+    /// something changed there, so sync. Backs off 5 s when there is no Mac
+    /// to watch or the request fails (the 60 s timer still covers it).
+    /// ponytail: watches the first syncing Mac only; one Mac per phone today.
+    private func watchMac(core: CoreClient, hooks: PlatformHooks) async {
+        var cursor: (peer: String, value: Int64)?
+        while !Task.isCancelled {
+            guard let peer = core.peers().first(where: { shouldSync($0) && !syncDisabled.contains($0.id) }),
+                  let client = MacLink.client(for: peer, hooks: hooks) else {
+                try? await Task.sleep(for: .seconds(5))
+                continue
+            }
+            let since = cursor?.peer == peer.id ? cursor?.value : nil
+            do {
+                let now = try await client.waitForSyncChange(since: since)
+                cursor = (peer.id, now)
+                if let since, since != now { await syncNow(core: core, hooks: hooks) }
+            } catch PeerClientError.syncDisabled {
+                syncDisabled.insert(peer.id)
+            } catch PeerClientError.notEntitled {
+                notEntitled.insert(peer.id)
+            } catch {
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+
     /// Single-flight; a call that lands mid-sync runs one more pass after.
     /// `userInitiated` also retries a Mac that said not_entitled.
     func syncNow(core: CoreClient, hooks: PlatformHooks, userInitiated: Bool = false) async {
-        if userInitiated { notEntitled.removeAll() }
+        if userInitiated { notEntitled.removeAll(); syncDisabled.removeAll() }
         guard !isSyncing else { again = true; return }
         isSyncing = true
         defer { isSyncing = false }
@@ -106,10 +140,13 @@ final class ChatSync {
         }
         switch result {
         case .success(let report):
+            syncDisabled.remove(peerId)
             lastSyncedAt[peerId] = Date(timeIntervalSince1970: TimeInterval(report.syncedAt) / 1000)
         case .failure(let error):
             if case .NotEntitled? = error as? PocketError {
                 notEntitled.insert(peerId)
+            } else if case .SyncDisabled? = error as? PocketError {
+                syncDisabled.insert(peerId)
             } else {
                 DiagnosticsLog.shared.append("ChatSync: \(peer.name) failed: \(error)")
             }

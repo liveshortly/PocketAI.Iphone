@@ -185,6 +185,8 @@ struct ChatsListView: View {
         }
         .onChange(of: model.nav.pendingShowProjects) { showProjectsIfPending() }
         .onChange(of: searchText) { reload() }
+        // NET-22: chats pulled from the Mac show up without leaving the tab.
+        .onChange(of: ChatSync.shared.lastSyncedAny) { reload() }
         .onChange(of: segment) {
             reload()
             editMode = .inactive

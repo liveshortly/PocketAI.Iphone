@@ -58,15 +58,18 @@ struct DevicesView: View {
                 isPresented: Binding(get: { peerToRevoke != nil }, set: { if !$0 { peerToRevoke = nil } }),
                 titleVisibility: .visible
             ) {
-                Button("Forget", role: .destructive) {
-                    if let peer = peerToRevoke {
-                        revoke(peer)
-                    }
+                // NET-22: keeping synced chats is the first, default choice.
+                Button("Forget · Keep Synced Chats") {
+                    if let peer = peerToRevoke { revoke(peer) }
+                    peerToRevoke = nil
+                }
+                Button("Forget and Remove Chats from \(peerToRevoke?.name ?? "Mac")", role: .destructive) {
+                    if let peer = peerToRevoke { revoke(peer, removeChats: true) }
                     peerToRevoke = nil
                 }
                 Button("Cancel", role: .cancel) { peerToRevoke = nil }
             } message: {
-                Text("This removes the pairing. To pause without unpairing, use Disconnect instead. You can pair again anytime by scanning the code on your Mac.")
+                Text("This removes the pairing. Chats synced from this Mac stay on this iPhone unless you remove them; nothing is deleted on the Mac. To pause without unpairing, use Disconnect instead. You can pair again anytime by scanning the code on your Mac.")
             }
             .alert(
                 "Something went wrong",
@@ -486,8 +489,10 @@ struct DevicesView: View {
         }
     }
 
-    private func revoke(_ peer: Peer) {
+    private func revoke(_ peer: Peer, removeChats: Bool = false) {
         do {
+            // Local only: no tombstones, so the Mac keeps every chat.
+            if removeChats { try model.core.removeSyncedChats(peerId: peer.id) }
             try model.core.revokePeer(id: peer.id)
             // A default model that lived on this Mac is gone with it; leaving
             // the id selected made Home report "that Mac isn't available" and

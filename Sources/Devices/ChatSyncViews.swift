@@ -27,6 +27,9 @@ struct ChatSyncSection: View {
 
     private var footer: String {
         if !isOn { return "Chats stay on this iPhone only." }
+        if sync.syncDisabled.contains(peer.id) {
+            return "Sync is off on \(peer.name). Turn on Sync chats for this iPhone there, under Devices. Your chats stay on this iPhone until then."
+        }
         if sync.notEntitled.contains(peer.id) {
             return "Chat sync is part of PocketAI Pro on your Mac. Your chats stay on this iPhone until then."
         }
