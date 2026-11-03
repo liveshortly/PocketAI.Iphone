@@ -52,7 +52,7 @@ targets:
         UILaunchScreen: {}
         CFBundleLocalizations: [en, hi, es, fr, de, ja, zh-Hans, pt-BR]
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "26"
+        CFBundleVersion: "27"
         # Standard/exempt crypto only (TLS, Ed25519, tokens) — auto-clears the
         # TestFlight Export Compliance prompt (incl. France) so no manual step.
         ITSAppUsesNonExemptEncryption: false
