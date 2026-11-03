@@ -289,7 +289,7 @@ struct ProjectDetailView: View {
                 .padding(.horizontal, PocketSpacing.s16)
                 .padding(.vertical, PocketSpacing.s12)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                         .fill(PocketColor.accentSoft)
                 )
             }
@@ -569,7 +569,9 @@ struct ProjectDetailView: View {
             lsSessions = []
             return
         }
-        let mine = (try? await client.sessions(limit: 100)) ?? []
+        // A failed fetch keeps the rows already shown instead of blanking
+        // the project's sessions as if they were gone (UI-98).
+        guard let mine = try? await client.sessions(limit: 100) else { return }
         lsSessions = mine.filter { ids.contains($0.id) }
     }
 
