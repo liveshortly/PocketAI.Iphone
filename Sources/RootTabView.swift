@@ -185,10 +185,12 @@ struct RootTabView: View {
     }
 }
 
+/// UI-37 (owner): the tab bar stays full size on every screen and scroll
+/// direction. Explicit `.never` so a future system default can't minimize it.
 private struct TabBarMinimizeModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.tabBarMinimizeBehavior(.onScrollDown)
+            content.tabBarMinimizeBehavior(.never)
         } else {
             content
         }
