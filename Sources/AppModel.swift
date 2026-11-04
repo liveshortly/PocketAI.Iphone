@@ -119,7 +119,7 @@ public final class AppModel {
         }
         self.core = core
         self.offlineMode = OfflineMode(core: core)
-        // In the Keygen-only licensing model, there is no App Store IAP path.
+        // The iPhone app is free (D138); there is no App Store IAP path.
         // StoreEntitlementManager is retained as a disabled stub.
         self.store = StoreEntitlementManager(keychain: hooks) { [core] e in
             core.setStoreEntitlement(e)
