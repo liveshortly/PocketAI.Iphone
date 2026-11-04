@@ -553,13 +553,23 @@ private struct PairingFlowView: View {
 
     private enum Step { case scan, manualEntry, connecting, waitingForApproval, success, error(String) }
     @State private var step = Step.scan
+    /// NET-23: "Pair manually" - the Mac's address[:port] and 8-char code.
+    @State private var manualHost = ""
     @State private var manualCode = ""
+    /// The 6 digits to compare with the Mac's Allow sheet (manual pairing only).
+    @State private var sas: String?
     @State private var offer: PairingOffer?
     /// Kept so Cancel / dismiss actually stop the pairing work — otherwise the
     /// poll loop spins forever and onPaired can fire after the sheet is gone.
     @State private var pairTask: Task<Void, Never>?
     @State private var pollTask: Task<Void, Never>?
-    @FocusState private var codeFieldFocused: Bool
+    private enum ManualField { case host, code }
+    @FocusState private var manualFocus: ManualField?
+
+    private var canConnectManually: Bool {
+        let host = manualHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        return host.hasPrefix("pocketai://") || (!host.isEmpty && normalizePairingCode(code: manualCode) != nil)
+    }
 
     private var isSuccess: Bool { if case .success = step { return true }; return false }
     private var isError: Bool { if case .error = step { return true }; return false }
@@ -586,34 +596,44 @@ private struct PairingFlowView: View {
                     }
                 case .manualEntry:
                     VStack(spacing: PocketSpacing.s20) {
-                        Text("Enter the host and code shown on your Mac")
+                        Text("On your Mac, open Devices › Pair a device… › Enter code manually, then type what it shows.")
                             .font(.pocket(.body))
                             .foregroundStyle(PocketColor.textPrimary)
                             .multilineTextAlignment(.center)
-
-                        TextField("host:port#code", text: $manualCode)
-                            .font(.pocket(.mono))
-                            .textFieldStyle(.roundedBorder)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .accessibilityLabel("Pairing code")
-                            // UI-116: keyboard up on arrival; Return connects.
-                            .focused($codeFieldFocused)
-                            .submitLabel(.go)
-                            .onSubmit {
-                                if !manualCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    handle(code: manualCode)
-                                }
-                            }
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, PocketSpacing.gutterIphone)
+
+                        VStack(spacing: PocketSpacing.s12) {
+                            TextField("Address, e.g. 192.168.1.5:7480", text: $manualHost)
+                                .font(.pocket(.mono))
+                                .textFieldStyle(.roundedBorder)
+                                .keyboardType(.URL)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                .accessibilityLabel("Mac address")
+                                // UI-116: keyboard up on arrival.
+                                .focused($manualFocus, equals: .host)
+                                .submitLabel(.next)
+                                .onSubmit { manualFocus = .code }
+                            TextField("Code, e.g. K7QM-2XPA", text: $manualCode)
+                                .font(.pocket(.mono))
+                                .textFieldStyle(.roundedBorder)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.characters)
+                                .accessibilityLabel("Pairing code")
+                                .focused($manualFocus, equals: .code)
+                                .submitLabel(.go)
+                                .onSubmit { if canConnectManually { handleManual() } }
+                        }
+                        .padding(.horizontal, PocketSpacing.gutterIphone)
 
                         Button("Connect") {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            handle(code: manualCode)
+                            handleManual()
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(PocketColor.accent)
-                        .disabled(manualCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(!canConnectManually)
 
                         // UI-116: the only way back to the camera was Cancel.
                         Button("Scan the code instead") { step = .scan }
@@ -622,7 +642,7 @@ private struct PairingFlowView: View {
                             .frame(minHeight: 44)
                     }
                     .padding(.top, PocketSpacing.s40)
-                    .onAppear { codeFieldFocused = true }
+                    .onAppear { manualFocus = .host }
                 case .connecting:
                     VStack(spacing: PocketSpacing.s20) {
                         PocketMarkView(state: .loading, size: 72)
@@ -642,11 +662,25 @@ private struct PairingFlowView: View {
                             .foregroundStyle(PocketColor.textPrimary)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("Check the prompt on your Mac's screen.")
-                            .font(.pocket(.footnote))
-                            .foregroundStyle(PocketColor.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if let sas {
+                            // NET-23: the user's check that no one is in between.
+                            Text("\(sas.prefix(3)) \(sas.suffix(3))")
+                                .font(.pocket(.display))
+                                .monospacedDigit()
+                                .foregroundStyle(PocketColor.textPrimary)
+                                .accessibilityLabel("Confirmation code \(sas.map(String.init).joined(separator: " "))")
+                            Text("Make sure your Mac shows the same number, then click Allow there. If it's different, click Deny.")
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            Text("Check the prompt on your Mac's screen.")
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding(.horizontal, PocketSpacing.gutterIphone)
                     .accessibilityElement(children: .combine)
@@ -779,12 +813,42 @@ private struct PairingFlowView: View {
 
         let coordinator = PairingCoordinator(core: liveCore.rawCore, keychain: model.hooks)
         pairTask = Task { await coordinator.pair(qr: code) }
+        watch(coordinator)
+    }
+
+    /// NET-23: pair from a typed address and code. A pasted `pocketai://`
+    /// link still goes through the QR path.
+    private func handleManual() {
+        let typed = manualHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        if typed.hasPrefix("pocketai://") {
+            handle(code: typed)
+            return
+        }
+        offer = nil
+        sas = nil
+        guard let address = PeerAddressBook.parse(typed, defaultPort: 7480) else {
+            step = .error("That address doesn't look right. Type it exactly as your Mac shows it, like 192.168.1.5:7480.")
+            return
+        }
+        guard let liveCore = model.core as? LiveCore else {
+            step = .error("Pairing isn't available right now — the on-device engine didn't start. Restart the app and try again.")
+            return
+        }
+        step = .connecting
+        let coordinator = PairingCoordinator(core: liveCore.rawCore, keychain: model.hooks)
+        let code = manualCode
+        pairTask = Task { await coordinator.pair(host: address.host, port: address.port, code: code) }
+        watch(coordinator)
+    }
+
+    private func watch(_ coordinator: PairingCoordinator) {
         pollTask = Task {
             // Bounded: 2 minutes at 200ms ticks, then an honest timeout error.
             for _ in 0..<600 {
                 if Task.isCancelled { return }
                 switch coordinator.phase {
                 case .waitingForApproval:
+                    sas = coordinator.sas
                     step = .waitingForApproval
                 case .approved:
                     step = .success
