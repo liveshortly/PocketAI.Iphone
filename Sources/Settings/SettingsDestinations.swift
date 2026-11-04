@@ -411,10 +411,10 @@ struct PairMacView: View {
                         SettingsRow(
                             icon: "laptopcomputer",
                             tint: PocketColor.statusOk,
-                            title: peer.name,
+                            verbatimTitle: peer.name,
                             // UI-113: a raw IP read as jargon, and "Connected"
                             // claimed a live link nobody had checked.
-                            accessory: .value("Paired")
+                            accessory: .value(String(localized: "Paired"))
                         )
                     }
                     Button {

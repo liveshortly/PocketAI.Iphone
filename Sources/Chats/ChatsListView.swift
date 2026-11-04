@@ -806,7 +806,7 @@ struct ChatsListView: View {
         reload()
         guard model.toast?.id == before else { return } // attempt() failed: error toast shown
         let id = conversation.id
-        model.toast = ToastData(message: archived ? "Chat archived" : "Chat restored", undo: {
+        model.toast = ToastData(message: archived ? String(localized: "Chat archived") : String(localized: "Chat restored"), undo: {
             model.attempt(archived ? "undo archive" : "undo unarchive") {
                 try model.core.archiveConversation(id: id, archived: !archived)
             }

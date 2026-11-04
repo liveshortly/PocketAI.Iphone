@@ -42,9 +42,9 @@ public final class AppModel {
     public var toast: ToastData?
 
     /// Runs a user action; a failure becomes a toast instead of vanishing.
-    public func attempt(_ what: String, _ body: () throws -> Void) {
+    public func attempt(_ what: LocalizedStringResource, _ body: () throws -> Void) {
         do { try body() } catch {
-            toast = ToastData(message: "Couldn't \(what): \(error.localizedDescription)")
+            toast = ToastData(message: String(localized: "Couldn't \(String(localized: what)): \(error.localizedDescription)"))
         }
     }
 

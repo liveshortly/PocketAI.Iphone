@@ -486,7 +486,7 @@ struct ChatView: View {
         let approvals = model.tools.approvals
         if let request = approvals.request(for: conversationId) {
             RunCodeCard(
-                language: request.languageName, place: request.runsOnMac ? "your Mac" : "this iPhone",
+                language: request.languageName, place: request.runsOnMac ? String(localized: "your Mac") : String(localized: "this iPhone"),
                 code: request.code, offersAlwaysAllow: request.offersAlwaysAllow, onMac: request.runsOnMac,
                 onRun: { code, always in
                     approvals.answer(request.id, code == request.code ? .run : .runEdited(code: code), alwaysAllow: always)
@@ -1998,7 +1998,7 @@ private struct ToolStepRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.bottom, PocketSpacing.s8)
             } label: {
-                Label((step.kind == "read" ? "Read: " : "Searched: ") + step.label,
+                Label(step.kind == "read" ? String(localized: "Read: \(step.label)") : String(localized: "Searched: \(step.label)"),
                       systemImage: step.kind == "read" ? "doc.text" : "magnifyingglass")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)

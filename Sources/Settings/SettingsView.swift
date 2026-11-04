@@ -57,7 +57,7 @@ struct SettingsView: View {
                     NavigationLink {
                         StorageUsedView()
                     } label: {
-                        SettingsRow(icon: "internaldrive", title: "Storage used", accessory: .value(storageTotal == 0 ? "None" : formatBytes(storageTotal)))
+                        SettingsRow(icon: "internaldrive", title: "Storage used", accessory: .value(storageTotal == 0 ? String(localized: "None") : formatBytes(storageTotal)))
                     }
                     .accessibilityIdentifier("settings_storage_row")
 
@@ -66,7 +66,7 @@ struct SettingsView: View {
                     } label: {
                         // UI-109: a count, not three engine names that wrapped
                         // or truncated beside the title.
-                        SettingsRow(icon: "bolt.fill", title: "Engines", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "3 available" : "2 available"))
+                        SettingsRow(icon: "bolt.fill", title: "Engines", accessory: .value(AppleFoundationModelsEngine.isAvailable ? String(localized: "3 available") : String(localized: "2 available")))
                     }
                     .accessibilityIdentifier("settings_engines_row")
                 }
@@ -116,7 +116,7 @@ struct SettingsView: View {
                     NavigationLink {
                         NetworkProofView(offline: offlineBinding)
                     } label: {
-                        SettingsRow(icon: "checkmark.shield.fill", title: "Network Proof", accessory: .value("\(egressCount) this session"))
+                        SettingsRow(icon: "checkmark.shield.fill", title: "Network Proof", accessory: .value(String(localized: "\(egressCount) this session")))
                     }
                     .accessibilityIdentifier("settings_network_proof_row")
 
@@ -237,13 +237,13 @@ struct SettingsView: View {
         }
     }
 
-    private var toolsStatus: String { toolsAllowed ? "Code allowed" : "Code off" }
+    private var toolsStatus: String { toolsAllowed ? String(localized: "Code allowed") : String(localized: "Code off") }
 
     private var liveShortlyStatus: String {
         if case .connected(let user) = model.liveShortly.phase {
             return user.name.isEmpty ? user.email : user.name
         }
-        return "Not connected"
+        return String(localized: "Not connected")
     }
 
     /// Version + build from the installed bundle — never a hardcoded string (F23).

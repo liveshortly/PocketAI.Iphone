@@ -55,8 +55,8 @@ private struct ToolSwitchRow: View {
         let noMac = tool.needsPairedMac && !macPaired
         let blocked = (tool.runsCode && !masterOn) || noMac
         VStack(alignment: .leading, spacing: PocketSpacing.s4) {
-            SettingsRow(icon: tool.symbol, title: tool.title(device: "iPhone"), accessory: .toggle($isOn))
-            Text(noMac ? "Pair a Mac first (Mac tab)." : blocked ? "Turn on Allow tools first." : tool.detail)
+            SettingsRow(icon: tool.symbol, verbatimTitle: tool.title(device: "iPhone"), accessory: .toggle($isOn))
+            Text(noMac ? String(localized: "Pair a Mac first (Mac tab).") : blocked ? String(localized: "Turn on Allow tools first.") : tool.detail)
                 .font(.pocket(.caption))
                 .foregroundStyle(PocketColor.textTertiary)
         }
