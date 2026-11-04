@@ -170,6 +170,14 @@ struct ModelsView: View {
                 hubResults = []
                 hubSearchError = nil
             }
+            .onChange(of: availableSegments) { _, segments in
+                // UI-142: the Mac went away (unpaired / disconnected): leave its
+                // pane and drop everything it fetched.
+                guard !segments.contains(.onMac) else { return }
+                if segment == .onMac { segment = .onDevice }
+                remoteCatalog = []
+                remoteError = nil
+            }
             .onChange(of: segment) { _, newValue in
                 if newValue == .onMac { Task { await reloadRemote() } }
             }
@@ -432,7 +440,7 @@ struct ModelsView: View {
                 .listRowBackground(Color.clear)
             }
 
-            if segment == .onMac {
+            if segment == .onMac, macPeer != nil {
                 if let remoteError {
                     // UI-117: an error with a way out, not a dead end.
                     VStack(alignment: .leading, spacing: PocketSpacing.s8) {
@@ -464,6 +472,8 @@ struct ModelsView: View {
                     }
                     .font(.pocket(.footnote))
                 }
+                // No empty header while loading or errored.
+                if !remoteCatalog.isEmpty {
                 Section(macPeer.map { peers.count > 1 ? $0.name : "On your Mac" } ?? "On your Mac") {
                     ForEach(remoteCatalog) { entry in
                         ModelRow(
@@ -476,6 +486,7 @@ struct ModelsView: View {
                             if entry.state == .installed { performRemotePrimaryAction(for: entry) }
                         }
                     }
+                }
                 }
             } else if groupedSections.isEmpty {
                 Section {
@@ -1110,11 +1121,11 @@ struct ModelsView: View {
                     remoteError = nil
                     return
                 } catch {
-                    remoteError = "Couldn't reach \(peer.name). Open PocketAI on your Mac."
+                    remoteError = "\(peer.name) is offline."
                     return
                 }
             }
-            remoteError = "Couldn't reach \(peer.name). Open PocketAI on your Mac."
+            remoteError = "\(peer.name) is offline."
         }
     }
 
