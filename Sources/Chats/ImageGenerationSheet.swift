@@ -15,6 +15,9 @@ final class ImageGenSheetViewModel {
         case generating(current: Int, total: Int)
         case completed
         case error(String)
+        /// No image model downloaded: Try again can't help, so the sheet
+        /// points at Models instead (UI-140).
+        case needsModel
     }
 
     var prompt: String
@@ -44,7 +47,7 @@ final class ImageGenSheetViewModel {
         switch state {
         case .loadingModel, .generating:
             return true
-        case .idle, .completed, .error:
+        case .idle, .completed, .error, .needsModel:
             return false
         }
     }
@@ -134,7 +137,7 @@ final class ImageGenSheetViewModel {
                         self.state = .idle
                         return
                     case .modelNotFound, .notLoaded:
-                        self.state = .error("No image model yet. Download one in Models.")
+                        self.state = .needsModel
                         return
                     default:
                         break
@@ -536,6 +539,22 @@ struct ImageGenerationSheet: View {
                 .padding(PocketSpacing.s12)
                 .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
             }
+
+        case .needsModel:
+            VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                Text("No image model yet. Download one in Models, then come back.")
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textSecondary)
+                Button("Open Models") {
+                    dismiss()
+                    AppModel.shared.nav.select(tab: .models)
+                }
+                .font(.pocket(.footnote).bold())
+                .foregroundStyle(PocketColor.accent)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(PocketSpacing.s12)
+            .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
 
         case .error(let error):
             VStack(alignment: .leading, spacing: PocketSpacing.s8) {
