@@ -486,8 +486,8 @@ struct ChatView: View {
         let approvals = model.tools.approvals
         if let request = approvals.request(for: conversationId) {
             RunCodeCard(
-                language: request.languageName, place: "this iPhone", code: request.code,
-                offersAlwaysAllow: request.offersAlwaysAllow,
+                language: request.languageName, place: request.runsOnMac ? "your Mac" : "this iPhone",
+                code: request.code, offersAlwaysAllow: request.offersAlwaysAllow, onMac: request.runsOnMac,
                 onRun: { code, always in
                     approvals.answer(request.id, code == request.code ? .run : .runEdited(code: code), alwaysAllow: always)
                 },
@@ -1978,7 +1978,8 @@ private struct ToolStepRow: View {
         if step.kind == "ran" {
             let ran = RanCodeDetail(step: step)
             RanCodeRow(language: step.codeLanguageName, code: ran.code, output: ran.output, error: ran.error,
-                       durationMs: ran.durationMs, truncated: ran.truncated, denied: ran.denied)
+                       durationMs: ran.durationMs, truncated: ran.truncated, denied: ran.denied,
+                       onMac: step.ranOnMac)
         } else {
             DisclosureGroup(isExpanded: $expanded) {
                 Text(step.detail)

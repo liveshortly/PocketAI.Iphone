@@ -7,6 +7,7 @@ import SwiftUI
 /// they show up here with no change to this view.
 struct ToolsSettingsView: View {
     @AppStorage(ToolsSettings.allowToolsKey) private var allowTools = false
+    @State private var macPaired = false
 
     var body: some View {
         List {
@@ -22,15 +23,16 @@ struct ToolsSettingsView: View {
 
             Section {
                 ForEach(ToolsSettings.Tool.allCases, id: \.rawValue) { tool in
-                    ToolSwitchRow(tool: tool, masterOn: allowTools)
+                    ToolSwitchRow(tool: tool, masterOn: allowTools, macPaired: macPaired)
                 }
             } header: {
                 Text("Tools")
             } footer: {
-                Text("Code never leaves this iPhone. Web search sends only the query or page you allow to the web.")
+                Text("Code stays on this iPhone, or goes to your own Mac if you turn on Run on my Mac. Web search sends only the query or page you allow to the web.")
                     .font(.pocket(.caption))
             }
         }
+        .onAppear { macPaired = MacCodeRunner.hasPairedMac(AppModel.shared.core) }
         .navigationTitle("Tools")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -39,19 +41,22 @@ struct ToolsSettingsView: View {
 private struct ToolSwitchRow: View {
     let tool: ToolsSettings.Tool
     let masterOn: Bool
+    let macPaired: Bool
     @AppStorage private var isOn: Bool
 
-    init(tool: ToolsSettings.Tool, masterOn: Bool) {
+    init(tool: ToolsSettings.Tool, masterOn: Bool, macPaired: Bool) {
         self.tool = tool
         self.masterOn = masterOn
+        self.macPaired = macPaired
         _isOn = AppStorage(wrappedValue: true, tool.defaultsKey)
     }
 
     var body: some View {
-        let blocked = tool.runsCode && !masterOn
+        let noMac = tool.needsPairedMac && !macPaired
+        let blocked = (tool.runsCode && !masterOn) || noMac
         VStack(alignment: .leading, spacing: PocketSpacing.s4) {
             SettingsRow(icon: tool.symbol, title: tool.title(device: "iPhone"), accessory: .toggle($isOn))
-            Text(blocked ? "Turn on Allow tools first." : tool.detail)
+            Text(noMac ? "Pair a Mac first (Mac tab)." : blocked ? "Turn on Allow tools first." : tool.detail)
                 .font(.pocket(.caption))
                 .foregroundStyle(PocketColor.textTertiary)
         }
