@@ -17,11 +17,23 @@ public struct OnboardingFlow: View {
     @State private var selectedModelId: String?
     @State private var catalog: [CatalogEntry] = []
     @State private var downloadStartError: String?
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     public init(core: CoreClient, deviceProfile: DeviceProfile, onFinished: @escaping () -> Void) {
         self.core = core
         self.deviceProfile = deviceProfile
         self.onFinished = onFinished
+    }
+
+    /// The step Back returns to, nil where there is no Back. The device check
+    /// advances by itself (unless VoiceOver is on), so Back from Pick skips
+    /// it instead of bouncing the user straight forward again.
+    private var backStep: Step? {
+        switch step {
+        case .deviceCheck: .welcome
+        case .pickModel: voiceOver ? .deviceCheck : .welcome
+        default: nil
+        }
     }
 
     public var body: some View {
@@ -102,6 +114,23 @@ public struct OnboardingFlow: View {
         }
         .animation(.default, value: step)
         .background(PocketColor.bgCanvas)
+        // UI-58: Back between Welcome, Device check and Pick. Downloading
+        // has its own Cancel; Ready is the end.
+        .safeAreaInset(edge: .top, alignment: .leading, spacing: 0) {
+            if let previous = backStep {
+                Button {
+                    withAnimation(PocketMotion.standard) { step = previous }
+                } label: {
+                    Label("Back", systemImage: "chevron.left")
+                        .font(.pocket(.body))
+                        .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .tint(PocketColor.accent)
+                .padding(.horizontal, PocketSpacing.gutterIphone)
+                .accessibilityIdentifier("onboarding_back")
+            }
+        }
         .alert("Couldn't start the download", isPresented: Binding(
             get: { downloadStartError != nil },
             set: { if !$0 { downloadStartError = nil } }
@@ -223,6 +252,8 @@ private struct OnboardingDeviceCheckView: View {
 
     @State private var revealedRows = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// UI-58: ~1.3 s is too fast to read under VoiceOver; wait for the user.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     private var rows: [String] {
         var r = [
@@ -248,6 +279,7 @@ private struct OnboardingDeviceCheckView: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 withAnimation { revealedRows += 1 }
             }
+            guard !voiceOver else { return }
             try? await Task.sleep(nanoseconds: 500_000_000)
             onContinue()
         }
@@ -302,7 +334,20 @@ private struct OnboardingDeviceCheckView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, PocketSpacing.gutterIphone)
-                .padding(.bottom, PocketSpacing.s24)
+                .padding(.bottom, voiceOver ? 0 : PocketSpacing.s24)
+
+            if voiceOver {
+                Button(action: onContinue) {
+                    Text("Continue")
+                        .font(.pocket(.headline))
+                        .foregroundStyle(PocketColor.accentOnAccent)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(PocketColor.accent)
+                .padding(.horizontal, PocketSpacing.gutterIphone)
+                .padding(.bottom, PocketSpacing.s16)
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -698,11 +743,7 @@ private struct OnboardingReadyView: View {
     /// nil = plain start; a string = start a chat with that suggestion sent.
     let onStart: (String?) -> Void
 
-    private static let suggestions = [
-        ("Summarize a long email", "doc.text"),
-        ("Explain a concept simply", "lightbulb"),
-        ("Draft a quick reply", "bubble.left.and.text.bubble.right"),
-    ]
+    private static let suggestions = FirstChatSuggestion.all
 
     var body: some View {
         ViewThatFits(in: .vertical) {
@@ -733,8 +774,9 @@ private struct OnboardingReadyView: View {
             .padding(.horizontal, PocketSpacing.gutterIphone)
 
             VStack(spacing: PocketSpacing.s12) {
-                ForEach(Self.suggestions, id: \.0) { title, icon in
-                    Button(action: { onStart(title) }) {
+                ForEach(Self.suggestions, id: \.title) { suggestion in
+                    let title = suggestion.title, icon = suggestion.icon
+                    Button(action: { onStart(suggestion.prompt) }) {
                         HStack(spacing: PocketSpacing.s12) {
                             Image(systemName: icon)
                                 .font(.pocket(.callout))

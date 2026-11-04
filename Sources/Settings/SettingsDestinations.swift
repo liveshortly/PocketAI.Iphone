@@ -219,7 +219,18 @@ struct SpeechToTextView: View {
                 LabeledContent("Permission", value: authLabel)
             }
 
-            if authStatus == .denied || authStatus == .restricted {
+            if authStatus == .notDetermined {
+                Section {
+                    Button("Allow speech recognition") {
+                        SFSpeechRecognizer.requestAuthorization { status in
+                            Task { @MainActor in authStatus = status }
+                        }
+                    }
+                    .frame(minHeight: 44)
+                } footer: {
+                    Text("PocketAI asks once. You can change it later in iOS Settings.")
+                }
+            } else if authStatus == .denied || authStatus == .restricted {
                 Section {
                     Button("Open iOS Settings") {
                         if let url = URL(string: UIApplication.openSettingsURLString) {

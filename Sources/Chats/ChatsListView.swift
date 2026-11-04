@@ -37,6 +37,8 @@ struct ChatsListView: View {
     @State private var editMode: EditMode = .inactive
     @State private var selectedIds = Set<String>()
     @State private var showBulkDeleteConfirm = false
+    /// UI-78: the archived list (Archive used to be one-way).
+    @State private var showArchived = false
     /// Surfaces a failed create/rename/delete — a store write that throws used
     /// to leave the tap looking ignored.
     @State private var actionError: String?
@@ -255,6 +257,16 @@ struct ChatsListView: View {
                     } label: {
                         Label("New chat", systemImage: "square.and.pencil")
                     }
+                    Button {
+                        showArchived.toggle()
+                        reload()
+                    } label: {
+                        if showArchived {
+                            Label("Show all chats", systemImage: "bubble.left.and.bubble.right")
+                        } else {
+                            Label("Archived chats", systemImage: "archivebox")
+                        }
+                    }
                     if AppleFoundationModelsEngine.isAvailable {
                         Button {
                             newChat(firstMessage: nil, modelId: AppleFoundationModelsEngine.modelId)
@@ -315,17 +327,21 @@ struct ChatsListView: View {
         Group {
             // A connected LiveShortly account keeps the List branch alive even
             // with zero local chats — its sessions ARE the content then.
-            if conversations.isEmpty && !model.liveShortly.isConnected {
-                if searchText.isEmpty {
+            if conversations.isEmpty && (showArchived || !model.liveShortly.isConnected) {
+                if showArchived && searchText.isEmpty {
+                    emptyArchivedState
+                } else if searchText.isEmpty {
                     emptyChatsState
                 } else {
                     noSearchResultsState
                 }
             } else {
                 List(selection: $selectedIds) {
-                    LSSessionsSection(
-                        account: model.liveShortly,
-                        onNewSession: { lsNewSession = true })
+                    if !showArchived {
+                        LSSessionsSection(
+                            account: model.liveShortly,
+                            onNewSession: { lsNewSession = true })
+                    }
                     ForEach(groupedConversations) { group in
                         Section(header: Text(group.title).font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)) {
                             ForEach(group.conversations, id: \.id) { conversation in
@@ -361,6 +377,23 @@ struct ChatsListView: View {
         } message: {
             Text("This permanently deletes the selected conversations and their messages.")
         }
+    }
+
+    private var emptyArchivedState: some View {
+        VStack(spacing: PocketSpacing.s12) {
+            Image(systemName: "archivebox")
+                .font(.title)
+                .foregroundStyle(PocketColor.textTertiary)
+                .accessibilityHidden(true)
+            Text("No archived chats")
+                .font(.pocket(.headline))
+                .foregroundStyle(PocketColor.textPrimary)
+            Button("Back to chats") { showArchived = false; reload() }
+                .buttonStyle(.bordered)
+                .tint(PocketColor.accent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(PocketSpacing.s32)
     }
 
     private var noSearchResultsState: some View {
@@ -427,7 +460,11 @@ struct ChatsListView: View {
                 selectedIds = [conversation.id]
                 withAnimation { editMode = .active }
             }
-            Button("Archive", systemImage: "archivebox") { archive(conversation) }
+            if showArchived {
+                Button("Unarchive", systemImage: "tray.and.arrow.up") { setArchived(conversation, false) }
+            } else {
+                Button("Archive", systemImage: "archivebox") { setArchived(conversation, true) }
+            }
             Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = conversation }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -439,9 +476,13 @@ struct ChatsListView: View {
             }
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                archive(conversation)
+                setArchived(conversation, !showArchived)
             } label: {
-                Label("Archive", systemImage: "archivebox")
+                if showArchived {
+                    Label("Unarchive", systemImage: "tray.and.arrow.up")
+                } else {
+                    Label("Archive", systemImage: "archivebox")
+                }
             }
             .tint(PocketColor.statusWarn)
         }
@@ -467,9 +508,9 @@ struct ChatsListView: View {
             .padding(.horizontal, PocketSpacing.s24)
 
             VStack(spacing: PocketSpacing.s12) {
-                suggestionButton(icon: "doc.text", title: "Summarize a long email")
-                suggestionButton(icon: "lightbulb", title: "Explain a concept simply")
-                suggestionButton(icon: "bubble.left.and.text.bubble.right", title: "Draft a quick reply")
+                ForEach(FirstChatSuggestion.all, id: \.title) { suggestion in
+                    suggestionButton(icon: suggestion.icon, title: suggestion.title, prompt: suggestion.prompt)
+                }
             }
             .padding(.horizontal, PocketSpacing.gutterIphone)
 
@@ -478,10 +519,10 @@ struct ChatsListView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func suggestionButton(icon: String, title: String) -> some View {
+    private func suggestionButton(icon: String, title: String, prompt: String) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            newChat(firstMessage: title)
+            newChat(firstMessage: prompt)
         } label: {
             HStack(spacing: PocketSpacing.s12) {
                 // Capped: a glyph that grows without limit leaves the title a
@@ -667,7 +708,7 @@ struct ChatsListView: View {
             filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: true))
         // ponytail: flat limit 1000, add real pagination if anyone ever has more chats
         conversations = model.core.conversations(
-            query: ConversationQuery(search: searchText.isEmpty ? nil : searchText, archived: false, limit: 1000, offset: 0)
+            query: ConversationQuery(search: searchText.isEmpty ? nil : searchText, archived: showArchived, limit: 1000, offset: 0)
         )
         // Preview snippets are a per-conversation DB read each — do them off
         // the main thread so typing in search never stutters.
@@ -756,13 +797,21 @@ struct ChatsListView: View {
         reload()
     }
 
-    private func archive(_ conversation: ConversationSummary) {
-        do {
-            try model.core.archiveConversation(id: conversation.id, archived: true)
-        } catch {
-            actionError = "Couldn't archive that chat: \(error.localizedDescription)"
+    /// Archive / unarchive; archiving offers Undo in the app toast (UI-78).
+    private func setArchived(_ conversation: ConversationSummary, _ archived: Bool) {
+        let before = model.toast?.id
+        model.attempt(archived ? "archive that chat" : "unarchive that chat") {
+            try model.core.archiveConversation(id: conversation.id, archived: archived)
         }
         reload()
+        guard model.toast?.id == before else { return } // attempt() failed: error toast shown
+        let id = conversation.id
+        model.toast = ToastData(message: archived ? "Chat archived" : "Chat restored", undo: {
+            model.attempt(archived ? "undo archive" : "undo unarchive") {
+                try model.core.archiveConversation(id: id, archived: !archived)
+            }
+            reload()
+        })
     }
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {

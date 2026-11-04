@@ -978,6 +978,14 @@ struct ChatView: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(PocketColor.textPrimary)
 
+                        Text("·")
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.textTertiary)
+                            .accessibilityHidden(true)
+                        Text(Date(timeIntervalSince1970: Double(message.createdAt) / 1000).formatted(date: .omitted, time: .shortened))
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.textTertiary)
+
                         if let stats = message.stats {
                             Text("·")
                                 .font(.pocket(.caption))
@@ -1007,7 +1015,8 @@ struct ChatView: View {
                             } else {
                                 speechPlayback.speak(text)
                             }
-                        }
+                        },
+                        alwaysShowFooter: !isCurrentStreaming
                     )
                     .accessibilityIdentifier("chat_bubble_assistant")
 
@@ -1344,7 +1353,7 @@ struct ChatView: View {
         let text = promptText
         composerText = ""
         UIImpactFeedbackGenerator(style: .light).impactOccurred() // §3.4 send
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        // UI-77: keyboard stays up after send, like Messages.
         let attachment = pendingAttachment
         pendingAttachment = nil
         errorText = nil

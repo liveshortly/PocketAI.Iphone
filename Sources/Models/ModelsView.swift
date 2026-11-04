@@ -34,7 +34,10 @@ struct ModelsView: View {
 
     @State private var segment = Segment.browse
     @State private var searchText = ""
-    @State private var fitsOnly = true          // §6.1: default on in Browse
+    /// Settings › Advanced (UI-118): off by default.
+    static let allowMayNotFitKey = "app.getpocketai.allowMayNotFit"
+    @AppStorage(ModelsView.allowMayNotFitKey) private var allowMayNotFit = false
+    @State private var fitsOnly = !UserDefaults.standard.bool(forKey: ModelsView.allowMayNotFitKey) // §6.1: default on in Browse
     @State private var capabilityFilter = CapabilityFilter.all
     @State private var sortOrder = SortOrder.recommended
     @State private var catalog: [CatalogEntry] = []          // curated browse source
@@ -1241,7 +1244,7 @@ struct ModelsView: View {
         case .verifying: return "Checking files…"
         case .queued: return "Queued"
         case .failed: return "Retry"
-        case .available: return entry.fit.verdict == .willNotFit ? "Won't fit" : "Download"
+        case .available: return entry.fit.verdict == .willNotFit && !allowMayNotFit ? "Won't fit" : "Download"
         }
     }
 
@@ -1256,7 +1259,7 @@ struct ModelsView: View {
             setUserPaused(id, false)
         case .available, .failed:
             // "Won't fit" is honest — don't start a download that can't run.
-            guard entry.fit.verdict != .willNotFit else { break }
+            guard entry.fit.verdict != .willNotFit || allowMayNotFit else { break }
             model.attempt("start the download") { try model.core.startDownload(modelId: id) }
             setUserPaused(id, false)
         case .installed:
@@ -1276,7 +1279,7 @@ struct ModelsView: View {
     private func isPrimaryActionDisabled(_ entry: CatalogEntry) -> Bool {
         switch entry.state {
         case .queued, .verifying: return true
-        case .available: return entry.fit.verdict == .willNotFit
+        case .available: return entry.fit.verdict == .willNotFit && !allowMayNotFit
         default: return false
         }
     }

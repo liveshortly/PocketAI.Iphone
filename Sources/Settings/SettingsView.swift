@@ -14,6 +14,8 @@ struct SettingsView: View {
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
     @AppStorage("app.getpocketai.diagnosticsEnabled") private var diagnosticsEnabled = false
     @AppStorage(ToolsSettings.allowToolsKey) private var toolsAllowed = false
+    @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system.rawValue
+    @AppStorage(ModelsView.allowMayNotFitKey) private var allowMayNotFit = false
     @State private var egressCount = 0
     @State private var defaultModelName = "Choose"
     @State private var storageTotal: UInt64 = 0
@@ -67,6 +69,18 @@ struct SettingsView: View {
                         SettingsRow(icon: "bolt.fill", title: "Engines", accessory: .value(AppleFoundationModelsEngine.isAvailable ? "3 available" : "2 available"))
                     }
                     .accessibilityIdentifier("settings_engines_row")
+                }
+
+                // MARK: Appearance
+                Section("Appearance") {
+                    Picker(selection: $appearance) {
+                        Text("System").tag(AppearancePreference.system.rawValue)
+                        Text("Light").tag(AppearancePreference.light.rawValue)
+                        Text("Dark").tag(AppearancePreference.dark.rawValue)
+                    } label: {
+                        SettingsRow(icon: "circle.lefthalf.filled", title: "Appearance", accessory: .none)
+                    }
+                    .accessibilityIdentifier("settings_appearance_picker")
                 }
 
                 // MARK: Voice
@@ -178,6 +192,20 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings_pair_mac_row")
                 }
 
+                // MARK: Advanced
+                Section {
+                    SettingsRow(
+                        icon: "exclamationmark.triangle",
+                        title: "Allow models that may not fit",
+                        accessory: .toggle($allowMayNotFit)
+                    )
+                    .accessibilityIdentifier("settings_allow_may_not_fit")
+                } header: {
+                    Text("Advanced")
+                } footer: {
+                    Text("Shows models too large for this iPhone and lets you download them. They may run very slowly or crash the app.")
+                }
+
                 // MARK: About
                 Section("About") {
                     SettingsRow(icon: "info.circle.fill", title: "Version", accessory: .value(appVersionString))
@@ -262,6 +290,11 @@ private struct NetworkProofView: View {
 
     private static let scopeLimit: UInt32 = 500
 
+    /// `ts` is ms since the epoch (same unit as chat timestamps).
+    private static func time(_ ts: Int64) -> String {
+        Date(timeIntervalSince1970: Double(ts) / 1000).formatted(date: .omitted, time: .standard)
+    }
+
     var body: some View {
         List {
             if offline {
@@ -313,7 +346,7 @@ private struct NetworkProofView: View {
                     ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
                         VStack(alignment: .leading, spacing: PocketSpacing.s4) {
                             Text(NetPurpose.label(for: entry.purpose)).font(.pocket(.body))
-                            Text("\(entry.host) · \(formatBytes(entry.bytesOut + entry.bytesIn))")
+                            Text("\(entry.host) · \(formatBytes(entry.bytesOut + entry.bytesIn)) · \(Self.time(entry.ts))")
                                 .font(.pocket(.caption))
                                 .foregroundStyle(PocketColor.textTertiary)
                         }

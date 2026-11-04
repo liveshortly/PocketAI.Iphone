@@ -74,8 +74,10 @@ struct HomeView: View {
     private func cards(_ s: HomeSnapshot) -> some View {
         ScrollView {
             VStack(spacing: PocketSpacing.s12) {
+                // UI-58: with no model chosen, the Model card is the next step.
+                if s.model == nil { ModelCard(snapshot: s) }
                 ContinueCard(chats: s.recent, onNewChat: { startNewChat() })
-                ModelCard(snapshot: s)
+                if s.model != nil { ModelCard(snapshot: s) }
                 MacCard(peer: s.macPeer, chatModelOnMac: s.macChatModel)
                 if model.liveShortly.isConnected {
                     LiveShortlyCard(sessions: lsSessions, failed: lsFailed) { openSessionId = $0 }
@@ -133,7 +135,7 @@ struct HomeView: View {
 /// One summary card: leading glyph, small title, content, chevron when the
 /// whole card navigates. `action == nil` leaves the rows to handle taps.
 private struct HomeCard<Leading: View, Content: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     var action: (() -> Void)?
     @ViewBuilder let leading: Leading
     @ViewBuilder let content: Content
@@ -186,15 +188,17 @@ private struct CardIcon: View {
 
 /// Headline + secondary line, the shape most cards share.
 private struct CardLines: View {
-    let primary: String
-    var secondary: String?
+    // Text, not String: literals go through the string catalog (UI-57);
+    // runtime values are passed as `Text(verbatim:)`.
+    let primary: Text
+    var secondary: Text?
     var body: some View {
-        Text(primary)
+        primary
             .font(.pocket(.headline))
             .foregroundStyle(PocketColor.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
         if let secondary {
-            Text(secondary)
+            secondary
                 .font(.pocket(.footnote))
                 .foregroundStyle(PocketColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -214,7 +218,7 @@ private struct ContinueCard: View {
             HomeCard(title: "Continue", action: onNewChat) {
                 CardIcon(systemName: "bubble.left.and.bubble.right")
             } content: {
-                CardLines(primary: "Start your first chat", secondary: "It stays on this iPhone.")
+                CardLines(primary: Text("Start your first chat"), secondary: Text("It stays on this iPhone."))
             }
         } else {
             HomeCard(title: "Continue") {
@@ -268,14 +272,16 @@ private struct ModelCard: View {
                 .accessibilityHidden(true)
         } content: {
             if let m = snapshot.model {
-                CardLines(primary: m.name, secondary: m.detail)
+                CardLines(primary: Text(verbatim: m.name), secondary: Text(verbatim: m.detail))
                 if let fit = m.fit {
-                    FitBadge(kind: fit, reason: m.fitReason)
+                    // Not a button here: the whole card is one, and a nested tap target
+                    // swallowed the card's tap (UI-58). The reason is read by VoiceOver.
+                    FitBadge(kind: fit, reason: m.fitReason, interactive: false)
                 }
             } else if snapshot.hasInstalledChatModel {
-                CardLines(primary: "No model chosen", secondary: "Choose one in Models.")
+                CardLines(primary: Text("No model chosen"), secondary: Text("Choose one in Models."))
             } else {
-                CardLines(primary: "No model yet", secondary: "Download one that runs on this iPhone.")
+                CardLines(primary: Text("No model yet"), secondary: Text("Download one that runs on this iPhone."))
             }
         }
         .accessibilityIdentifier("home_model_card")
@@ -294,14 +300,14 @@ private struct MacCard: View {
             CardIcon(systemName: peer == nil ? "laptopcomputer" : "laptopcomputer.and.iphone")
         } content: {
             if let peer {
-                CardLines(primary: peer.name, secondary: status(peer))
+                CardLines(primary: Text(verbatim: peer.name), secondary: status(peer))
                 if let chatModelOnMac {
                     Text("Your chat model: \(chatModelOnMac)")
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
                 }
             } else {
-                CardLines(primary: "Not paired", secondary: "Pair your Mac to use its bigger models from this iPhone.")
+                CardLines(primary: Text("Not paired"), secondary: Text("Pair your Mac to use its bigger models from this iPhone."))
             }
         }
         .accessibilityIdentifier("home_mac_card")
@@ -309,12 +315,12 @@ private struct MacCard: View {
 
     /// NET-17/18 link state. nil = paired, no heartbeat answered yet (e.g.
     /// just launched or offline), which the Mac side shows as Idle too.
-    private func status(_ peer: Peer) -> String {
+    private func status(_ peer: Peer) -> Text {
         switch MacLink.shared.state(for: peer) {
-        case .connected: return "Connected"
-        case nil: return "Idle"
-        case .unreachable: return "Not answering — open PocketAI on your Mac"
-        case .disconnected, .disconnectedByHost: return "Disconnected"
+        case .connected: return Text("Connected")
+        case nil: return Text("Idle")
+        case .unreachable: return Text("Not answering — open PocketAI on your Mac")
+        case .disconnected, .disconnectedByHost: return Text("Disconnected")
         }
     }
 }
@@ -351,14 +357,14 @@ private struct LiveShortlyCard: View {
 
     @ViewBuilder private var lines: some View {
         if failed, sessions == nil {
-            CardLines(primary: "Couldn't load sessions", secondary: "Tap to see them in Chats.")
+            CardLines(primary: Text("Couldn't load sessions"), secondary: Text("Tap to see them in Chats."))
         } else if let sessions, let latest {
             let live = sessions.filter(\.isLive).count
-            CardLines(primary: latest.title, secondary: live == 0 ? "No live sessions" : "\(live) live")
+            CardLines(primary: Text(verbatim: latest.title), secondary: live == 0 ? Text("No live sessions") : Text("\(live) live"))
         } else if sessions != nil {
-            CardLines(primary: "No sessions yet", secondary: "Run \u{201C}live claude\u{201D} in a terminal to stream an agent here.")
+            CardLines(primary: Text("No sessions yet"), secondary: Text("Run \u{201C}live claude\u{201D} in a terminal to stream an agent here."))
         } else {
-            CardLines(primary: "Loading sessions…")
+            CardLines(primary: Text("Loading sessions…"))
         }
     }
 
@@ -380,9 +386,9 @@ private struct ProjectsCard: View {
             CardIcon(systemName: "folder")
         } content: {
             if let newest {
-                CardLines(primary: count == 1 ? "1 project" : "\(count) projects", secondary: "Newest: \(newest)")
+                CardLines(primary: count == 1 ? Text("1 project") : Text("\(count) projects"), secondary: Text("Newest: \(newest)"))
             } else {
-                CardLines(primary: "No projects yet", secondary: "Group chats with your own documents.")
+                CardLines(primary: Text("No projects yet"), secondary: Text("Group chats with your own documents."))
             }
         }
         .accessibilityIdentifier("home_projects_card")
@@ -401,22 +407,22 @@ private struct PrivacyCard: View {
         HomeCard(title: "Storage & privacy", action: { model.nav.select(tab: .settings) }) {
             CardIcon(systemName: "checkmark.shield")
         } content: {
-            Text(storage)
+            storage
                 .font(.pocket(.footnote))
                 .foregroundStyle(PocketColor.textPrimary)
             // Core's egress log is in-memory (F19), so "this session" is the
             // honest scope — the same number Settings › Network Proof shows.
-            Text(requests == 1 ? "1 internet request this session" : "\(requests) internet requests this session")
+            (requests == 1 ? Text("1 internet request this session") : Text("\(requests) internet requests this session"))
                 .font(.pocket(.footnote))
                 .foregroundStyle(PocketColor.textSecondary)
         }
         .accessibilityIdentifier("home_privacy_card")
     }
 
-    private var storage: String {
-        guard modelCount > 0 else { return "No models stored" }
+    private var storage: Text {
+        guard modelCount > 0 else { return Text("No models stored") }
         let size = ByteCountFormatter.string(fromByteCount: Int64(diskBytes), countStyle: .file)
-        return modelCount == 1 ? "1 model · \(size)" : "\(modelCount) models · \(size)"
+        return modelCount == 1 ? Text("1 model · \(size)") : Text("\(modelCount) models · \(size)")
     }
 }
 

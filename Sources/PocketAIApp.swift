@@ -1,9 +1,11 @@
 import SwiftUI
 import PocketKit
+import PocketUI
 
 @main
 struct PocketAIApp: App {
     @State private var model = AppModel.shared
+    @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system.rawValue
 
     init() {
         DiagnosticsLog.shared.append("PocketAIApp: application initialized")
@@ -18,6 +20,7 @@ struct PocketAIApp: App {
         WindowGroup {
             RootTabView()
                 .environment(model)
+                .preferredColorScheme(AppearancePreference.colorScheme(forStored: appearance))
         }
     }
 }
