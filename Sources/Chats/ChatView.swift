@@ -52,6 +52,8 @@ struct ChatView: View {
     /// Per-chat thinking toggle (UI-27); default on. Persisted in
     /// UserDefaults keyed by conversation id — only "off" is stored.
     @State private var thinkingEnabled = true
+    /// AGT-12: per-chat web tools switch, stored on the conversation in Core.
+    @State private var toolsEnabled = false
     /// Catalog snapshot refreshed in reload() — header/composer lookups must
     /// never call core.catalog() per render (it re-parses the bundled JSON).
     @State private var cachedCatalog: [CatalogEntry] = []
@@ -110,6 +112,24 @@ struct ChatView: View {
     /// never a dead toggle on models that ignore it.
     private var currentModelSupportsReasoning: Bool {
         currentModelId.map { cachedCatalog.supportsReasoning(modelID: $0) } ?? false
+    }
+
+    /// AGT-12: web tools run in this device's Core, so not for Apple's
+    /// built-in model or a Mac-routed one (the Mac route sends no tools).
+    // ponytail: no catalog `tools` flag yet, so every other chat model gets it.
+    private var offersTools: Bool {
+        guard let id = currentModelId else { return false }
+        return id != AppleFoundationModelsEngine.modelId && !id.hasPrefix("mac:")
+    }
+
+    private var toolsBinding: Binding<Bool> {
+        Binding(
+            get: { toolsEnabled },
+            set: { on in
+                toolsEnabled = on
+                try? model.core.setConversationTools(id: conversationId, on: on)
+            }
+        )
     }
 
     // ponytail: per-chat UserDefaults key; orphaned on chat delete — move into
@@ -418,6 +438,13 @@ struct ChatView: View {
                 Label(thinkingEnabled ? "Thinking: On" : "Thinking: Off", systemImage: "brain")
             }
         }
+        if offersTools {
+            Button {
+                toolsBinding.wrappedValue = !toolsEnabled
+            } label: {
+                Label(toolsEnabled ? "Web search: On" : "Web search: Off", systemImage: "globe")
+            }
+        }
         Button {
             autoSpeakReplies.toggle()
         } label: {
@@ -451,7 +478,7 @@ struct ChatView: View {
 
     private var showsAccessoryRow: Bool {
         !(voiceDictation.isRecording || voiceDictation.isTranscribing)
-            && (currentModelSupportsReasoning || remoteModelChipLabel != nil)
+            && (currentModelSupportsReasoning || offersTools || remoteModelChipLabel != nil)
     }
 
     /// UI-36: Think chip and model pill. Collapsing fades them out but keeps
@@ -461,8 +488,13 @@ struct ChatView: View {
     private var accessoryRow: some View {
         if showsAccessoryRow {
             VStack(alignment: .leading, spacing: 0) {
-                if currentModelSupportsReasoning {
-                    ThinkingToggleChip(isOn: thinkingBinding)
+                HStack(spacing: PocketSpacing.s8) {
+                    if currentModelSupportsReasoning {
+                        ThinkingToggleChip(isOn: thinkingBinding)
+                    }
+                    if offersTools {
+                        ToolsToggleChip(isOn: toolsBinding)
+                    }
                 }
                 if let label = remoteModelChipLabel {
                     modelPill(label)
@@ -931,6 +963,8 @@ struct ChatView: View {
                     .padding(.bottom, 2)
                 }
 
+                ToolStepRows(steps: message.toolSteps)
+
                 HStack(alignment: .bottom, spacing: 4) {
                     MessageView(
                         text: text,
@@ -959,6 +993,8 @@ struct ChatView: View {
                             .accessibilityHidden(true)
                     }
                 }
+
+                WebSourceLinks(urls: message.sources)
 
                 if projectId != nil {
                     let citations = extractCitationNumbers(from: text)
@@ -1198,6 +1234,7 @@ struct ChatView: View {
             conversationModelId = convo.modelId
         }
         thinkingEnabled = !UserDefaults.standard.bool(forKey: thinkingOffKey)
+        toolsEnabled = model.core.conversationTools(id: conversationId)
     }
 
     /// UI-31 pull-to-refresh: reload from the store and, for a Mac-routed
@@ -1361,6 +1398,7 @@ struct ChatView: View {
     private func consumeStream(_ stream: AsyncThrowingStream<ChatStreamEvent, Error>, shouldAutoSpeak: Bool, streamId: UUID) async {
         var partialText = ""
         var partialReasoning = ""
+        var partialSteps: [ToolStep] = []
         var sawFirstToken = false
         do {
             // No reload here: it would race the core's DB write and wipe the
@@ -1382,7 +1420,10 @@ struct ChatView: View {
                         // exact tok/s arrives with the final message stats.
                         if elapsed > 0.2 { liveTokPerSec = (Double(genCharCount) / 4.0) / elapsed }
                     }
-                    upsertStreamingPlaceholder(text: partialText, reasoning: partialReasoning)
+                    upsertStreamingPlaceholder(text: partialText, reasoning: partialReasoning, steps: partialSteps)
+                case .toolStep(let step):
+                    partialSteps.append(step)
+                    upsertStreamingPlaceholder(text: partialText, reasoning: partialReasoning, steps: partialSteps)
                 case .done(let finalMessage):
                     if let tps = finalMessage.stats?.decodeTps { liveTokPerSec = Double(tps) }
                     #if DEBUG
@@ -1489,21 +1530,23 @@ struct ChatView: View {
     /// Shows the in-flight reply growing in place rather than waiting for
     /// `sendMessage`'s final `.done` event - `messages(conversationId:)`
     /// only reflects the persisted row, so this overlays a synthetic one.
-    private func upsertStreamingPlaceholder(text: String, reasoning: String = "") {
+    private func upsertStreamingPlaceholder(text: String, reasoning: String = "", steps: [ToolStep] = []) {
         let placeholderId = "streaming-placeholder"
+        let message = streamingMessage(id: placeholderId, text: text, reasoning: reasoning, steps: steps)
         if let index = messages.firstIndex(where: { $0.id == placeholderId }) {
-            messages[index] = streamingMessage(id: placeholderId, text: text, reasoning: reasoning)
+            messages[index] = message
         } else {
-            messages.append(streamingMessage(id: placeholderId, text: text, reasoning: reasoning))
+            messages.append(message)
         }
     }
 
-    private func streamingMessage(id: String, text: String, reasoning: String = "") -> Message {
+    private func streamingMessage(id: String, text: String, reasoning: String = "", steps: [ToolStep] = []) -> Message {
         Message(
             id: id, conversationId: conversationId, role: "assistant",
             parts: [.text(text: text)], reasoning: reasoning.isEmpty ? nil : reasoning,
             stats: nil, modelId: nil,
-            createdAt: Int64(Date().timeIntervalSince1970 * 1000), status: .streaming
+            createdAt: Int64(Date().timeIntervalSince1970 * 1000), status: .streaming,
+            toolSteps: steps
         )
     }
 
@@ -1535,7 +1578,8 @@ struct ChatView: View {
                 id: "streaming-placeholder", conversationId: conversationId, role: "assistant",
                 parts: [.text(text: partial)], reasoning: reasoning,
                 stats: nil, modelId: nil,
-                createdAt: messages[index].createdAt, status: .done
+                createdAt: messages[index].createdAt, status: .done,
+                toolSteps: messages[index].toolSteps
             )
         }
     }
@@ -1875,4 +1919,78 @@ private struct ChromeTopFade: View {
     NavigationStack { ChatView(conversationId: "fixture-0") }
         .environment(AppModel())
         .environment(\.dynamicTypeSize, .accessibility3)
+}
+
+/// AGT-12: "Searched: …" / "Read: …" rows above a reply that used the web
+/// tools, each expandable to its results or page URL. Nothing otherwise.
+private struct ToolStepRows: View {
+    let steps: [ToolStep]
+
+    var body: some View {
+        if !steps.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
+                    ToolStepRow(step: step)
+                }
+            }
+            .padding(.horizontal, PocketSpacing.s12)
+            .background(PocketColor.bgRaised, in: RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous).strokeBorder(PocketColor.lineHairline))
+        }
+    }
+}
+
+private struct ToolStepRow: View {
+    let step: ToolStep
+    @State private var expanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            Text(step.detail)
+                .font(.pocket(.caption))
+                .foregroundStyle(PocketColor.textSecondary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, PocketSpacing.s8)
+        } label: {
+            Label((step.kind == "read" ? "Read: " : "Searched: ") + step.label,
+                  systemImage: step.kind == "read" ? "doc.text" : "magnifyingglass")
+                .font(.pocket(.footnote))
+                .foregroundStyle(PocketColor.textSecondary)
+                .lineLimit(1)
+                .frame(minHeight: 44)
+        }
+        .tint(PocketColor.textTertiary)
+    }
+}
+
+/// AGT-12: the pages a reply read, as links under the answer.
+private struct WebSourceLinks: View {
+    let urls: [String]
+
+    var body: some View {
+        let links = urls.compactMap { URL(string: $0) }
+        if !links.isEmpty {
+            ScrollView(.horizontal) {
+                HStack(spacing: PocketSpacing.s8) {
+                    ForEach(links, id: \.self) { url in
+                        Link(destination: url) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "link").font(.system(size: 11))
+                                Text(url.host() ?? url.absoluteString).font(.pocket(.footnote))
+                            }
+                            .foregroundStyle(PocketColor.accent)
+                            .padding(.horizontal, PocketSpacing.s8)
+                            .padding(.vertical, 4)
+                            .background(PocketColor.bgRaised, in: Capsule())
+                            .overlay(Capsule().strokeBorder(PocketColor.lineHairline))
+                            .frame(minHeight: 44)
+                        }
+                        .accessibilityLabel("Source: \(url.host() ?? url.absoluteString)")
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
 }

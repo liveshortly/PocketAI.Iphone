@@ -34,7 +34,7 @@ struct AskPocketAIIntent: AppIntent {
                 switch event {
                 case .delta(let delta):
                     answer += delta.text
-                case .done:
+                case .done, .toolStep:
                     break
                 }
             }
