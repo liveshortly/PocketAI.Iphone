@@ -147,20 +147,15 @@ struct DevicesView: View {
                 .padding(.horizontal, PocketSpacing.gutterIphone)
                 .padding(.top, PocketSpacing.s8)
 
-                Link(destination: URL(string: "https://pocket.liveshortly.com")!) {
-                    HStack(spacing: 4) {
-                        Text("Don't have PocketAI on Mac? pocket.liveshortly.com")
-                        Image(systemName: "arrow.up.right")
-                            .font(.caption)
-                    }
+                // No outbound link here (App Review 3.1.1): the Mac app is
+                // installed on the Mac, so say so in plain text.
+                Text("Pairing needs PocketAI installed on your Mac.")
                     .font(.pocket(.footnote))
-                    // UI-114: tertiary (40 %) fails AA for a link.
                     .foregroundStyle(PocketColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(minHeight: 44)
-                }
-                .padding(.horizontal, PocketSpacing.gutterIphone)
-                .padding(.bottom, PocketSpacing.s24)
+                    .padding(.horizontal, PocketSpacing.gutterIphone)
+                    .padding(.bottom, PocketSpacing.s24)
             }
         }
     }
