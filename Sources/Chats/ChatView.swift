@@ -1522,7 +1522,7 @@ struct ChatView: View {
             return "No model is ready yet. (\(error.localizedDescription))"
         }
         if desc.contains("not entitled") || desc.contains("notentitled") {
-            return "This needs PocketAI Pro. Unlock it in Settings."
+            return "This isn't available with your Mac yet. Everything on this iPhone keeps working."
         }
         return "Something went wrong: \(error.localizedDescription)"
     }

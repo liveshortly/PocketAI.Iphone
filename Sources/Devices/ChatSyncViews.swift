@@ -31,7 +31,7 @@ struct ChatSyncSection: View {
             return "Sync is off on \(peer.name). Turn on Sync chats for this iPhone there, under Devices. Your chats stay on this iPhone until then."
         }
         if sync.notEntitled.contains(peer.id) {
-            return "Chat sync is part of PocketAI Pro on your Mac. Your chats stay on this iPhone until then."
+            return "Chat sync isn't available with this Mac yet. Your chats stay on this iPhone until then."
         }
         guard let last = sync.lastSyncedAt[peer.id] else {
             return "Chats sync both ways while PocketAI is open on this iPhone and your Mac is reachable."
