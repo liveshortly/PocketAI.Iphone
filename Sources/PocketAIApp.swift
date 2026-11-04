@@ -9,6 +9,9 @@ struct PocketAIApp: App {
         DiagnosticsLog.shared.append("PocketAIApp: application initialized")
         ChatSync.registerBackgroundTask()
         RemoteChatSelfTestRunner.shared.runIfNeeded(model: AppModel.shared)
+        #if DEBUG
+        SandboxSelfTest.runIfNeeded()
+        #endif
     }
 
     var body: some Scene {
@@ -136,3 +139,29 @@ final class RemoteChatSelfTestRunner: @unchecked Sendable {
         }
     }
 }
+
+#if DEBUG
+/// AGT-14: `-PocketSandboxSelfTest` drives the web sandbox on a real device or
+/// simulator and prints `[SANDBOX_SELFTEST]` lines to stderr, then exits.
+enum SandboxSelfTest {
+    static func runIfNeeded() {
+        guard ProcessInfo.processInfo.arguments.contains("-PocketSandboxSelfTest") else { return }
+        Task { @MainActor in
+            let sandbox = WebSandbox()
+            func report(_ name: String, _ r: ToolRunResult) {
+                fputs("[SANDBOX_SELFTEST] \(name): ok=\(r.ok) output=\(r.output.debugDescription) error=\(r.error.debugDescription) ms=\(r.durationMs) truncated=\(r.truncated)\n", stderr)
+                fflush(stderr)
+            }
+            report("js", await sandbox.run(language: "javascript", code: "console.log('hi'); 6 * 7"))
+            report("js-loop", await sandbox.run(language: "javascript", code: "try { while (true) {} } finally {}", timeout: 2))
+            report("py", await sandbox.run(language: "python", code: "print(sum(range(10)))\n[1, 2] * 2"))
+            report("py-loop", await sandbox.run(language: "python", code: "while True: pass", timeout: 2))
+            report("py-after", await sandbox.run(language: "python", code: "import math\nmath.factorial(20)"))
+            report("py-error", await sandbox.run(language: "python", code: "1 / 0"))
+            fputs("[SANDBOX_SELFTEST_DONE]\n", stderr)
+            fflush(stderr)
+            exit(0)
+        }
+    }
+}
+#endif

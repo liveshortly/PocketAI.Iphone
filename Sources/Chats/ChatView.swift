@@ -486,7 +486,8 @@ struct ChatView: View {
         let approvals = model.tools.approvals
         if let request = approvals.request(for: conversationId) {
             RunCodeCard(
-                language: "JavaScript", place: "this iPhone", code: request.code,
+                language: request.languageName, place: "this iPhone", code: request.code,
+                offersAlwaysAllow: request.offersAlwaysAllow,
                 onRun: { code, always in
                     approvals.answer(request.id, code == request.code ? .run : .runEdited(code: code), alwaysAllow: always)
                 },
@@ -1976,7 +1977,7 @@ private struct ToolStepRow: View {
     var body: some View {
         if step.kind == "ran" {
             let ran = RanCodeDetail(step: step)
-            RanCodeRow(language: "JavaScript", code: ran.code, output: ran.output, error: ran.error,
+            RanCodeRow(language: step.codeLanguageName, code: ran.code, output: ran.output, error: ran.error,
                        durationMs: ran.durationMs, truncated: ran.truncated, denied: ran.denied)
         } else {
             DisclosureGroup(isExpanded: $expanded) {
