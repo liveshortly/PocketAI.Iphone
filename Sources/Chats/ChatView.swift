@@ -114,9 +114,10 @@ struct ChatView: View {
         currentModelId.map { cachedCatalog.supportsReasoning(modelID: $0) } ?? false
     }
 
-    /// AGT-12: web tools run in this device's Core, so not for Apple's
+    /// AGT-12/13: tools run in this device's Core, so not for Apple's
     /// built-in model or a Mac-routed one (the Mac route sends no tools).
-    // ponytail: no catalog `tools` flag yet, so every other chat model gets it.
+    // ponytail: no catalog `tools` flag yet, so every other chat model gets it,
+    // whether or not it calls tools reliably. Add the flag before widening.
     private var offersTools: Bool {
         guard let id = currentModelId else { return false }
         return id != AppleFoundationModelsEngine.modelId && !id.hasPrefix("mac:")
@@ -442,7 +443,7 @@ struct ChatView: View {
             Button {
                 toolsBinding.wrappedValue = !toolsEnabled
             } label: {
-                Label(toolsEnabled ? "Web search: On" : "Web search: Off", systemImage: "globe")
+                Label(toolsEnabled ? "Tools: On" : "Tools: Off", systemImage: "wrench.and.screwdriver")
             }
         }
         Button {
@@ -463,6 +464,8 @@ struct ChatView: View {
             }
             #endif
 
+            toolApprovalArea
+
             // NET-22: quiet, only while this chat waits to reach the Mac.
             ChatSyncNote(conversationId: conversationId)
                 .padding(.bottom, PocketSpacing.s4)
@@ -473,6 +476,30 @@ struct ChatView: View {
         }
         .onChange(of: isComposerFocused) { _, focused in
             if focused { setAccessoryCollapsed(false) }
+        }
+    }
+
+    /// AGT-13: the "Run this?" card (or "Running code…" with Stop) for this
+    /// chat. The card's buttons are the only way an answer reaches Core.
+    @ViewBuilder
+    private var toolApprovalArea: some View {
+        let approvals = model.tools.approvals
+        if let request = approvals.request(for: conversationId) {
+            RunCodeCard(
+                language: "JavaScript", place: "this iPhone", code: request.code,
+                onRun: { code, always in
+                    approvals.answer(request.id, code == request.code ? .run : .runEdited(code: code), alwaysAllow: always)
+                },
+                onDeny: { approvals.answer(request.id, .deny) }
+            )
+            .padding(.horizontal, PocketSpacing.gutterIphone)
+            .padding(.bottom, PocketSpacing.s8)
+            .id(request.id)
+        } else if approvals.running.contains(conversationId) {
+            RunningCodeRow {
+                model.core.cancelConversation(id: conversationId)
+            }
+            .padding(.horizontal, PocketSpacing.gutterIphone + PocketSpacing.s8)
         }
     }
 
@@ -1422,6 +1449,7 @@ struct ChatView: View {
                     }
                     upsertStreamingPlaceholder(text: partialText, reasoning: partialReasoning, steps: partialSteps)
                 case .toolStep(let step):
+                    if step.kind == "ran" { model.tools.approvals.finishRun(conversationId: conversationId) }
                     partialSteps.append(step)
                     upsertStreamingPlaceholder(text: partialText, reasoning: partialReasoning, steps: partialSteps)
                 case .done(let finalMessage):
@@ -1460,6 +1488,7 @@ struct ChatView: View {
                 lastStreamError = message
             }
         }
+        model.tools.approvals.finishRun(conversationId: conversationId)
         // Only the stream that still owns the screen may clean up — a Stop
         // followed by an immediate Retry must not be clobbered by the old
         // stream's late teardown.
@@ -1921,8 +1950,8 @@ private struct ChromeTopFade: View {
         .environment(\.dynamicTypeSize, .accessibility3)
 }
 
-/// AGT-12: "Searched: …" / "Read: …" rows above a reply that used the web
-/// tools, each expandable to its results or page URL. Nothing otherwise.
+/// AGT-12/13: "Searched" / "Read" / "Ran code" rows above a reply that used
+/// tools, each expandable to its results, page URL or code and output.
 private struct ToolStepRows: View {
     let steps: [ToolStep]
 
@@ -1945,22 +1974,28 @@ private struct ToolStepRow: View {
     @State private var expanded = false
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            Text(step.detail)
-                .font(.pocket(.caption))
-                .foregroundStyle(PocketColor.textSecondary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, PocketSpacing.s8)
-        } label: {
-            Label((step.kind == "read" ? "Read: " : "Searched: ") + step.label,
-                  systemImage: step.kind == "read" ? "doc.text" : "magnifyingglass")
-                .font(.pocket(.footnote))
-                .foregroundStyle(PocketColor.textSecondary)
-                .lineLimit(1)
-                .frame(minHeight: 44)
+        if step.kind == "ran" {
+            let ran = RanCodeDetail(step: step)
+            RanCodeRow(language: "JavaScript", code: ran.code, output: ran.output, error: ran.error,
+                       durationMs: ran.durationMs, truncated: ran.truncated, denied: ran.denied)
+        } else {
+            DisclosureGroup(isExpanded: $expanded) {
+                Text(step.detail)
+                    .font(.pocket(.caption))
+                    .foregroundStyle(PocketColor.textSecondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, PocketSpacing.s8)
+            } label: {
+                Label((step.kind == "read" ? "Read: " : "Searched: ") + step.label,
+                      systemImage: step.kind == "read" ? "doc.text" : "magnifyingglass")
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textSecondary)
+                    .lineLimit(1)
+                    .frame(minHeight: 44)
+            }
+            .tint(PocketColor.textTertiary)
         }
-        .tint(PocketColor.textTertiary)
     }
 }
 

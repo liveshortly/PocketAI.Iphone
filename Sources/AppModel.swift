@@ -15,6 +15,8 @@ public final class AppModel {
     /// The offline switch, owned once rather than copied into each screen
     /// that offers it. See `OfflineMode`.
     public private(set) var offlineMode: OfflineMode!
+    /// AGT-13: the code sandbox and its "Run this?" cards (Settings → Tools).
+    public private(set) var tools: ToolsRuntime!
     public let hooks: PlatformHooks
     public let store: StoreEntitlementManager
     /// LiveShortly integration (opt-in; connected from Settings → Integrations).
@@ -119,6 +121,7 @@ public final class AppModel {
         }
         self.core = core
         self.offlineMode = OfflineMode(core: core)
+        self.tools = ToolsRuntime(core: core)
         // The iPhone app is free (D138); there is no App Store IAP path.
         // StoreEntitlementManager is retained as a disabled stub.
         self.store = StoreEntitlementManager(keychain: hooks) { [core] e in

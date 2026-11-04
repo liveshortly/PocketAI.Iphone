@@ -13,6 +13,7 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
     @AppStorage("app.getpocketai.diagnosticsEnabled") private var diagnosticsEnabled = false
+    @AppStorage(ToolsSettings.allowToolsKey) private var toolsAllowed = false
     @State private var egressCount = 0
     @State private var defaultModelName = "Choose"
     @State private var storageTotal: UInt64 = 0
@@ -125,6 +126,19 @@ struct SettingsView: View {
                     }
                 }
 
+                // MARK: Tools
+                Section("Tools") {
+                    NavigationLink {
+                        ToolsSettingsView()
+                    } label: {
+                        SettingsRow(
+                            icon: "wrench.and.screwdriver",
+                            title: "Tools",
+                            accessory: .value(toolsStatus))
+                    }
+                    .accessibilityIdentifier("settings_tools_row")
+                }
+
                 // MARK: Notifications
                 Section("Notifications") {
                     NavigationLink {
@@ -194,6 +208,8 @@ struct SettingsView: View {
             }
         }
     }
+
+    private var toolsStatus: String { toolsAllowed ? "Code allowed" : "Code off" }
 
     private var liveShortlyStatus: String {
         if case .connected(let user) = model.liveShortly.phase {
