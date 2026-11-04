@@ -47,6 +47,9 @@ struct RootTabView: View {
                 tabs
             }
         }
+        // UI-140: one toast over every tab and onboarding, for failures that
+        // used to be swallowed (AppModel.attempt).
+        .pocketToast(Bindable(model).toast, duration: .seconds(6))
         .sheet(isPresented: $isShowingSharedInboxSheet) {
             SharedInboxIngestSheet(core: model.core) {
                 isShowingSharedInboxSheet = false

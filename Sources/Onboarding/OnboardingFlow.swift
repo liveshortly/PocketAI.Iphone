@@ -607,15 +607,34 @@ private struct OnboardingDownloadingView: View {
                             bytesPerSecond: 0 // no fabricated rate; honest instruments
                         ),
                     onPauseResume: {
-                        if isPaused { try? core.resumeDownload(modelId: modelId) }
-                        else { try? core.pauseDownload(modelId: modelId) }
+                        // UI-140: say so when pause/resume fails, via the
+                        // same line a failed Retry uses.
+                        do {
+                            if isPaused { try core.resumeDownload(modelId: modelId) }
+                            else { try core.pauseDownload(modelId: modelId) }
+                            retryError = nil
+                        } catch {
+                            retryError = error.localizedDescription
+                        }
                     },
                     onCancel: {
-                        try? core.cancelDownload(modelId: modelId)
-                        onBack()
+                        do {
+                            try core.cancelDownload(modelId: modelId)
+                            onBack()
+                        } catch {
+                            retryError = error.localizedDescription
+                        }
                     }
                 )
                 .padding(.horizontal, PocketSpacing.gutterIphone)
+                if let retryError {
+                    Text(retryError)
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.statusBad)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, PocketSpacing.gutterIphone)
+                }
             }
 
             if let onSkipToApple {

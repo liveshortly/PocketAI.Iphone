@@ -1,4 +1,5 @@
 import Foundation
+import PocketUI
 import Observation
 import PocketKit
 import PocketLiveShortly
@@ -33,6 +34,17 @@ public final class AppModel {
     /// existing consumers; `@ObservationIgnored` because views observe `nav`
     /// directly, not through AppModel.
     @ObservationIgnored public let nav: AppNavigator
+
+    /// The app-wide toast (C18, UI-140): reports failures that used to be
+    /// swallowed by `try?`, shown over every tab and onboarding.
+    public var toast: ToastData?
+
+    /// Runs a user action; a failure becomes a toast instead of vanishing.
+    public func attempt(_ what: String, _ body: () throws -> Void) {
+        do { try body() } catch {
+            toast = ToastData(message: "Couldn't \(what): \(error.localizedDescription)")
+        }
+    }
 
     private static let onboardedKey = "app.getpocketai.hasOnboarded"
     private static let selectedModelKey = "app.getpocketai.selectedModelId"

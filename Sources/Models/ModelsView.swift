@@ -90,7 +90,7 @@ struct ModelsView: View {
         guard network.isOnline else { return }
         var didResume = false
         for entry in catalog where entry.state == .paused && !isUserPaused(entry.manifest.id) {
-            try? model.core.resumeDownload(modelId: entry.manifest.id)
+            model.attempt("resume the download") { try model.core.resumeDownload(modelId: entry.manifest.id) }
             didResume = true
         }
         if didResume { reload() }
@@ -194,7 +194,7 @@ struct ModelsView: View {
                         primaryActionLabel: primaryActionLabel(for: entry),
                         onPrimaryAction: { performPrimaryAction(for: entry) },
                         onCancel: {
-                            try? model.core.cancelDownload(modelId: entry.manifest.id)
+                            model.attempt("cancel the download") { try model.core.cancelDownload(modelId: entry.manifest.id) }
                             reload()
                             detailId = nil
                         },
@@ -237,7 +237,7 @@ struct ModelsView: View {
             ) {
                 Button("Stop download", role: .destructive) {
                     if let entry = pendingCancel {
-                        try? model.core.cancelDownload(modelId: entry.manifest.id)
+                        model.attempt("cancel the download") { try model.core.cancelDownload(modelId: entry.manifest.id) }
                         reload()
                     }
                     pendingCancel = nil
@@ -820,7 +820,7 @@ struct ModelsView: View {
                 DownloadProgress(
                     state: .downloading(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(transferTotal(entry)), bytesPerSecond: downloadRates[id] ?? 0),
                     onPauseResume: {
-                        try? model.core.pauseDownload(modelId: id)
+                        model.attempt("pause the download") { try model.core.pauseDownload(modelId: id) }
                         setUserPaused(id, true)
                         reload()
                     },
@@ -836,7 +836,7 @@ struct ModelsView: View {
                 DownloadProgress(
                     state: .paused(bytesDone: Int64(entry.bytesDone), bytesTotal: Int64(transferTotal(entry))),
                     onPauseResume: {
-                        try? model.core.resumeDownload(modelId: id)
+                        model.attempt("resume the download") { try model.core.resumeDownload(modelId: id) }
                         setUserPaused(id, false)
                         reload()
                     },
@@ -848,7 +848,7 @@ struct ModelsView: View {
                 Image(systemName: "clock").font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)
                 Text("Queued").font(.pocket(.footnote)).foregroundStyle(PocketColor.textSecondary)
                 Spacer()
-                Button("Cancel") { try? model.core.cancelDownload(modelId: id); reload() }
+                Button("Cancel") { model.attempt("cancel the download") { try model.core.cancelDownload(modelId: id) }; reload() }
                     .font(.pocket(.footnote))
                     .buttonStyle(.plain)
                     .foregroundStyle(PocketColor.accent)
@@ -868,10 +868,10 @@ struct ModelsView: View {
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.statusBad)
                 HStack(spacing: PocketSpacing.s16) {
-                    Button("Retry") { try? model.core.startDownload(modelId: id); setUserPaused(id, false); reload() }
+                    Button("Retry") { model.attempt("start the download") { try model.core.startDownload(modelId: id) }; setUserPaused(id, false); reload() }
                         .buttonStyle(.plain).foregroundStyle(PocketColor.accent)
                         .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                    Button("Remove") { try? model.core.cancelDownload(modelId: id); reload() }
+                    Button("Remove") { model.attempt("cancel the download") { try model.core.cancelDownload(modelId: id) }; reload() }
                         .buttonStyle(.plain).foregroundStyle(PocketColor.textSecondary)
                         .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
                     Spacer()
@@ -1238,15 +1238,15 @@ struct ModelsView: View {
         let id = entry.manifest.id
         switch entry.state {
         case .downloading:
-            try? model.core.pauseDownload(modelId: id)
+            model.attempt("pause the download") { try model.core.pauseDownload(modelId: id) }
             setUserPaused(id, true)
         case .paused:
-            try? model.core.resumeDownload(modelId: id)
+            model.attempt("resume the download") { try model.core.resumeDownload(modelId: id) }
             setUserPaused(id, false)
         case .available, .failed:
             // "Won't fit" is honest — don't start a download that can't run.
             guard entry.fit.verdict != .willNotFit else { break }
-            try? model.core.startDownload(modelId: id)
+            model.attempt("start the download") { try model.core.startDownload(modelId: id) }
             setUserPaused(id, false)
         case .installed:
             model.selectedModelId = id
