@@ -517,6 +517,24 @@ struct ChatView: View {
         }
     }
 
+    /// UI-145: what the Tools chip actually gives this chat, so "Tools: On"
+    /// is never a silent no-op. Nil when Tools is off or nothing to explain.
+    private var toolsNote: String? {
+        guard offersTools, toolsEnabled else { return nil }
+        let t = ToolsSettings()
+        var on: [String] = []
+        if t.isOn(.webSearch) { on.append(String(localized: "web search")) }
+        if t.isAvailable(.runPython) || t.isAvailable(.runJavaScript) {
+            on.append(String(localized: "code (you approve each run)"))
+        }
+        if on.isEmpty { return String(localized: "Tools is on, but every tool is off in Settings → Tools.") }
+        var line = String(localized: "Can use: ") + on.joined(separator: ", ") + "."
+        if !t.allowTools {
+            line += " " + String(localized: "Running code is off; allow it in Settings → Tools.")
+        }
+        return line
+    }
+
     private var showsAccessoryRow: Bool {
         !(voiceDictation.isRecording || voiceDictation.isTranscribing)
             && (currentModelSupportsReasoning || offersTools || remoteModelChipLabel != nil)
@@ -536,6 +554,13 @@ struct ChatView: View {
                     if offersTools {
                         ToolsToggleChip(isOn: toolsBinding)
                     }
+                }
+                if let note = toolsNote {
+                    Text(note)
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, PocketSpacing.s4)
                 }
                 if let label = remoteModelChipLabel {
                     modelPill(label)
