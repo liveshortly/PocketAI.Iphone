@@ -358,7 +358,7 @@ struct ChatsListView: View {
         }
         .searchable(text: $searchText, prompt: "Search chats")
         .alert(
-            "Delete \(selectedIds.count) chat\(selectedIds.count == 1 ? "" : "s")?",
+            "Delete \(selectedIds.count) chats?",
             isPresented: $showBulkDeleteConfirm
         ) {
             Button("Delete", role: .destructive) {
@@ -370,7 +370,7 @@ struct ChatsListView: View {
                 editMode = .inactive
                 reload()
                 if failed > 0 {
-                    actionError = "\(failed) chat\(failed == 1 ? "" : "s") couldn't be deleted."
+                    actionError = String(localized: "\(failed) chats couldn't be deleted.")
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -595,7 +595,7 @@ struct ChatsListView: View {
                         Spacer(minLength: PocketSpacing.s8)
 
                         if let count = projectDocCounts[project.id], count > 0 {
-                            Text("\(count) doc\(count == 1 ? "" : "s")")
+                            Text("\(count) docs")
                                 .font(.pocket(.caption))
                                 .foregroundStyle(PocketColor.textSecondary)
                                 .padding(.horizontal, 6)
@@ -751,7 +751,7 @@ struct ChatsListView: View {
             pendingInitial = firstMessage.map { (conversation.id, $0) }
             path.append(.chat(conversation.id))
         } catch {
-            actionError = "Couldn't start a new chat: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't start a new chat: \(error.localizedDescription)")
         }
     }
 
@@ -761,7 +761,7 @@ struct ChatsListView: View {
             reload()
             path.append(.project(project.id))
         } catch {
-            actionError = "Couldn't create the project: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't create the project: \(error.localizedDescription)")
         }
     }
 
@@ -773,7 +773,7 @@ struct ChatsListView: View {
                 try model.core.renameProject(id: project.id, name: trimmed)
                 reload()
             } catch {
-                actionError = "Couldn't rename “\(project.name)”: \(error.localizedDescription)"
+                actionError = String(localized: "Couldn't rename “\(project.name)”: \(error.localizedDescription)")
             }
         }
         renamingProject = nil
@@ -783,7 +783,7 @@ struct ChatsListView: View {
         do {
             try model.core.deleteProject(id: project.id)
         } catch {
-            actionError = "Couldn't delete “\(project.name)”: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't delete “\(project.name)”: \(error.localizedDescription)")
         }
         reload()
     }
@@ -792,7 +792,7 @@ struct ChatsListView: View {
         do {
             try model.core.deleteConversation(id: conversation.id)
         } catch {
-            actionError = "Couldn't delete that chat: \(error.localizedDescription)"
+            actionError = String(localized: "Couldn't delete that chat: \(error.localizedDescription)")
         }
         reload()
     }

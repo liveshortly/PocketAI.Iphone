@@ -185,7 +185,7 @@ public final class VoiceDictation {
             startMetering()
             AccessibilityNotification.Announcement(handsFree ? "Hands-free voice recording started" : "Voice recording started").post()
         } catch {
-            state = .error("Failed to initialize recording: \(error.localizedDescription)")
+            state = .error(String(localized: "Failed to initialize recording: \(error.localizedDescription)"))
         }
     }
 
@@ -232,7 +232,7 @@ public final class VoiceDictation {
             } else {
                 errorMessage = error.localizedDescription
             }
-            state = .error("Transcription failed: \(errorMessage)")
+            state = .error(String(localized: "Transcription failed: \(errorMessage)"))
             AccessibilityNotification.Announcement("Transcription failed").post()
             return nil
         }

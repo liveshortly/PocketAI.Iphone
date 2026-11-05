@@ -92,7 +92,7 @@ struct ProjectDetailView: View {
                 do {
                     try model.core.renameProject(id: projectId, name: trimmed)
                 } catch {
-                    errorMessage = "Couldn't rename this project: \(error.localizedDescription)"
+                    errorMessage = String(localized: "Couldn't rename this project: \(error.localizedDescription)")
                     showingErrorAlert = true
                 }
                 reload()
@@ -610,7 +610,7 @@ struct ProjectDetailView: View {
             activeConversationId = conversation.id
         } catch {
             // The screen's primary action: say why instead of ignoring the tap.
-            errorMessage = "Couldn't start a chat in this project: \(error.localizedDescription)"
+            errorMessage = String(localized: "Couldn't start a chat in this project: \(error.localizedDescription)")
             showingErrorAlert = true
         }
     }
@@ -619,7 +619,7 @@ struct ProjectDetailView: View {
         do {
             try model.core.deleteDocument(id: doc.id)
         } catch {
-            errorMessage = "Couldn't delete “\(doc.name)”: \(error.localizedDescription)"
+            errorMessage = String(localized: "Couldn't delete “\(doc.name)”: \(error.localizedDescription)")
             showingErrorAlert = true
         }
         reload()
@@ -663,7 +663,7 @@ struct ProjectDetailView: View {
                         withAnimation {
                             justAddedDocName = filename
                         }
-                        AccessibilityNotification.Announcement("Added and indexed \(filename)").post()
+                        AccessibilityNotification.Announcement(String(localized: "Added and indexed \(filename)")).post()
                     }
 
                     // Clear brief added state after 3 seconds
@@ -677,7 +677,7 @@ struct ProjectDetailView: View {
                     }
                 } catch {
                     await MainActor.run {
-                        errorMessage = "Couldn't add “\(filename)”: \(error.localizedDescription)"
+                        errorMessage = String(localized: "Couldn't add “\(filename)”: \(error.localizedDescription)")
                         showingErrorAlert = true
                     }
                 }

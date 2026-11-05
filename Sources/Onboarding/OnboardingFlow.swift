@@ -257,8 +257,8 @@ private struct OnboardingDeviceCheckView: View {
 
     private var rows: [String] {
         var r = [
-            "\(profile.chip) · \(formatBytes(profile.totalRamBytes)) memory · up to \(formatBytes(profile.appMemoryLimitBytes)) for models",
-            "\(formatBytes(profile.freeDiskBytes)) free storage",
+            String(localized: "\(profile.chip) · \(formatBytes(profile.totalRamBytes)) memory · up to \(formatBytes(profile.appMemoryLimitBytes)) for models"),
+            String(localized: "\(formatBytes(profile.freeDiskBytes)) free storage"),
         ]
         if AppleFoundationModelsEngine.isAvailable {
             r.append("Apple Intelligence available")
@@ -435,7 +435,7 @@ private struct OnboardingPickModelView: View {
                                 speedIsMeasured: false,
                                 licenseLabel: recommended.manifest.license.spdx
                             ),
-                            primaryActionLabel: "Download \(downloadSize(recommended))",
+                            primaryActionLabel: String(localized: "Download \(downloadSize(recommended))"),
                             onPrimaryAction: {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 onPick(recommended.manifest.id)
@@ -623,8 +623,8 @@ private struct OnboardingDownloadingView: View {
             if let reason = failureReason {
                 VStack(spacing: PocketSpacing.s12) {
                     Text(reason == "network"
-                         ? "Download failed — check your connection."
-                         : "Download failed (\(reason)).")
+                         ? String(localized: "Download failed — check your connection.")
+                         : String(localized: "Download failed (\(reason))."))
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.statusBad)
                         .multilineTextAlignment(.center)

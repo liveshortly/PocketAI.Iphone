@@ -98,7 +98,7 @@ struct StorageUsedView: View {
                         if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                     } catch {
-                        deleteError = "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)"
+                        deleteError = String(localized: "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)")
                     }
                     reload()
                 }
@@ -109,8 +109,8 @@ struct StorageUsedView: View {
             if let entry = pendingDelete {
                 // UI-111: say so when this is the model new chats use.
                 Text(model.selectedModelId == entry.manifest.id
-                     ? "Frees \(formatBytes(diskBytes(entry))). It's your default chat model, so you'll choose another next time you chat."
-                     : "Frees \(formatBytes(diskBytes(entry))). You can download it again later.")
+                     ? String(localized: "Frees \(formatBytes(diskBytes(entry))). It's your default chat model, so you'll choose another next time you chat.")
+                     : String(localized: "Frees \(formatBytes(diskBytes(entry))). You can download it again later."))
             }
         }
         .alert(
@@ -363,8 +363,8 @@ struct TextToSpeechVoiceView: View {
     private func voiceDetail(_ voice: AVSpeechSynthesisVoice) -> String {
         let region = Locale.current.localizedString(forIdentifier: voice.language) ?? voice.language
         switch voice.quality {
-        case .premium: return "\(region) · Premium"
-        case .enhanced: return "\(region) · Enhanced"
+        case .premium: return String(localized: "\(region) · Premium")
+        case .enhanced: return String(localized: "\(region) · Enhanced")
         default: return region
         }
     }

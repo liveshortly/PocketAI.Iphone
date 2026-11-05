@@ -173,7 +173,7 @@ final class ImageGenSheetViewModel {
                     self.isSavedToPhotos = true
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 } catch {
-                    self.photoSaveErrorMessage = "Couldn't save to Photos: \(error.localizedDescription)"
+                    self.photoSaveErrorMessage = String(localized: "Couldn't save to Photos: \(error.localizedDescription)")
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                 }
             case .denied, .restricted:

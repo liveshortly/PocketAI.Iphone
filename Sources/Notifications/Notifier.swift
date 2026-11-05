@@ -103,19 +103,19 @@ public final class Notifier {
     public func downloadFinished(modelName: String) {
         post(
             .downloadFinished, title: "Model ready",
-            body: "\(modelName) finished downloading.", threadId: "downloads")
+            body: String(localized: "\(modelName) finished downloading."), threadId: "downloads")
     }
 
     public func downloadFailed(modelName: String, reason: String) {
         post(
             .downloadFinished, title: "Download failed",
-            body: "\(modelName) couldn't finish: \(reason)", threadId: "downloads")
+            body: String(localized: "\(modelName) couldn't finish: \(reason)"), threadId: "downloads")
     }
 
     public func replyFinished(chatTitle: String, conversationId: String) {
         post(
             .replyFinished, title: "Reply ready",
-            body: "\(chatTitle) finished generating.",
+            body: String(localized: "\(chatTitle) finished generating."),
             // One thread per conversation, so a busy chat collapses instead of
             // stacking.
             threadId: "chat.\(conversationId)")
@@ -124,7 +124,7 @@ public final class Notifier {
     public func approvalNeeded(sessionTitle: String, sessionId: String) {
         post(
             .approvalNeeded, title: "Approval needed",
-            body: "\(sessionTitle) is waiting on you — it asked while PocketAI was closed.",
+            body: String(localized: "\(sessionTitle) is waiting on you — it asked while PocketAI was closed."),
             threadId: "session.\(sessionId)")
     }
 

@@ -257,7 +257,7 @@ struct ChatView: View {
         } catch {
             // Don't let the header name a model this conversation isn't
             // actually bound to — the next reply would come from the old one.
-            errorText = "Couldn't switch models: \(error.localizedDescription)"
+            errorText = String(localized: "Couldn't switch models: \(error.localizedDescription)")
         }
     }
 
@@ -761,7 +761,7 @@ struct ChatView: View {
                     try model.core.deleteConversation(id: conversationId)
                     dismiss()
                 } catch {
-                    errorText = "Couldn't delete this chat: \(error.localizedDescription)"
+                    errorText = String(localized: "Couldn't delete this chat: \(error.localizedDescription)")
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -781,7 +781,7 @@ struct ChatView: View {
                     try model.core.renameConversation(id: conversationId, title: trimmed)
                     title = trimmed
                 } catch {
-                    errorText = "Couldn't rename this chat: \(error.localizedDescription)"
+                    errorText = String(localized: "Couldn't rename this chat: \(error.localizedDescription)")
                 }
             }
             .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -1049,7 +1049,7 @@ struct ChatView: View {
             UserBubble(text: text, attachmentThumbnails: thumbnails)
                 .accessibilityIdentifier("chat_bubble_user")
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(thumbnails.isEmpty ? "You: \(text)" : "You, with image: \(text)")
+                .accessibilityLabel(thumbnails.isEmpty ? String(localized: "You: \(text)") : String(localized: "You, with image: \(text)"))
                 .contextMenu {
                     if !text.isEmpty {
                         Button("Copy", systemImage: "doc.on.doc") { copyToPasteboard(text) }
@@ -1128,7 +1128,7 @@ struct ChatView: View {
                         // UI-148: only the live reply animates; a reply left .streaming
                         // in the store (killed app, reopened chat) is stale.
                         isThinking: isCurrentStreaming && message.status == .streaming && message.stats == nil,
-                        statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
+                        statsText: message.stats.map { String(localized: "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s") },
                         onCopy: { copyToPasteboard(text) },
                         onRetry: { if canRetry { regenerateLastTurn() } },
                         onSpeak: {
@@ -1443,7 +1443,7 @@ struct ChatView: View {
         }
         let localId = RemoteEngine.localModelId(from: id)
         guard entries.contains(where: { $0.manifest.id == localId && $0.state == .installed }) else {
-            return "\(modelLocationLabel) is no longer on your Mac. Choose another model."
+            return String(localized: "\(modelLocationLabel) is no longer on your Mac. Choose another model.")
         }
         return nil
     }
@@ -1688,12 +1688,12 @@ struct ChatView: View {
         if desc.contains("no model") || desc.contains("not installed") || desc.contains("not exist")
             || desc.contains("config.json") || desc.contains("no engine") || desc.contains("notfound") {
             // Append the raw cause so a masked load/engine failure is visible.
-            return "No model is ready yet. (\(error.localizedDescription))"
+            return String(localized: "No model is ready yet. (\(error.localizedDescription))")
         }
         if desc.contains("not entitled") || desc.contains("notentitled") {
             return "This isn't available with your Mac yet. Everything on this iPhone keeps working."
         }
-        return "Something went wrong: \(error.localizedDescription)"
+        return String(localized: "Something went wrong: \(error.localizedDescription)")
     }
 
     /// Shows the in-flight reply growing in place rather than waiting for
@@ -1952,7 +1952,7 @@ struct ChatView: View {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {
             // Never show a chip pointing at a file that doesn't exist.
-            errorText = "Couldn't attach the image: \(error.localizedDescription)"
+            errorText = String(localized: "Couldn't attach the image: \(error.localizedDescription)")
         }
     }
 

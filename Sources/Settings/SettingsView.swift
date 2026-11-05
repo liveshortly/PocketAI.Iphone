@@ -344,7 +344,7 @@ private struct NetworkProofView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    Text("PocketAI made \(entries.count) internet request\(entries.count == 1 ? "" : "s") since this app launched.")
+                    Text("PocketAI made \(entries.count) internet requests since this app launched.")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
 

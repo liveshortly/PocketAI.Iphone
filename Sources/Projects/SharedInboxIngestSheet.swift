@@ -46,11 +46,11 @@ final class SharedInboxViewModel {
             var warnings: [String] = []
 
             for (index, item) in currentItems.enumerated() {
-                ingestingStatus = "Adding \(index + 1) of \(currentItems.count): \(item.originalName)…"
+                ingestingStatus = String(localized: "Adding \(index + 1) of \(currentItems.count): \(item.originalName)…")
 
                 guard let fileURL = SharedInbox.payloadURL(for: item),
                       FileManager.default.fileExists(atPath: fileURL.path) else {
-                    warnings.append("Couldn't find the shared file for “\(item.originalName)”")
+                    warnings.append(String(localized: "Couldn't find the shared file for “\(item.originalName)”"))
                     SharedInbox.deleteItem(item)
                     continue
                 }
@@ -65,7 +65,7 @@ final class SharedInboxViewModel {
                     )
                     SharedInbox.deleteItem(item)
                 } catch {
-                    warnings.append("Skipped “\(item.originalName)”: \(error.localizedDescription)")
+                    warnings.append(String(localized: "Skipped “\(item.originalName)”: \(error.localizedDescription)"))
                     SharedInbox.deleteItem(item)
                 }
             }
@@ -178,7 +178,7 @@ public struct SharedInboxIngestSheet: View {
             .background(PocketColor.bgCanvas)
             .navigationTitle("Add to project")
             .confirmationDialog(
-                "Discard \(viewModel.items.count) shared item\(viewModel.items.count == 1 ? "" : "s")?",
+                "Discard \(viewModel.items.count) shared items?",
                 isPresented: $confirmDiscardAll, titleVisibility: .visible
             ) {
                 Button("Discard", role: .destructive) {
@@ -219,7 +219,7 @@ public struct SharedInboxIngestSheet: View {
                         // Reuses the warnings card: a failed create just closed
                         // the New Project sheet with nothing imported and
                         // nothing said.
-                        viewModel.skippedWarnings = ["Couldn't create “\(name)”: \(error.localizedDescription)"]
+                        viewModel.skippedWarnings = [String(localized: "Couldn't create “\(name)”: \(error.localizedDescription)")]
                     }
                 }
             }

@@ -72,7 +72,7 @@ public final class SpeechPlayback: NSObject {
                     Self.deleteFile(at: fileURL)
                     return
                 }
-                self.fail("Couldn't read that aloud: \(error.localizedDescription)")
+                self.fail(String(localized: "Couldn't read that aloud: \(error.localizedDescription)"))
             }
         }
     }
@@ -110,7 +110,7 @@ public final class SpeechPlayback: NSObject {
             }
             self.player = audioPlayer
         } catch {
-            fail("Couldn't play that aloud: \(error.localizedDescription)")
+            fail(String(localized: "Couldn't play that aloud: \(error.localizedDescription)"))
         }
     }
 
@@ -149,7 +149,7 @@ extension SpeechPlayback: AVAudioPlayerDelegate {
     nonisolated public func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: (any Error)?) {
         let reason = error?.localizedDescription
         Task { @MainActor [weak self] in
-            self?.fail(reason.map { "Audio playback failed: \($0)" } ?? "Audio playback failed.")
+            self?.fail(reason.map { String(localized: "Audio playback failed: \($0)") } ?? String(localized: "Audio playback failed."))
         }
     }
 }

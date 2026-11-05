@@ -559,7 +559,7 @@ struct HomeSnapshot: Sendable {
     private static func ramLine(_ need: UInt64, totalRam: UInt64) -> String {
         guard need > 0, totalRam > 0 else { return "On this iPhone" }
         let f: (UInt64) -> String = { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .memory) }
-        return "On this iPhone · needs ~\(f(need)) of \(f(totalRam)) RAM"
+        return String(localized: "On this iPhone · needs ~\(f(need)) of \(f(totalRam)) RAM")
     }
 
     private static func fitKind(_ v: FitVerdict) -> FitBadgeKind {

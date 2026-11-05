@@ -28,7 +28,7 @@ struct ChatSyncSection: View {
     private var footer: String {
         if !isOn { return "Chats stay on this iPhone only." }
         if sync.syncDisabled.contains(peer.id) {
-            return "Sync is off on \(peer.name). Turn on Sync chats for this iPhone there, under Devices. Your chats stay on this iPhone until then."
+            return String(localized: "Sync is off on \(peer.name). Turn on Sync chats for this iPhone there, under Devices. Your chats stay on this iPhone until then.")
         }
         if sync.notEntitled.contains(peer.id) {
             return "Chat sync isn't available with this Mac yet. Your chats stay on this iPhone until then."
@@ -36,7 +36,7 @@ struct ChatSyncSection: View {
         guard let last = sync.lastSyncedAt[peer.id] else {
             return "Chats sync both ways while PocketAI is open on this iPhone and your Mac is reachable."
         }
-        return "Last synced \(last.formatted(date: .omitted, time: .shortened)). Chats sync both ways while PocketAI is open."
+        return String(localized: "Last synced \(last.formatted(date: .omitted, time: .shortened)). Chats sync both ways while PocketAI is open.")
     }
 }
 
@@ -55,7 +55,7 @@ struct ChatSyncNote: View {
 
     static func text(lastSynced: Date?) -> String {
         guard let lastSynced else { return "Not synced yet" }
-        return "Not synced · last synced \(lastSynced.formatted(date: .omitted, time: .shortened))"
+        return String(localized: "Not synced · last synced \(lastSynced.formatted(date: .omitted, time: .shortened))")
     }
 }
 

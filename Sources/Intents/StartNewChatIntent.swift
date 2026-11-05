@@ -15,7 +15,7 @@ struct StartNewChatIntent: AppIntent {
                 NewConversation(title: nil, projectId: nil, modelId: AppModel.shared.selectedModelId)
             )
         } catch {
-            throw PocketAIIntentError("PocketAI couldn't create a new chat: \(error.localizedDescription)")
+            throw PocketAIIntentError(String(localized: "PocketAI couldn't create a new chat: \(error.localizedDescription)"))
         }
 
         // ponytail: Deep-linking to the exact new conversation is deferred until a navigation coordinator is implemented.

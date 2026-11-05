@@ -115,7 +115,7 @@ public final class AppModel {
                 DiagnosticsLog.shared.append("AppModel: LiveCore failed to open: \(error)")
                 // Graceful degradation instead of a hard crash: keep the app
                 // navigable and tell the user, rather than fatalError().
-                coreOpenError = "PocketAI's on-device engine couldn't start. Quit and reopen PocketAI; if it keeps happening, reinstall it. (\(error))"
+                coreOpenError = String(localized: "PocketAI's on-device engine couldn't start. Quit and reopen PocketAI; if it keeps happening, reinstall it. (\(error))")
                 core = PreviewCore()
             }
         }

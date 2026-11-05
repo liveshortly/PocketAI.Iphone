@@ -235,7 +235,7 @@ struct ModelsView: View {
                             if model.selectedModelId == entry.manifest.id { model.selectedModelId = nil }
                             UINotificationFeedbackGenerator().notificationOccurred(.success)
                         } catch {
-                            actionError = "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)"
+                            actionError = String(localized: "Couldn't delete \(entry.manifest.displayName): \(error.localizedDescription)")
                         }
                         reload()
                     }
@@ -246,8 +246,8 @@ struct ModelsView: View {
                 if let entry = pendingDelete {
                     // UI-117: say so when this is the model new chats use.
                     Text(model.selectedModelId == entry.manifest.id
-                         ? "Frees \(formatBytes(diskBytes(entry))). It's your default chat model, so you'll choose another next time you chat."
-                         : "Frees \(formatBytes(diskBytes(entry))). You can download it again later.")
+                         ? String(localized: "Frees \(formatBytes(diskBytes(entry))). It's your default chat model, so you'll choose another next time you chat.")
+                         : String(localized: "Frees \(formatBytes(diskBytes(entry))). You can download it again later."))
                 }
             }
             .confirmationDialog(
@@ -341,7 +341,7 @@ struct ModelsView: View {
         } label: {
             HStack(spacing: PocketSpacing.s4) {
                 Image(systemName: "line.3.horizontal.decrease")
-                Text(activeFilterCount > 0 ? "Filter · \(activeFilterCount)" : "Filter")
+                Text(activeFilterCount > 0 ? String(localized: "Filter · \(activeFilterCount)") : String(localized: "Filter"))
             }
             .font(.pocket(.footnote))
             .foregroundStyle(PocketColor.textPrimary)
@@ -352,7 +352,7 @@ struct ModelsView: View {
             .contentShape(Rectangle())
         }
         .fixedSize()
-        .accessibilityLabel(activeFilterCount > 0 ? "Filter, \(activeFilterCount) active" : "Filter")
+        .accessibilityLabel(activeFilterCount > 0 ? String(localized: "Filter, \(activeFilterCount) active") : String(localized: "Filter"))
         .accessibilityIdentifier("models_filter_menu")
     }
 
@@ -384,7 +384,7 @@ struct ModelsView: View {
     private func fitsChipLabel(short: Bool) -> String {
         let hidden = fitsHiddenCount
         let base = short ? "Fits" : "Fits this iPhone"
-        return fitsOnly && hidden > 0 ? "\(base) · \(hidden) hidden" : base
+        return fitsOnly && hidden > 0 ? String(localized: "\(base) · \(hidden) hidden") : base
     }
 
     /// Browse entries (after search/capability filters) that the fits filter
@@ -649,9 +649,9 @@ struct ModelsView: View {
     private func heroMetaLine(_ entry: CatalogEntry) -> String {
         var parts = ["\(entry.manifest.family) · \(entry.manifest.quant) · \(formatBytes(diskBytes(entry)))"]
         if let tok = entry.fit.measuredTokensPerSec {
-            parts.append("\(Int(tok)) tok/s")
+            parts.append(String(localized: "\(Int(tok)) tok/s"))
         } else if let tok = entry.fit.estTokensPerSec {
-            parts.append("~\(Int(tok)) tok/s est.")
+            parts.append(String(localized: "~\(Int(tok)) tok/s est."))
         }
         return parts.joined(separator: " · ")
     }
@@ -1110,7 +1110,7 @@ struct ModelsView: View {
         isLoadingRemote = true
         defer { isLoadingRemote = false }
         guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) }) else {
-            remoteError = "No saved credential for \(peer.name) - try pairing again."
+            remoteError = String(localized: "No saved credential for \(peer.name) - try pairing again.")
             return
         }
         let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: peerEndpoint(for: peer), token: token))
@@ -1133,11 +1133,11 @@ struct ModelsView: View {
                     remoteError = nil
                     return
                 } catch {
-                    remoteError = "\(peer.name) is offline."
+                    remoteError = String(localized: "\(peer.name) is offline.")
                     return
                 }
             }
-            remoteError = "\(peer.name) is offline."
+            remoteError = String(localized: "\(peer.name) is offline.")
         }
     }
 
@@ -1146,9 +1146,9 @@ struct ModelsView: View {
             name: entry.manifest.displayName,
             familyParamsQuant: "\(entry.manifest.family) · \(entry.manifest.quant)",
             fitKind: remoteFitKind(entry.fit.verdict),
-            fitReason: "Fits on Mac: \(entry.fit.reason)",
+            fitReason: String(localized: "Fits on Mac: \(entry.fit.reason)"),
             sizeOnDisk: entry.manifest.estRuntimeBytes != 0 ? formatBytes(entry.manifest.estRuntimeBytes) : nil,
-            speedText: entry.fit.estTokensPerSec.map { "\(Int($0)) tok/s" },
+            speedText: entry.fit.estTokensPerSec.map { String(localized: "\(Int($0)) tok/s") },
             speedIsMeasured: false,
             licenseLabel: "",
             supportsReasoning: entry.manifest.reasoning ?? false
@@ -1181,7 +1181,7 @@ struct ModelsView: View {
         case .available, .queued, .failed:
             guard let token = model.hooks.keychainGet(key: peer.tokenRef).flatMap({ String(data: $0, encoding: .utf8) })
             else {
-                actionError = "No saved credential for \(peer.name) — try pairing again."
+                actionError = String(localized: "No saved credential for \(peer.name) — try pairing again.")
                 return
             }
             let client = RemoteCatalogClient(peerClient: PeerClient(endpoint: peerEndpoint(for: peer), token: token))
@@ -1191,7 +1191,7 @@ struct ModelsView: View {
                 } catch {
                     // Without this the row came back unchanged and the tap on
                     // "Download on Mac" looked like nothing happened.
-                    actionError = "Couldn't start that download on \(peer.name): \(error.localizedDescription)"
+                    actionError = String(localized: "Couldn't start that download on \(peer.name): \(error.localizedDescription)")
                 }
                 await reloadRemote()
             }
@@ -1224,7 +1224,7 @@ struct ModelsView: View {
         } catch {
             hubResults = []
             // UI-117: the raw error dump read as a crash log.
-            hubSearchError = "Couldn't search Hugging Face: \(error.localizedDescription)"
+            hubSearchError = String(localized: "Couldn't search Hugging Face: \(error.localizedDescription)")
         }
     }
 
@@ -1235,7 +1235,7 @@ struct ModelsView: View {
             fitKind: fitKind(entry.fit.verdict),
             fitReason: entry.fit.reason,
             sizeOnDisk: diskBytes(entry) != 0 ? formatBytes(diskBytes(entry)) : nil,
-            speedText: (entry.fit.measuredTokensPerSec ?? entry.fit.estTokensPerSec).map { "\(Int($0)) tok/s" },
+            speedText: (entry.fit.measuredTokensPerSec ?? entry.fit.estTokensPerSec).map { String(localized: "\(Int($0)) tok/s") },
             speedIsMeasured: entry.fit.measuredTokensPerSec != nil,
             licenseLabel: entry.manifest.license.spdx,
             supportsReasoning: entry.manifest.reasoning
@@ -1310,7 +1310,7 @@ struct ModelsView: View {
         case .installed: return "installed"
         case .queued: return "queued"
         case .verifying: return "checking files"
-        case .failed(let reason): return "failed: \(reason)"
+        case .failed(let reason): return String(localized: "failed: \(reason)")
         }
     }
 }
@@ -1368,15 +1368,15 @@ private struct ModelDetailSheet: View {
 
                 Section("Specs") {
                     LabeledContent("Quantization", value: entry.manifest.quant)
-                    LabeledContent("Context length", value: "\(entry.manifest.contextLength) tokens")
+                    LabeledContent("Context length", value: String(localized: "\(entry.manifest.contextLength) tokens"))
                     if realDiskBytes != 0 {
                         LabeledContent("Download size", value: formatBytes(realDiskBytes))
                     }
                     LabeledContent("Format", value: "\(entry.manifest.format)")
                     if let speed = entry.fit.measuredTokensPerSec {
-                        LabeledContent("Speed", value: "\(Int(speed)) tok/s (measured)")
+                        LabeledContent("Speed", value: String(localized: "\(Int(speed)) tok/s (measured)"))
                     } else if let speed = entry.fit.estTokensPerSec {
-                        LabeledContent("Speed", value: "~\(Int(speed)) tok/s (est.)")
+                        LabeledContent("Speed", value: String(localized: "~\(Int(speed)) tok/s (est.)"))
                     }
                 }
 
@@ -1477,7 +1477,7 @@ private struct ModelDetailSheet: View {
     private var benchmarkRows: some View {
         if let benchmark {
             LabeledContent("Throughput", value: String(format: "%.1f tok/s", benchmark.tps))
-            LabeledContent("Time to first token", value: "\(benchmark.ttftMs) ms")
+            LabeledContent("Time to first token", value: String(localized: "\(benchmark.ttftMs) ms"))
             if benchmark.peakBytes > 0 {
                 LabeledContent("Peak memory", value: formatBytes(benchmark.peakBytes))
             }

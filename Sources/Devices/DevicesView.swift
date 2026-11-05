@@ -341,7 +341,7 @@ struct DevicesView: View {
                             .fill(probe == nil ? PocketColor.statusBad : PocketColor.statusOk)
                             .frame(width: 8, height: 8)
                             .accessibilityHidden(true)
-                        Text(probe.map { "Responded in \(Int($0 * 1000)) ms" } ?? "No answer from this Mac")
+                        Text(probe.map { String(localized: "Responded in \(Int($0 * 1000)) ms") } ?? String(localized: "No answer from this Mac"))
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -483,7 +483,7 @@ struct DevicesView: View {
         )
         manualAddressError = ok
             ? nil
-            : "Enter a hostname or IP, optionally with :port — e.g. mac.tailnet.ts.net:\(peer.port)."
+            : String(localized: "Enter a hostname or IP, optionally with :port — e.g. mac.tailnet.ts.net:\(peer.port).")
         if ok {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             reload()
@@ -515,7 +515,7 @@ struct DevicesView: View {
                 isProbing = false
                 // UI-115: the result appears silently below the button.
                 AccessibilityNotification.Announcement(
-                    rtt.map { "Responded in \(Int($0 * 1000)) milliseconds" } ?? "No answer from this Mac"
+                    rtt.map { String(localized: "Responded in \(Int($0 * 1000)) milliseconds") } ?? String(localized: "No answer from this Mac")
                 ).post()
                 UINotificationFeedbackGenerator().notificationOccurred(rtt == nil ? .error : .success)
             }
@@ -534,7 +534,7 @@ struct DevicesView: View {
                 model.selectedModelId = nil
             }
         } catch {
-            revokeError = "Couldn't forget \(peer.name): \(error.localizedDescription)"
+            revokeError = String(localized: "Couldn't forget \(peer.name): \(error.localizedDescription)")
         }
         reload()
     }
