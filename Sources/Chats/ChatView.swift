@@ -125,6 +125,13 @@ struct ChatView: View {
         return id != AppleFoundationModelsEngine.modelId && !id.hasPrefix("mac:")
     }
 
+    /// UI-145: the llama.cpp engine ignores tool specs, so a GGUF build can
+    /// never call a tool. Say so instead of showing a chip that does nothing.
+    private var toolsBlockedByFormat: Bool {
+        guard let id = currentModelId else { return false }
+        return cachedCatalog.first { $0.manifest.id == id }?.manifest.format == .gguf
+    }
+
     private var toolsBinding: Binding<Bool> {
         Binding(
             get: { toolsEnabled },
@@ -458,6 +465,7 @@ struct ChatView: View {
             } label: {
                 Label(toolsEnabled ? "Tools: On" : "Tools: Off", systemImage: "wrench.and.screwdriver")
             }
+            .disabled(toolsBlockedByFormat)
         }
         Button {
             autoSpeakReplies.toggle()
@@ -538,7 +546,11 @@ struct ChatView: View {
     /// UI-145: what the Tools chip actually gives this chat, so "Tools: On"
     /// is never a silent no-op. Nil when Tools is off or nothing to explain.
     private var toolsNote: String? {
-        guard offersTools, toolsEnabled else { return nil }
+        guard offersTools else { return nil }
+        if toolsBlockedByFormat {
+            return String(localized: "This model build can't use tools. Pick an MLX build of it in Models.")
+        }
+        guard toolsEnabled else { return nil }
         let t = ToolsSettings()
         var on: [String] = []
         if t.isOn(.webSearch) { on.append(String(localized: "web search")) }
@@ -571,6 +583,8 @@ struct ChatView: View {
                     }
                     if offersTools {
                         ToolsToggleChip(isOn: toolsBinding)
+                            .disabled(toolsBlockedByFormat)
+                            .opacity(toolsBlockedByFormat ? 0.5 : 1)
                     }
                 }
                 if let note = toolsNote {

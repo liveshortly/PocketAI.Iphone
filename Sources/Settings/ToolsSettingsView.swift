@@ -31,6 +31,29 @@ struct ToolsSettingsView: View {
                 Text("Code stays on this iPhone, or goes to your own Mac if you turn on Run on my Mac. Web search sends only the query or page you allow to the web.")
                     .font(.pocket(.caption))
             }
+
+            // UI-145: when a chat says "Tools: On" and nothing runs, this shows
+            // what Core is actually offered right now.
+            Section {
+                let t = ToolsSettings()
+                ForEach(ToolsSettings.Tool.allCases, id: \.rawValue) { tool in
+                    let on = t.isAvailable(tool) && (!tool.needsPairedMac || macPaired)
+                    let name = tool.title(device: "iPhone")
+                    HStack {
+                        Text(verbatim: name)
+                        Spacer()
+                        Text(on ? "Offered" : "Not offered")
+                            .foregroundStyle(on ? PocketColor.accent : PocketColor.textTertiary)
+                    }
+                    .font(.pocket(.footnote))
+                    .accessibilityElement(children: .combine)
+                }
+            } header: {
+                Text("Offered to the model now")
+            } footer: {
+                Text("A chat also needs its Tools button on, a model that can call tools (MLX builds), and Offline mode off for web search.")
+                    .font(.pocket(.caption))
+            }
         }
         .onAppear { macPaired = MacCodeRunner.hasPairedMac(AppModel.shared.core) }
         .navigationTitle("Tools")
