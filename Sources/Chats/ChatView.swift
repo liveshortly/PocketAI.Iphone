@@ -31,6 +31,8 @@ struct ChatView: View {
     @State private var messages: [Message] = []
     @State private var composerText = ""
     @State private var isGenerating = false
+    /// UI-146: latest Core phase of the live reply.
+    @State private var livePhase: ChatPhase?
     @State private var streamTask: Task<Void, Never>?
     @State private var errorText: String?
     @State private var renamingTitle = false
@@ -363,7 +365,8 @@ struct ChatView: View {
                 }
                 // UI-147: markdown/code heights settle after the message count
                 // does, so follow content growth while pinned.
-                .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
+                // Also re-pins when the container resizes (rotation, keyboard).
+                .onScrollGeometryChange(for: [CGFloat].self) { [$0.contentSize.height, $0.containerSize.height] } action: { _, _ in
                     if !userScrolledUp { scrollToLatest(proxy: proxy, animated: false) }
                 }
                 .onChange(of: genCharCount) { _, _ in
@@ -526,24 +529,6 @@ struct ChatView: View {
         }
     }
 
-    /// UI-146 (iPhone side): what the live reply is doing, from state the chat
-    /// already has. Approval and running-code have their own cards, so they
-    /// return nil here. Core phase events (loading, per-tool args) come later.
-    private func liveStatus(for message: Message, text: String) -> String? {
-        let approvals = model.tools.approvals
-        if approvals.request(for: conversationId) != nil || approvals.running.contains(conversationId) { return nil }
-        if !text.isEmpty { return String(localized: "Writing the answer…") }
-        if let last = message.toolSteps.last {
-            switch last.kind {
-            case "searched": return String(localized: "Read the search results, thinking…")
-            case "read": return String(localized: "Read the page, thinking…")
-            default: return String(localized: "Read the result, thinking…")
-            }
-        }
-        if !(message.reasoning ?? "").isEmpty { return String(localized: "Thinking…") }
-        return nil
-    }
-
     /// UI-145: Run on Python/JavaScript blocks, whether or not the model
     /// called the tool itself. Only while code tools are allowed.
     private var codeBlockRunner: CodeRunner? {
@@ -566,12 +551,19 @@ struct ChatView: View {
         guard toolsEnabled else { return nil }
         let t = ToolsSettings()
         var on: [String] = []
-        if t.isOn(.webSearch) { on.append(String(localized: "web search")) }
+        var off: [String] = []
+        if t.isOn(.webSearch) {
+            if model.offlineMode.isOn { off.append(String(localized: "Search needs internet (Offline mode is on).")) } else { on.append(String(localized: "web search")) }
+        }
         if t.isAvailable(.runPython) || t.isAvailable(.runJavaScript) {
             on.append(String(localized: "code (you approve each run)"))
         }
-        if on.isEmpty { return String(localized: "Tools is on, but every tool is off in Settings → Tools.") }
-        var line = String(localized: "Can use: ") + on.joined(separator: ", ") + "."
+        if t.isAvailable(.runOnMac) && !MacCodeRunner.hasPairedMac(model.core) {
+            off.append(String(localized: "Run on my Mac needs a paired Mac."))
+        }
+        if on.isEmpty && off.isEmpty { return String(localized: "Tools is on, but every tool is off in Settings → Tools.") }
+        var line = on.isEmpty ? "" : String(localized: "Can use: ") + on.joined(separator: ", ") + "."
+        if !off.isEmpty { line += (line.isEmpty ? "" : " ") + off.joined(separator: " ") }
         if !t.allowTools {
             line += " " + String(localized: "Running code is off; allow it in Settings → Tools.")
         }
@@ -993,6 +985,23 @@ struct ChatView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(PocketColor.accent)
                     .frame(minHeight: 44)
+            } else {
+                // UI-78 / C17: a few complete prompts; one tap sends it.
+                // ponytail: the same three for every model, not yet tailored to its tags.
+                VStack(spacing: PocketSpacing.s8) {
+                    ForEach(FirstChatSuggestion.all, id: \.title) { suggestion in
+                        Button {
+                            composerText = suggestion.prompt
+                            send()
+                        } label: {
+                            Label(suggestion.title, systemImage: suggestion.icon)
+                                .font(.pocket(.callout))
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(PocketColor.accent)
+                    }
+                }
             }
             Spacer(minLength: 40)
         }
@@ -1090,11 +1099,26 @@ struct ChatView: View {
 
                 ToolStepRows(steps: message.toolSteps)
 
-                if isCurrentStreaming, let status = liveStatus(for: message, text: text) {
-                    Text(status)
+                if isCurrentStreaming {
+                    ReplyStatusLine(
+                        phase: livePhase,
+                        modelName: currentModelId.flatMap { id in
+                            Self.humanLabel(cachedCatalog.first { $0.manifest.id == id }?.manifest.displayName)
+                        },
+                        onStop: { stop() }
+                    )
+                }
+
+                // UI-148: a reply that ended early (Stop, killed app) says so, no spinner.
+                if !isCurrentStreaming, message.status == .cancelled || message.status == .streaming {
+                    Text("Stopped")
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
-                        .accessibilityLabel(status)
+                }
+
+                if !isCurrentStreaming, !message.toolSteps.contains(where: { $0.kind == "ran" }),
+                   codeBlockRunner != nil, let finding = UnranOutput.find(in: text) {
+                    NotRunNote(finding: finding)
                 }
 
                 HStack(alignment: .bottom, spacing: 4) {
@@ -1556,6 +1580,13 @@ struct ChatView: View {
                         if elapsed > 0.2 { liveTokPerSec = (Double(genCharCount) / 4.0) / elapsed }
                     }
                     upsertStreamingPlaceholder(text: partialText, reasoning: partialReasoning, steps: partialSteps)
+                case .status(let phase):
+                    livePhase = phase
+                case .diagnostic(let line):
+                    // UI-145: model output (Test tools only) never reaches the log.
+                    if !line.hasPrefix(ChatStreamEvent.contentLinePrefix) {
+                        DiagnosticsLog.shared.append(line)
+                    }
                 case .toolStep(let step):
                     if step.kind == "ran" { model.tools.approvals.finishRun(conversationId: conversationId) }
                     partialSteps.append(step)
@@ -1597,6 +1628,7 @@ struct ChatView: View {
             }
         }
         model.tools.approvals.finishRun(conversationId: conversationId)
+        livePhase = nil
         // Only the stream that still owns the screen may clean up — a Stop
         // followed by an immediate Retry must not be clobbered by the old
         // stream's late teardown.
@@ -1695,6 +1727,7 @@ struct ChatView: View {
         streamTask = nil
         activeStreamId = UUID() // orphan the old stream's cleanup
         isGenerating = false
+        livePhase = nil
         // The orphaned stream never cleans up, so the placeholder has to be
         // settled here: left `.streaming`, MessageView keeps a "Thinking…"
         // spinner running forever on a reply that was stopped.

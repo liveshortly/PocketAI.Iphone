@@ -54,6 +54,8 @@ struct ToolsSettingsView: View {
                 Text("A chat also needs its Tools button on, a model that can call tools (MLX builds), and Offline mode off for web search.")
                     .font(.pocket(.caption))
             }
+
+            ToolsTestSection()
         }
         .onAppear { macPaired = MacCodeRunner.hasPairedMac(AppModel.shared.core) }
         .navigationTitle("Tools")

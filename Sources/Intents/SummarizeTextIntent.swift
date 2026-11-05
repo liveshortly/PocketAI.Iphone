@@ -29,7 +29,7 @@ struct SummarizeTextIntent: AppIntent {
                 switch event {
                 case .delta(let delta):
                     summary += delta.text
-                case .done, .toolStep:
+                case .done, .toolStep, .status, .diagnostic:
                     break
                 }
             }
