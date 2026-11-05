@@ -62,6 +62,8 @@ struct ChatView: View {
     @State private var activeStreamId = UUID()
     @State private var showModelPicker = false
     @State private var showSwitchWhileGeneratingAlert = false
+    @State private var showAllowCodeAlert = false
+    @AppStorage("tools.askedAllowCode") private var askedAllowCode = false
     @State private var showImageGenSheet = false
     @State private var imageGenPrompt = ""
     @State private var activeSourceTurn: ActiveSourceTurn?
@@ -447,6 +449,12 @@ struct ChatView: View {
         if offersTools {
             Button {
                 toolsBinding.wrappedValue = !toolsEnabled
+                // UI-145: code tools need a master switch that lives in
+                // Settings; ask once here instead of leaving it buried.
+                if toolsEnabled && !askedAllowCode && !ToolsSettings().allowTools {
+                    askedAllowCode = true
+                    showAllowCodeAlert = true
+                }
             } label: {
                 Label(toolsEnabled ? "Tools: On" : "Tools: Off", systemImage: "wrench.and.screwdriver")
             }
@@ -806,6 +814,12 @@ struct ChatView: View {
                     onPicked: { bindModel($0) }
                 )
             }
+        }
+        .alert("Also allow running code?", isPresented: $showAllowCodeAlert) {
+            Button("Allow") { ToolsSettings().allowTools = true }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("Lets the assistant run JavaScript or Python in a sandbox. You approve every run. Change it anytime in Settings → Tools.")
         }
         .alert("Stop to switch models", isPresented: $showSwitchWhileGeneratingAlert) {
             Button("Stop", role: .destructive) { stop() }
