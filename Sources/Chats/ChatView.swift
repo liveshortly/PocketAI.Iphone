@@ -351,6 +351,11 @@ struct ChatView: View {
                         scrollToLatest(proxy: proxy, animated: false)
                     }
                 }
+                // UI-147: markdown/code heights settle after the message count
+                // does, so follow content growth while pinned.
+                .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
+                    if !userScrolledUp { scrollToLatest(proxy: proxy, animated: false) }
+                }
                 .onChange(of: genCharCount) { _, _ in
                     // Streaming grows the last bubble without changing the
                     // message count; stay pinned unless the user scrolled up.
@@ -1005,7 +1010,9 @@ struct ChatView: View {
                     MessageView(
                         text: text,
                         reasoning: message.reasoning,
-                        isThinking: message.status == .streaming && message.stats == nil,
+                        // UI-148: only the live reply animates; a reply left .streaming
+                        // in the store (killed app, reopened chat) is stale.
+                        isThinking: isCurrentStreaming && message.status == .streaming && message.stats == nil,
                         statsText: message.stats.map { "\($0.completionTokens) tokens · \(Int($0.decodeTps)) tok/s" },
                         onCopy: { copyToPasteboard(text) },
                         onRetry: { if canRetry { regenerateLastTurn() } },
