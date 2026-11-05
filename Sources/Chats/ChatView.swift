@@ -517,6 +517,24 @@ struct ChatView: View {
         }
     }
 
+    /// UI-146 (iPhone side): what the live reply is doing, from state the chat
+    /// already has. Approval and running-code have their own cards, so they
+    /// return nil here. Core phase events (loading, per-tool args) come later.
+    private func liveStatus(for message: Message, text: String) -> String? {
+        let approvals = model.tools.approvals
+        if approvals.request(for: conversationId) != nil || approvals.running.contains(conversationId) { return nil }
+        if !text.isEmpty { return String(localized: "Writing the answer…") }
+        if let last = message.toolSteps.last {
+            switch last.kind {
+            case "searched": return String(localized: "Read the search results, thinking…")
+            case "read": return String(localized: "Read the page, thinking…")
+            default: return String(localized: "Read the result, thinking…")
+            }
+        }
+        if !(message.reasoning ?? "").isEmpty { return String(localized: "Thinking…") }
+        return nil
+    }
+
     /// UI-145: what the Tools chip actually gives this chat, so "Tools: On"
     /// is never a silent no-op. Nil when Tools is off or nothing to explain.
     private var toolsNote: String? {
@@ -1044,6 +1062,13 @@ struct ChatView: View {
                 }
 
                 ToolStepRows(steps: message.toolSteps)
+
+                if isCurrentStreaming, let status = liveStatus(for: message, text: text) {
+                    Text(status)
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textTertiary)
+                        .accessibilityLabel(status)
+                }
 
                 HStack(alignment: .bottom, spacing: 4) {
                     MessageView(
