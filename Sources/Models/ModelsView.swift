@@ -99,8 +99,17 @@ struct ModelsView: View {
         if didResume { reload() }
     }
 
-    private var availableSegments: [Segment] {
-        peers.isEmpty ? [.onDevice, .browse] : [.onDevice, .browse, .onMac]
+    private var availableSegments: [Segment] { Self.segments(hasPairedMac: !peers.isEmpty) }
+
+    /// UI-142/144: "On your Mac" exists only while a Mac is paired. Pure so a
+    /// unit test can pin it.
+    private static func segments(hasPairedMac: Bool) -> [Segment] {
+        hasPairedMac ? [.onDevice, .browse, .onMac] : [.onDevice, .browse]
+    }
+
+    /// Titles of `segments(hasPairedMac:)`, for tests.
+    static func segmentTitles(hasPairedMac: Bool) -> [String] {
+        segments(hasPairedMac: hasPairedMac).map(\.rawValue)
     }
 
     private var heroEntry: CatalogEntry? {

@@ -17,6 +17,7 @@ targets:
     scheme:
       testTargets:
         - PocketAIUITests
+        - PocketAITests
     sources:
       - Sources
       - path: Resources/PrivacyInfo.xcprivacy
@@ -93,3 +94,19 @@ targets:
         DEVELOPMENT_TEAM: 4RK6YA795V
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: PocketAI
+
+  # UI-144: logic tests for the app target (the UI suites cannot reach pure functions).
+  PocketAITests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [Tests]
+    dependencies:
+      - target: PocketAI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.getpocketai.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/PocketAI.app/PocketAI"
+        BUNDLE_LOADER: "$(TEST_HOST)"
