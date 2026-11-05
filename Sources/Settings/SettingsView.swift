@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("app.getpocketai.autoSpeakReplies") private var autoSpeakReplies = false
     @AppStorage("app.getpocketai.diagnosticsEnabled") private var diagnosticsEnabled = false
     @AppStorage(ToolsSettings.allowToolsKey) private var toolsAllowed = false
+    @State private var confirmDeleteAll = false
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system.rawValue
     @AppStorage(ModelsView.allowMayNotFitKey) private var allowMayNotFit = false
     @State private var egressCount = 0
@@ -200,6 +201,14 @@ struct SettingsView: View {
                         accessory: .toggle($allowMayNotFit)
                     )
                     .accessibilityIdentifier("settings_allow_may_not_fit")
+                    // UI-118: ponytail: deletes chats (archived too) and projects through
+                    // the existing API; models, paired devices and the licence stay.
+                    Button(role: .destructive) {
+                        confirmDeleteAll = true
+                    } label: {
+                        Text("Delete all chats and projects")
+                    }
+                    .accessibilityIdentifier("settings_delete_all")
                 } header: {
                     Text("Advanced")
                 } footer: {
@@ -231,10 +240,27 @@ struct SettingsView: View {
                 pairedMacName = model.core.peers().first?.name
             }
             .onChange(of: model.selectedModelId) { refreshModelsInfo() }
+            .alert("Delete all chats and projects?", isPresented: $confirmDeleteAll) {
+                Button("Delete", role: .destructive) { deleteAllData() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes every chat, including archived ones, and every project on this iPhone. Downloaded models stay. This can't be undone.")
+            }
             .onChange(of: diagnosticsEnabled) { _, newValue in
                 DiagnosticsLog.shared.append("Settings: diagnostics sharing set to \(newValue)")
             }
         }
+    }
+
+    private func deleteAllData() {
+        let core = model.core
+        var failed = 0
+        for archived in [false, true] {
+            let list = core.conversations(query: ConversationQuery(search: nil, archived: archived, limit: 100_000, offset: 0))
+            for c in list { if (try? core.deleteConversation(id: c.id)) == nil { failed += 1 } }
+        }
+        for p in core.listProjects() { if (try? core.deleteProject(id: p.id)) == nil { failed += 1 } }
+        DiagnosticsLog.shared.append("Settings: delete all chats and projects, failures=\(failed)")
     }
 
     private var toolsStatus: String { toolsAllowed ? String(localized: "Code allowed") : String(localized: "Code off") }
