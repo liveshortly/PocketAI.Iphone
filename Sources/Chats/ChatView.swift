@@ -320,6 +320,7 @@ struct ChatView: View {
                         emptyChatView
                     } else {
                         messageList
+                            .environment(\.codeRunner, codeBlockRunner)
                     }
                 }
                 .defaultScrollAnchor(.bottom)
@@ -541,6 +542,18 @@ struct ChatView: View {
         }
         if !(message.reasoning ?? "").isEmpty { return String(localized: "Thinking…") }
         return nil
+    }
+
+    /// UI-145: Run on Python/JavaScript blocks, whether or not the model
+    /// called the tool itself. Only while code tools are allowed.
+    private var codeBlockRunner: CodeRunner? {
+        let t = ToolsSettings()
+        guard t.isAvailable(.runPython) || t.isAvailable(.runJavaScript) else { return nil }
+        let tools = model.tools
+        return { language, code in
+            let r = await tools!.runBlock(language: language, code: code)
+            return CodeRunOutcome(ok: r.ok, output: r.output, error: r.error)
+        }
     }
 
     /// UI-145: what the Tools chip actually gives this chat, so "Tools: On"
